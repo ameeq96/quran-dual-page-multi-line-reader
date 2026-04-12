@@ -1,23 +1,33 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppTheme {
-  static ThemeData light() {
+  static ThemeData light({
+    bool highContrast = false,
+    bool largerText = false,
+  }) {
     return _theme(
       seed: const Color(0xFF1B6B5D),
       brightness: Brightness.light,
       scaffoldColor: const Color(0xFFF0E7D5),
       surfaceColor: const Color(0xFFFCF8F0),
       dividerColor: const Color(0xFFD8CBB5),
+      highContrast: highContrast,
+      largerText: largerText,
     );
   }
 
-  static ThemeData dark() {
+  static ThemeData dark({
+    bool highContrast = false,
+    bool largerText = false,
+  }) {
     return _theme(
       seed: const Color(0xFF73C4B0),
       brightness: Brightness.dark,
       scaffoldColor: const Color(0xFF101311),
       surfaceColor: const Color(0xFF171B18),
       dividerColor: const Color(0xFF3A413C),
+      highContrast: highContrast,
+      largerText: largerText,
     );
   }
 
@@ -27,6 +37,8 @@ abstract final class AppTheme {
     required Color scaffoldColor,
     required Color surfaceColor,
     required Color dividerColor,
+    required bool highContrast,
+    required bool largerText,
   }) {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: seed,
@@ -34,13 +46,17 @@ abstract final class AppTheme {
       surface: surfaceColor,
     );
     final isDark = brightness == Brightness.dark;
+    final scale = largerText ? 1.08 : 1.0;
+    final effectiveDivider = highContrast
+        ? (isDark ? const Color(0xFF64726A) : const Color(0xFFB0956F))
+        : dividerColor;
 
     final baseTheme = ThemeData(
       useMaterial3: true,
       brightness: brightness,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: scaffoldColor,
-      dividerColor: dividerColor,
+      dividerColor: effectiveDivider,
       splashFactory: InkSparkle.splashFactory,
     );
 
@@ -48,30 +64,38 @@ abstract final class AppTheme {
       headlineSmall: baseTheme.textTheme.headlineSmall?.copyWith(
         fontWeight: FontWeight.w900,
         letterSpacing: -0.55,
+        fontSize: (baseTheme.textTheme.headlineSmall?.fontSize ?? 24) * scale,
       ),
       titleLarge: baseTheme.textTheme.titleLarge?.copyWith(
         fontWeight: FontWeight.w800,
         letterSpacing: -0.35,
+        fontSize: (baseTheme.textTheme.titleLarge?.fontSize ?? 22) * scale,
       ),
       titleMedium: baseTheme.textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.w800,
         letterSpacing: -0.15,
+        fontSize: (baseTheme.textTheme.titleMedium?.fontSize ?? 16) * scale,
       ),
       titleSmall: baseTheme.textTheme.titleSmall?.copyWith(
         fontWeight: FontWeight.w700,
+        fontSize: (baseTheme.textTheme.titleSmall?.fontSize ?? 14) * scale,
       ),
       bodyLarge: baseTheme.textTheme.bodyLarge?.copyWith(
         height: 1.38,
+        fontSize: (baseTheme.textTheme.bodyLarge?.fontSize ?? 16) * scale,
       ),
       bodyMedium: baseTheme.textTheme.bodyMedium?.copyWith(
         height: 1.36,
+        fontSize: (baseTheme.textTheme.bodyMedium?.fontSize ?? 14) * scale,
       ),
       labelLarge: baseTheme.textTheme.labelLarge?.copyWith(
         fontWeight: FontWeight.w700,
         letterSpacing: 0.15,
+        fontSize: (baseTheme.textTheme.labelLarge?.fontSize ?? 14) * scale,
       ),
       labelMedium: baseTheme.textTheme.labelMedium?.copyWith(
         fontWeight: FontWeight.w700,
+        fontSize: (baseTheme.textTheme.labelMedium?.fontSize ?? 12) * scale,
       ),
     );
 
@@ -87,12 +111,8 @@ abstract final class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
-        iconTheme: IconThemeData(
-          color: colorScheme.onSurface,
-        ),
-        actionsIconTheme: IconThemeData(
-          color: colorScheme.onSurface,
-        ),
+        iconTheme: IconThemeData(color: colorScheme.onSurface),
+        actionsIconTheme: IconThemeData(color: colorScheme.onSurface),
         titleTextStyle: textTheme.titleLarge?.copyWith(
           color: colorScheme.onSurface,
           fontWeight: FontWeight.w900,
@@ -104,7 +124,7 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(30),
           side: BorderSide(
-            color: dividerColor.withOpacity(isDark ? 0.34 : 0.52),
+            color: effectiveDivider.withOpacity(isDark ? 0.42 : 0.68),
           ),
         ),
       ),
@@ -115,7 +135,7 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(28),
           side: BorderSide(
-            color: dividerColor.withOpacity(isDark ? 0.36 : 0.62),
+            color: effectiveDivider.withOpacity(isDark ? 0.44 : 0.72),
           ),
         ),
       ),
@@ -123,7 +143,7 @@ abstract final class AppTheme {
         backgroundColor: colorScheme.surface,
         modalBackgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
-        dragHandleColor: dividerColor.withOpacity(0.9),
+        dragHandleColor: effectiveDivider.withOpacity(0.9),
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
         ),
@@ -154,9 +174,7 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),
-          side: BorderSide(
-            color: dividerColor.withOpacity(0.64),
-          ),
+          side: BorderSide(color: effectiveDivider.withOpacity(0.72)),
           textStyle: textTheme.labelLarge,
         ),
       ),
@@ -177,21 +195,17 @@ abstract final class AppTheme {
         suffixIconColor: colorScheme.onSurfaceVariant,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(
-            color: dividerColor.withOpacity(0.45),
-          ),
+          borderSide: BorderSide(color: effectiveDivider.withOpacity(0.58)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(
-            color: dividerColor.withOpacity(0.45),
-          ),
+          borderSide: BorderSide(color: effectiveDivider.withOpacity(0.58)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(
-            color: colorScheme.primary.withOpacity(0.68),
-            width: 1.4,
+            color: colorScheme.primary.withOpacity(0.72),
+            width: 1.5,
           ),
         ),
       ),
@@ -212,7 +226,7 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(22),
           side: BorderSide(
-            color: dividerColor.withOpacity(0.4),
+            color: effectiveDivider.withOpacity(0.48),
           ),
         ),
         textStyle: textTheme.bodyMedium,
@@ -229,7 +243,7 @@ abstract final class AppTheme {
           if (states.contains(WidgetState.selected)) {
             return colorScheme.primary;
           }
-          return dividerColor.withOpacity(0.55);
+          return effectiveDivider.withOpacity(0.62);
         }),
       ),
       chipTheme: baseTheme.chipTheme.copyWith(
@@ -237,7 +251,7 @@ abstract final class AppTheme {
         disabledColor: fieldFillColor.withOpacity(0.72),
         selectedColor: colorScheme.primary.withOpacity(0.14),
         side: BorderSide(
-          color: dividerColor.withOpacity(0.5),
+          color: effectiveDivider.withOpacity(0.6),
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(999),
@@ -246,13 +260,13 @@ abstract final class AppTheme {
       ),
       sliderTheme: baseTheme.sliderTheme.copyWith(
         activeTrackColor: colorScheme.primary,
-        inactiveTrackColor: dividerColor.withOpacity(0.45),
+        inactiveTrackColor: effectiveDivider.withOpacity(0.52),
         thumbColor: colorScheme.primary,
         overlayColor: colorScheme.primary.withOpacity(0.12),
         trackHeight: 4,
       ),
       dividerTheme: DividerThemeData(
-        color: dividerColor.withOpacity(isDark ? 0.42 : 0.58),
+        color: effectiveDivider.withOpacity(isDark ? 0.52 : 0.68),
         thickness: 1,
         space: 1,
       ),

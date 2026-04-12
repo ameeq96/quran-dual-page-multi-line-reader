@@ -114,8 +114,8 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                         const SizedBox(height: 4),
                         Text(
                           availableImageEditions.length <= 1
-                              ? 'Only the scanned Quran editions bundled in the app are shown here.'
-                              : 'Only the scanned Quran editions currently bundled in the app are shown here.',
+                              ? 'Only the scanned Quran editions available from the admin API are shown here.'
+                              : 'Only the scanned Quran editions currently available from the admin API are shown here.',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                             height: 1.34,
@@ -132,7 +132,7 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                           )
                         else
                           Text(
-                            'No scanned Mushaf edition is bundled right now.',
+                            'No scanned Mushaf edition is available from the admin API right now.',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),

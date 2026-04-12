@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/app_theme.dart';
-import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
 import '../models/reader_audio_state.dart';
 import 'reader_sheet_frame.dart';
@@ -38,11 +37,24 @@ class QuranAudioScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ReaderSettings>(
-      valueListenable: controller.settingsListenable,
-      builder: (context, settings, _) {
+    return AnimatedBuilder(
+      animation: Listenable.merge(<Listenable>[
+        controller.settingsListenable,
+        controller.experienceListenable,
+      ]),
+      builder: (context, _) {
+        final settings = controller.settings;
+        final experience = controller.experienceSettings;
         return Theme(
-          data: settings.nightMode ? AppTheme.dark() : AppTheme.light(),
+          data: settings.nightMode
+              ? AppTheme.dark(
+                  highContrast: experience.highContrastMode,
+                  largerText: experience.largerTextMode,
+                )
+              : AppTheme.light(
+                  highContrast: experience.highContrastMode,
+                  largerText: experience.largerTextMode,
+                ),
           child: Scaffold(
             body: SafeArea(
               child: ReaderAudioContent(

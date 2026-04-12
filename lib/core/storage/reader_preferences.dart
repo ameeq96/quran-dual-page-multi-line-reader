@@ -1,14 +1,18 @@
 import 'dart:convert';
+import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/quran_reader/domain/models/reader_daily_progress_state.dart';
 import '../../features/quran_reader/domain/models/reader_bookmark.dart';
 import '../../features/quran_reader/domain/models/reader_history_entry.dart';
 import '../../features/quran_reader/domain/models/quran_ai_models.dart';
+import '../../features/quran_reader/domain/models/reader_growth_models.dart';
 import '../../features/quran_reader/domain/models/reader_settings.dart';
 
 class ReaderPreferences {
+  static const _defaultAdminPublicBaseUrl = 'https://quranadminapi.opplexify.com';
   static const _lastPageKey = 'reader.lastPageNumber';
   static const _legacyLastSpreadKey = 'reader.lastSpreadIndex';
   static const _mushafEditionKey = 'reader.mushafEdition';
@@ -40,9 +44,15 @@ class ReaderPreferences {
   static const _readingStreakCountKey = 'reader.streakCount';
   static const _readingStreakLastDateKey = 'reader.streakLastDate';
   static const _onboardingSeenKey = 'reader.onboardingSeen';
+  static const _readingPlanKey = 'reader.readingPlan';
+  static const _hifzRevisionEntriesKey = 'reader.hifzRevisionEntries';
+  static const _experienceSettingsKey = 'reader.experienceSettings';
+  static const _adminPublicBaseUrlKey = 'reader.admin.publicBaseUrl';
+  static const _syncClientIdKey = 'reader.sync.clientId';
   static const _aiOllamaEnabledKey = 'reader.ai.ollamaEnabled';
   static const _aiOllamaBaseUrlKey = 'reader.ai.ollamaBaseUrl';
   static const _aiOllamaModelKey = 'reader.ai.ollamaModel';
+  static const _aiResponseDepthKey = 'reader.ai.responseDepth';
   static const _aiOnlineEnabledKey = 'reader.ai.onlineEnabled';
   static const _aiApiKeyKey = 'reader.ai.apiKey';
   static const _aiModelKey = 'reader.ai.model';
@@ -343,44 +353,155 @@ class ReaderPreferences {
     await prefs.setBool(_onboardingSeenKey, seen);
   }
 
+  Future<ReaderReadingPlan> loadReadingPlan() async {
+    final prefs = await _prefs;
+    final payload = prefs.getString(_readingPlanKey);
+    if (payload == null || payload.trim().isEmpty) {
+      return const ReaderReadingPlan.defaults();
+    }
+
+    try {
+      final jsonMap = json.decode(payload) as Map<String, dynamic>;
+      return ReaderReadingPlan.fromJson(jsonMap);
+    } catch (_) {
+      return const ReaderReadingPlan.defaults();
+    }
+  }
+
+  Future<void> saveReadingPlan(ReaderReadingPlan plan) async {
+    final prefs = await _prefs;
+    await prefs.setString(_readingPlanKey, json.encode(plan.toJson()));
+  }
+
+  Future<List<ReaderHifzReviewEntry>> loadHifzRevisionEntries() async {
+    final prefs = await _prefs;
+    final payload = prefs.getString(_hifzRevisionEntriesKey);
+    if (payload == null || payload.trim().isEmpty) {
+      return const [];
+    }
+
+    try {
+      final jsonList = json.decode(payload) as List<dynamic>;
+      return jsonList
+          .whereType<Map<String, dynamic>>()
+          .map(ReaderHifzReviewEntry.fromJson)
+          .toList(growable: false);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<void> saveHifzRevisionEntries(
+    List<ReaderHifzReviewEntry> entries,
+  ) async {
+    final prefs = await _prefs;
+    await prefs.setString(
+      _hifzRevisionEntriesKey,
+      json.encode(entries.map((entry) => entry.toJson()).toList()),
+    );
+  }
+
+  Future<ReaderExperienceSettings> loadExperienceSettings() async {
+    final prefs = await _prefs;
+    final payload = prefs.getString(_experienceSettingsKey);
+    if (payload == null || payload.trim().isEmpty) {
+      return const ReaderExperienceSettings.defaults();
+    }
+
+    try {
+      final jsonMap = json.decode(payload) as Map<String, dynamic>;
+      return ReaderExperienceSettings.fromJson(jsonMap);
+    } catch (_) {
+      return const ReaderExperienceSettings.defaults();
+    }
+  }
+
+  Future<void> saveExperienceSettings(ReaderExperienceSettings settings) async {
+    final prefs = await _prefs;
+    await prefs.setString(_experienceSettingsKey, json.encode(settings.toJson()));
+  }
+
+  Future<String> loadAdminPublicBaseUrl() async {
+    final prefs = await _prefs;
+    final savedUrl = prefs.getString(_adminPublicBaseUrlKey);
+    if (savedUrl != null && savedUrl.trim().isNotEmpty) {
+      final normalizedSavedUrl = savedUrl.trim();
+      if (_isLegacyLocalAdminPublicBaseUrl(normalizedSavedUrl)) {
+        await prefs.setString(_adminPublicBaseUrlKey, _defaultAdminPublicBaseUrl);
+        return _defaultAdminPublicBaseUrl;
+      }
+      return normalizedSavedUrl;
+    }
+    if (kIsWeb) {
+      return _defaultAdminPublicBaseUrl;
+    }
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android => _defaultAdminPublicBaseUrl,
+      _ => _defaultAdminPublicBaseUrl,
+    };
+  }
+
+  bool _isLegacyLocalAdminPublicBaseUrl(String value) {
+    final normalized = value.trim().toLowerCase();
+    return normalized == 'http://localhost:5052' ||
+        normalized == 'http://10.0.2.2:5052' ||
+        normalized == 'http://127.0.0.1:5052';
+  }
+
+  Future<void> saveAdminPublicBaseUrl(String baseUrl) async {
+    final prefs = await _prefs;
+    final normalized = baseUrl.trim();
+    if (normalized.isEmpty) {
+      await prefs.remove(_adminPublicBaseUrlKey);
+      return;
+    }
+    await prefs.setString(_adminPublicBaseUrlKey, normalized);
+  }
+
+  Future<String> loadOrCreateSyncClientId() async {
+    final prefs = await _prefs;
+    final existing = prefs.getString(_syncClientIdKey);
+    if (existing != null && existing.trim().isNotEmpty) {
+      return existing.trim();
+    }
+
+    final random = Random();
+    final generated = [
+      'reader',
+      DateTime.now().microsecondsSinceEpoch.toString(),
+      random.nextInt(1 << 32).toRadixString(16),
+    ].join('-');
+    await prefs.setString(_syncClientIdKey, generated);
+    return generated;
+  }
+
   Future<ReaderAiSettings> loadAiSettings() async {
     final prefs = await _prefs;
-    final savedOllamaModel = prefs.getString(_aiOllamaModelKey)?.trim();
-    final resolvedOllamaModel =
-        savedOllamaModel == null ||
-                savedOllamaModel.isEmpty ||
-                savedOllamaModel == 'llama3.2:3b' ||
-                savedOllamaModel == 'qwen2.5:7b-instruct' ||
-                savedOllamaModel == 'qwen2.5:7b' ||
-                savedOllamaModel == 'qwen2.5:3b'
-            ? 'qwen2.5:1.5b-instruct'
-            : savedOllamaModel;
-    final savedLanguage = AiResponseLanguageX.fromStorageValue(
-      prefs.getString(_aiResponseLanguageKey),
-    );
-    final resolvedLanguage = savedLanguage == AiResponseLanguage.urdu
-        ? AiResponseLanguage.english
-        : savedLanguage;
     return ReaderAiSettings(
-      ollamaEnabled: prefs.getBool(_aiOllamaEnabledKey) ?? false,
-      ollamaBaseUrl:
-          prefs.getString(_aiOllamaBaseUrlKey) ?? 'http://127.0.0.1:11434',
-      ollamaModel: resolvedOllamaModel,
-      responseLanguage: resolvedLanguage,
+      responseLanguage: AiResponseLanguageX.fromStorageValue(
+        prefs.getString(_aiResponseLanguageKey),
+      ),
+      responseDepth: AiResponseDepthX.fromStorageValue(
+        prefs.getString(_aiResponseDepthKey),
+      ),
     );
   }
 
   Future<void> saveAiSettings(ReaderAiSettings settings) async {
     final prefs = await _prefs;
-    await prefs.setBool(_aiOllamaEnabledKey, settings.ollamaEnabled);
-    await prefs.setString(_aiOllamaBaseUrlKey, settings.normalizedOllamaBaseUrl);
-    await prefs.setString(_aiOllamaModelKey, settings.ollamaModel.trim());
     await prefs.remove(_aiOnlineEnabledKey);
     await prefs.remove(_aiApiKeyKey);
     await prefs.remove(_aiModelKey);
+    await prefs.remove(_aiOllamaEnabledKey);
+    await prefs.remove(_aiOllamaBaseUrlKey);
+    await prefs.remove(_aiOllamaModelKey);
     await prefs.setString(
       _aiResponseLanguageKey,
       settings.responseLanguage.storageValue,
+    );
+    await prefs.setString(
+      _aiResponseDepthKey,
+      settings.responseDepth.storageValue,
     );
   }
 }

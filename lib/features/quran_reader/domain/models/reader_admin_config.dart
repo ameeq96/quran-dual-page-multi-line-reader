@@ -155,10 +155,40 @@ class ReaderAdminConfig {
   bool get hasEditionControls => editions.isNotEmpty;
 
   String? setting(String key) => settings[key];
-  ReaderRemoteContentDataset? contentDataset(String key) => contentDatasets[key];
+  ReaderRemoteContentDataset? contentDataset(String key) {
+    if (key.trim().toLowerCase() == 'taj_navigation_overrides') {
+      return null;
+    }
+    return contentDatasets[key];
+  }
   ReaderAdminEdition? editionConfig(MushafEdition edition) => editions[edition];
 
   bool isFeatureEnabled(String key, {bool fallback = false}) {
     return featureFlags[key] ?? fallback;
+  }
+
+  ReaderAdminConfig withoutContentDataset(String key) {
+    if (!contentDatasets.containsKey(key)) {
+      return this;
+    }
+
+    final nextDatasets = Map<String, ReaderRemoteContentDataset>.from(
+      contentDatasets,
+    )..remove(key);
+
+    return ReaderAdminConfig(
+      source: source,
+      publicBaseUrl: publicBaseUrl,
+      assetsBaseUrl: assetsBaseUrl,
+      assetPacks: assetPacks,
+      contentDatasets: Map<String, ReaderRemoteContentDataset>.unmodifiable(
+        nextDatasets,
+      ),
+      editions: editions,
+      settings: settings,
+      featureFlags: featureFlags,
+      announcements: announcements,
+      serverTimeIso: serverTimeIso,
+    );
   }
 }

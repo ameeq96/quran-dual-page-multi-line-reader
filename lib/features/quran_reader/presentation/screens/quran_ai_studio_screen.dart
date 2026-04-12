@@ -5,6 +5,7 @@ import '../../domain/models/quran_ai_models.dart';
 import '../../domain/models/quran_search_result.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
+import '../widgets/reader_skeleton.dart';
 
 class QuranAiStudioScreen extends StatefulWidget {
   const QuranAiStudioScreen({
@@ -100,13 +101,22 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
       animation: Listenable.merge(<Listenable>[
         widget.controller.aiSettingsListenable,
         widget.controller.settingsListenable,
+        widget.controller.experienceListenable,
         widget.controller.pageListenable,
       ]),
       builder: (context, _) {
         final readerSettings = widget.controller.settings;
         final aiSettings = widget.controller.aiSettings;
-        final themeData =
-            readerSettings.nightMode ? AppTheme.dark() : AppTheme.light();
+        final experience = widget.controller.experienceSettings;
+        final themeData = readerSettings.nightMode
+            ? AppTheme.dark(
+                highContrast: experience.highContrastMode,
+                largerText: experience.largerTextMode,
+              )
+            : AppTheme.light(
+                highContrast: experience.highContrastMode,
+                largerText: experience.largerTextMode,
+              );
 
         return Theme(
           data: themeData,
@@ -124,12 +134,22 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
                     widget.controller.settings.mushafEdition,
                   ),
                   languageLabel: aiSettings.responseLanguage.label,
+                  depthLabel: aiSettings.responseDepth.label,
+                  providerLabel: widget.controller.adminAiProviderLabel,
+                  modelLabel: widget.controller.adminAiModelLabel,
+                  statusLabel: widget.controller.adminAiStatusLabel,
+                  endpointLabel: widget.controller.adminAiEndpointLabel,
                 ),
                 const SizedBox(height: 14),
                 _ToolPicker(
                   selectedTool: _selectedTool,
                   aiSettings: aiSettings,
+                  languageLocked: widget.controller.isAiLanguageManagedByAdmin,
+                  depthLocked: widget.controller.isAiDepthManagedByAdmin,
+                  hasAdminAiConfiguration:
+                      widget.controller.hasAdminAiConfiguration,
                   onSelectLanguage: widget.controller.setAiResponseLanguage,
+                  onSelectDepth: widget.controller.setAiResponseDepth,
                   onSelected: (tool) {
                     setState(() {
                       _selectedTool = tool;
@@ -162,10 +182,13 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
                   ),
                 ),
                 const SizedBox(height: 14),
-                if (_result != null) ...[
+                if (_isRunning) ...[
+                  const _AiStudioSkeletonCard(),
+                ] else if (_result != null) ...[
                   _ResultCard(
                     result: _result!,
-                    pageReference: widget.controller.buildCurrentPageReference(),
+                    pageReference:
+                        widget.controller.buildCurrentPageReference(),
                     currentPageNumber: widget.controller.currentPageNumber,
                     onOpenCurrentPage: _openCurrentPageInReader,
                   ),
@@ -193,6 +216,47 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _AiStudioSkeletonCard extends StatelessWidget {
+  const _AiStudioSkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        color: theme.colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.shadow.withOpacity(0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ReaderSkeletonBlock(
+            width: 140,
+            height: 18,
+            borderRadius: BorderRadius.all(Radius.circular(999)),
+          ),
+          SizedBox(height: 14),
+          ReaderSkeletonLines(
+            lineCount: 6,
+            lineHeight: 14,
+            spacing: 10,
+            lastLineWidthFactor: 0.72,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -231,11 +295,21 @@ class _OverviewCard extends StatelessWidget {
     required this.pageReference,
     required this.editionLabel,
     required this.languageLabel,
+    required this.depthLabel,
+    required this.providerLabel,
+    required this.modelLabel,
+    required this.statusLabel,
+    required this.endpointLabel,
   });
 
   final String pageReference;
   final String editionLabel;
   final String languageLabel;
+  final String depthLabel;
+  final String providerLabel;
+  final String modelLabel;
+  final String statusLabel;
+  final String endpointLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -277,8 +351,20 @@ class _OverviewCard extends StatelessWidget {
               _Pill(label: pageReference, icon: Icons.menu_book_rounded),
               _Pill(label: editionLabel, icon: Icons.layers_outlined),
               _Pill(label: languageLabel, icon: Icons.translate_rounded),
-              const _Pill(label: 'AI assistant', icon: Icons.auto_awesome_rounded),
+              _Pill(label: depthLabel, icon: Icons.speed_rounded),
+              _Pill(label: providerLabel, icon: Icons.auto_awesome_rounded),
+              _Pill(label: modelLabel, icon: Icons.memory_rounded),
             ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            endpointLabel.isEmpty
+                ? statusLabel
+                : '$statusLabel\n$endpointLabel',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.4,
+            ),
           ),
         ],
       ),
@@ -290,13 +376,21 @@ class _ToolPicker extends StatelessWidget {
   const _ToolPicker({
     required this.selectedTool,
     required this.aiSettings,
+    required this.languageLocked,
+    required this.depthLocked,
+    required this.hasAdminAiConfiguration,
     required this.onSelectLanguage,
+    required this.onSelectDepth,
     required this.onSelected,
   });
 
   final QuranAiTool selectedTool;
   final ReaderAiSettings aiSettings;
+  final bool languageLocked;
+  final bool depthLocked;
+  final bool hasAdminAiConfiguration;
   final Future<void> Function(AiResponseLanguage language) onSelectLanguage;
+  final Future<void> Function(AiResponseDepth depth) onSelectDepth;
   final ValueChanged<QuranAiTool> onSelected;
 
   @override
@@ -349,12 +443,41 @@ class _ToolPicker extends StatelessWidget {
               return ChoiceChip(
                 label: Text(language.label),
                 selected: aiSettings.responseLanguage == language,
-                onSelected: (_) {
+                onSelected: languageLocked
+                    ? null
+                    : (_) {
                   onSelectLanguage(language);
-                },
+                      },
               );
             }).toList(growable: false),
           ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: AiResponseDepth.values.map((depth) {
+              return ChoiceChip(
+                label: Text(depth.label),
+                selected: aiSettings.responseDepth == depth,
+                onSelected: depthLocked
+                    ? null
+                    : (_) {
+                  onSelectDepth(depth);
+                      },
+              );
+            }).toList(growable: false),
+          ),
+          if (hasAdminAiConfiguration) ...[
+            const SizedBox(height: 10),
+            Text(
+              languageLocked || depthLocked
+                  ? 'AI defaults are currently managed by the admin dashboard.'
+                  : 'AI provider details are managed by the admin dashboard.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -430,23 +553,50 @@ class _ResultCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  result.tool.title,
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-              _Pill(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compactHeader = constraints.maxWidth < 420;
+              final sourcePill = _Pill(
                 label: result.sourceLabel,
                 icon: result.usedOnlineModel
                     ? Icons.memory_rounded
                     : Icons.offline_bolt_outlined,
-              ),
-            ],
+              );
+
+              if (compactHeader) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      result.tool.title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        height: 1.15,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    sourcePill,
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      result.tool.title,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        height: 1.15,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  sourcePill,
+                ],
+              );
+            },
           ),
           const SizedBox(height: 12),
           Container(
@@ -455,37 +605,59 @@ class _ResultCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
               color: theme.colorScheme.surfaceContainerLow,
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Current page',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: theme.colorScheme.primary,
-                        ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compactActions = constraints.maxWidth < 430;
+                final pageInfo = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Current page',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: theme.colorScheme.primary,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        pageReference,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      pageReference,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
                       ),
-                    ],
-                  ),
-                ),
-                FilledButton.tonalIcon(
+                    ),
+                  ],
+                );
+                final openPageButton = FilledButton.tonalIcon(
                   onPressed: () {
                     onOpenCurrentPage();
                   },
                   icon: const Icon(Icons.menu_book_rounded),
                   label: Text('Open page $currentPageNumber'),
-                ),
-              ],
+                );
+
+                if (compactActions) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      pageInfo,
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: openPageButton,
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: pageInfo),
+                    const SizedBox(width: 12),
+                    openPageButton,
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(height: 14),
@@ -758,10 +930,8 @@ class _AiOutputBlock {
 
 class _AiOutputFormatter {
   static List<_AiOutputBlock> parse(String raw) {
-    final normalized = raw
-        .replaceAll('\r\n', '\n')
-        .replaceAll('```', '')
-        .trim();
+    final normalized =
+        raw.replaceAll('\r\n', '\n').replaceAll('```', '').trim();
     if (normalized.isEmpty) {
       return const <_AiOutputBlock>[];
     }

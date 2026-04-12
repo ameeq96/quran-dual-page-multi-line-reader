@@ -10,8 +10,10 @@ import '../widgets/reader_dashboard_sheet.dart';
 import '../widgets/reader_insights_sheet.dart';
 import '../widgets/reader_motion.dart';
 import '../widgets/reader_page_strip_sheet.dart';
+import '../widgets/reader_skeleton.dart';
 import 'quran_ai_studio_screen.dart';
 import 'quran_bookmarks_screen.dart';
+import 'quran_growth_hub_screen.dart';
 import 'quran_reader_screen.dart';
 import 'quran_search_screen.dart';
 import 'quran_settings_screen.dart';
@@ -60,6 +62,9 @@ class QuranHomeScreen extends StatelessWidget {
           maxPage: controller.totalPages,
           surahPageResolver: controller.navigationPageForSurahEntry,
           juzPageResolver: controller.navigationPageForJuzEntry,
+          surahSearch: controller.searchSurahs,
+          juzSearch: controller.searchJuzs,
+          markerSearch: controller.searchMarkers,
           ayahSearch: controller.searchAyahs,
           textSearch: controller.searchPages,
         ),
@@ -102,6 +107,7 @@ class QuranHomeScreen extends StatelessWidget {
       buildReaderPageRoute<int>(
         builder: (screenContext) => QuranDashboardScreen(
           controller: controller,
+          onOpenGrowthHub: () => _openGrowthHubPage(screenContext),
           onOpenSearch: () => _openSearchPage(
             screenContext,
             title: 'Search',
@@ -198,6 +204,23 @@ class QuranHomeScreen extends StatelessWidget {
     }
   }
 
+  Future<void> _openGrowthHubPage(BuildContext context) async {
+    final page = await Navigator.of(context).push<int>(
+      buildReaderPageRoute<int>(
+        builder: (context) => QuranGrowthHubScreen(
+          controller: controller,
+        ),
+      ),
+    );
+    if (page == null) {
+      return;
+    }
+    await controller.jumpToPage(page);
+    if (context.mounted) {
+      await _openReader(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -205,20 +228,38 @@ class QuranHomeScreen extends StatelessWidget {
         controller.pageListenable,
         controller.settingsListenable,
         controller.contentListenable,
+        controller.experienceListenable,
+        controller.loadingListenable,
       ]),
       builder: (context, _) {
         final chapter = controller.currentChapterSummary;
         final chapterLabel = chapter?.nameSimple ?? 'Continue reading';
         final pageLabel = 'Page ${controller.currentPageNumber}';
         final settings = controller.settings;
+        final experience = controller.experienceSettings;
         final editionLabel = settings.mushafEdition.label;
-        final themeData =
-            settings.nightMode ? AppTheme.dark() : AppTheme.light();
+        final heroSubtitle = controller.homeHeroSubtitle(
+          chapterLabel: chapterLabel,
+          pageLabel: pageLabel,
+          editionLabel: editionLabel,
+        );
+        final themeData = settings.nightMode
+            ? AppTheme.dark(
+                highContrast: experience.highContrastMode,
+                largerText: experience.largerTextMode,
+              )
+            : AppTheme.light(
+                highContrast: experience.highContrastMode,
+                largerText: experience.largerTextMode,
+              );
 
         return Theme(
           data: themeData,
           child: Builder(
             builder: (context) {
+              if (controller.isLoading) {
+                return const _HomeSkeletonScreen();
+              }
               final theme = Theme.of(context);
               final size = MediaQuery.of(context).size;
               final contentHorizontalPadding = size.width < 420 ? 10.0 : 12.0;
@@ -262,10 +303,10 @@ class QuranHomeScreen extends StatelessWidget {
                       children: [
                         ReaderEntranceMotion(
                           child: _HomeTopCard(
-                          title: 'Quran Dual Page',
-                          subtitle:
+                          title: controller.homeHeroTitle,
+                          subtitle: heroSubtitle, /*
                               '$chapterLabel • $pageLabel • $editionLabel',
-                          streakLabel:
+                          */ streakLabel:
                               '${controller.readingStreakCount} day streak',
                           onResume: () => _openReader(context),
                           ),
@@ -282,12 +323,11 @@ class QuranHomeScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        const ReaderEntranceMotion(
+                        ReaderEntranceMotion(
                           distance: 20,
                           child: _SectionTitle(
                             title: 'Quick Access',
-                            subtitle:
-                                'Choose what you want to open. All reader options are available here.',
+                            subtitle: controller.quickAccessSubtitle,
                             horizontalInset: 14,
                           ),
                         ),
@@ -350,53 +390,75 @@ class QuranHomeScreen extends StatelessWidget {
                                 subtitle: 'Saved places and favorite pages',
                                 onTap: () => _openBookmarksPage(context),
                               ),
-                              const _TileDivider(),
-                              _HomeMenuTile(
-                                icon: Icons.auto_stories_outlined,
-                                title: 'Insights',
-                                subtitle:
-                                    'Translation, notes, and page details',
-                                onTap: () => _openInsightsPage(context),
-                              ),
-                              const _TileDivider(),
-                              _HomeMenuTile(
-                                icon: Icons.headphones_rounded,
-                                title: 'Audio',
-                                subtitle:
-                                    'Recitation, qari, and playback controls',
-                                onTap: () => _openAudioPage(context),
-                              ),
-                              const _TileDivider(),
-                              _HomeMenuTile(
-                                icon: Icons.auto_awesome_rounded,
-                                title: 'AI Studio',
-                                subtitle:
-                                    'Explainer, smart search, hifz, tajweed, and study help',
-                                onTap: () => _openAiStudioPage(context),
-                              ),
-                              const _TileDivider(),
-                              _HomeMenuTile(
-                                icon: Icons.photo_library_outlined,
-                                title: 'Page Thumbnails',
-                                subtitle: 'Jump quickly by previewing pages',
-                                onTap: () => _openPageStripPage(context),
-                              ),
-                              const _TileDivider(),
-                              _HomeMenuTile(
-                                icon: Icons.compare_rounded,
-                                title: 'Compare Editions',
-                                subtitle:
-                                    'Compare the same page across multiple Quran editions',
-                                onTap: () => _openComparePage(context),
-                              ),
-                              const _TileDivider(),
-                              _HomeMenuTile(
-                                icon: Icons.translate_rounded,
-                                title: 'Kanzul Iman Study',
-                                subtitle:
-                                    'Open Quran with Kanzul Iman study mode',
-                                onTap: () => _openKanzulStudyPage(context),
-                              ),
+                              if (controller.isPlansPacksEnabled) ...[
+                                const _TileDivider(),
+                                _HomeMenuTile(
+                                  icon: Icons.insights_outlined,
+                                  title: 'Plans & Packs',
+                                  subtitle:
+                                      'Reading plans, hifz tracking, packs, and accessibility',
+                                  onTap: () => _openGrowthHubPage(context),
+                                ),
+                              ],
+                              if (controller.isInsightsEnabled) ...[
+                                const _TileDivider(),
+                                _HomeMenuTile(
+                                  icon: Icons.auto_stories_outlined,
+                                  title: 'Insights',
+                                  subtitle:
+                                      'Translation, notes, and page details',
+                                  onTap: () => _openInsightsPage(context),
+                                ),
+                              ],
+                              if (controller.isAudioEnabled) ...[
+                                const _TileDivider(),
+                                _HomeMenuTile(
+                                  icon: Icons.headphones_rounded,
+                                  title: 'Audio',
+                                  subtitle:
+                                      'Recitation, qari, and playback controls',
+                                  onTap: () => _openAudioPage(context),
+                                ),
+                              ],
+                              if (controller.isAiStudioEnabled) ...[
+                                const _TileDivider(),
+                                _HomeMenuTile(
+                                  icon: Icons.auto_awesome_rounded,
+                                  title: 'AI Studio',
+                                  subtitle:
+                                      'Explainer, smart search, hifz, tajweed, and study help',
+                                  onTap: () => _openAiStudioPage(context),
+                                ),
+                              ],
+                              if (controller.isPageStripEnabled) ...[
+                                const _TileDivider(),
+                                _HomeMenuTile(
+                                  icon: Icons.photo_library_outlined,
+                                  title: 'Page Thumbnails',
+                                  subtitle: 'Jump quickly by previewing pages',
+                                  onTap: () => _openPageStripPage(context),
+                                ),
+                              ],
+                              if (controller.isCompareEnabled) ...[
+                                const _TileDivider(),
+                                _HomeMenuTile(
+                                  icon: Icons.compare_rounded,
+                                  title: 'Compare Editions',
+                                  subtitle:
+                                      'Compare the same page across multiple Quran editions',
+                                  onTap: () => _openComparePage(context),
+                                ),
+                              ],
+                              if (controller.isKanzulStudyEnabled) ...[
+                                const _TileDivider(),
+                                _HomeMenuTile(
+                                  icon: Icons.translate_rounded,
+                                  title: 'Kanzul Iman Study',
+                                  subtitle:
+                                      'Open Quran with Kanzul Iman study mode',
+                                  onTap: () => _openKanzulStudyPage(context),
+                                ),
+                              ],
                               const _TileDivider(),
                               _HomeMenuTile(
                                 icon: Icons.tune_rounded,
@@ -444,6 +506,148 @@ class QuranHomeScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _HomeSkeletonScreen extends StatelessWidget {
+  const _HomeSkeletonScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: theme.colorScheme.shadow.withOpacity(0.08),
+                      blurRadius: 18,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        ReaderSkeletonBlock(
+                          width: 52,
+                          height: 52,
+                          borderRadius: BorderRadius.all(Radius.circular(18)),
+                        ),
+                        SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ReaderSkeletonBlock(
+                                height: 18,
+                                borderRadius:
+                                    BorderRadius.all(Radius.circular(999)),
+                              ),
+                              SizedBox(height: 10),
+                              ReaderSkeletonBlock(
+                                height: 12,
+                                width: 220,
+                                borderRadius:
+                                    BorderRadius.all(Radius.circular(999)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 18),
+                    ReaderSkeletonBlock(
+                      width: 130,
+                      height: 34,
+                      borderRadius: BorderRadius.all(Radius.circular(999)),
+                    ),
+                    SizedBox(height: 14),
+                    ReaderSkeletonBlock(
+                      height: 52,
+                      borderRadius: BorderRadius.all(Radius.circular(18)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ReaderSkeletonBlock(
+                      width: 160,
+                      height: 16,
+                      borderRadius: BorderRadius.all(Radius.circular(999)),
+                    ),
+                    SizedBox(height: 14),
+                    ReaderSkeletonBlock(
+                      height: 52,
+                      borderRadius: BorderRadius.all(Radius.circular(18)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const ReaderSkeletonBlock(
+                width: 180,
+                height: 16,
+                borderRadius: BorderRadius.all(Radius.circular(999)),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: const Column(
+                  children: [
+                    ReaderSkeletonBlock(
+                      height: 56,
+                      borderRadius: BorderRadius.all(Radius.circular(18)),
+                    ),
+                    SizedBox(height: 10),
+                    ReaderSkeletonBlock(
+                      height: 56,
+                      borderRadius: BorderRadius.all(Radius.circular(18)),
+                    ),
+                    SizedBox(height: 10),
+                    ReaderSkeletonBlock(
+                      height: 56,
+                      borderRadius: BorderRadius.all(Radius.circular(18)),
+                    ),
+                    SizedBox(height: 10),
+                    ReaderSkeletonBlock(
+                      height: 56,
+                      borderRadius: BorderRadius.all(Radius.circular(18)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -513,12 +717,12 @@ class _HomeTopCard extends StatelessWidget {
                   color: heroShellColor,
                   borderRadius: BorderRadius.circular(18),
                 ),
-                child: IconTheme(
+                child: const IconTheme(
                   data: IconThemeData(
                     color: heroTextColor,
                     size: 28,
                   ),
-                  child: const Icon(Icons.auto_stories_rounded),
+                  child: Icon(Icons.auto_stories_rounded),
                 ),
               ),
               const SizedBox(width: 14),

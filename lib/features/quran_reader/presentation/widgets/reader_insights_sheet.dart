@@ -4,6 +4,7 @@ import '../../../../app/app_theme.dart';
 import '../../domain/models/reader_bookmark.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
+import 'reader_skeleton.dart';
 import 'reader_sheet_frame.dart';
 
 enum _TranslationPane {
@@ -727,7 +728,12 @@ class _FutureTextSection extends StatelessWidget {
             future: future,
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
-                return const LinearProgressIndicator(minHeight: 3);
+                return const ReaderSkeletonLines(
+                  lineCount: 4,
+                  lineHeight: 12,
+                  spacing: 10,
+                  lastLineWidthFactor: 0.68,
+                );
               }
               final text = snapshot.data;
               if (text == null || text.trim().isEmpty) {

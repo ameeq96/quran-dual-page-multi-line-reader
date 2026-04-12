@@ -8,7 +8,9 @@ import '../../domain/models/reader_settings.dart';
 import '../models/reader_page_appearance.dart';
 import 'authentic_quran_page.dart';
 import 'placeholder_quran_page.dart';
+import 'quran_page_image_provider.dart';
 import 'reader_hifz_line_mask.dart';
+import 'reader_skeleton.dart';
 
 class MushafPageWidget extends StatelessWidget {
   const MushafPageWidget({
@@ -73,12 +75,14 @@ class MushafPageWidget extends StatelessWidget {
     return RepaintBoundary(
       child: Align(
         alignment: alignment,
-        child: Transform(
+          child: Transform(
           alignment: hingeAlignment,
           transform: transform,
           child: AspectRatio(
-            aspectRatio:
-                isImagePage ? QuranConstants.scannedPageAspectRatio : 0.72,
+            aspectRatio: QuranConstants.pageAspectRatio(
+              usesImage: isImagePage,
+              assetPath: page.assetPath,
+            ),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: appearance.baseColor,
@@ -122,17 +126,6 @@ class MushafPageWidget extends StatelessWidget {
                         smartHifzLineCount: smartHifzLineCount,
                       ),
                     ),
-                    if (page.contentType == QuranPageContentType.placeholder)
-                      Positioned(
-                        top: 14,
-                        left: page.isLeftPage ? 14 : null,
-                        right: page.isLeftPage ? null : 14,
-                        child: _TagPill(
-                          label: 'Placeholder',
-                          icon: Icons.layers_outlined,
-                          appearance: appearance,
-                        ),
-                      ),
                     if (showPageNumbers && !isImagePage)
                       Positioned(
                         bottom: 14,
@@ -552,12 +545,11 @@ class _ImagePageContent extends StatelessWidget {
         final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
         final cacheWidth = (constraints.maxWidth * devicePixelRatio)
             .round()
-            .clamp(lowMemoryMode ? 520 : 700, lowMemoryMode ? 980 : 1680)
+            .clamp(lowMemoryMode ? 420 : 520, lowMemoryMode ? 760 : 1080)
             .toInt();
-        final imageProvider = ResizeImage.resizeIfNeeded(
-          cacheWidth,
-          null,
-          AssetImage(page.assetPath!),
+        final imageProvider = buildQuranPageImageProvider(
+          page,
+          cacheWidth: cacheWidth,
         );
 
         Widget image = Image(
@@ -565,8 +557,13 @@ class _ImagePageContent extends StatelessWidget {
           fit: BoxFit.contain,
           gaplessPlayback: true,
           excludeFromSemantics: true,
-          filterQuality:
-              lowMemoryMode ? FilterQuality.none : FilterQuality.low,
+          filterQuality: FilterQuality.none,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) {
+              return child;
+            }
+            return const ReaderSkeletonPage();
+          },
           errorBuilder: (_, __, ___) {
             return page.lines.isNotEmpty
                 ? AuthenticQuranPage(
@@ -616,61 +613,6 @@ class _ImagePageContent extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _TagPill extends StatelessWidget {
-  const _TagPill({
-    required this.label,
-    required this.icon,
-    required this.appearance,
-  });
-
-  final String label;
-  final IconData icon;
-  final ReaderPageAppearance appearance;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: appearance.pageNumberBackgroundColor,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: appearance.borderColor.withOpacity(0.74),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: appearance.outerShadowColor.withOpacity(0.4),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 14,
-              color: appearance.pageNumberForegroundColor,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: appearance.pageNumberForegroundColor,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

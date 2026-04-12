@@ -516,8 +516,10 @@ class _PreviewCanvas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final aspectRatio =
-        page.usesImage ? QuranConstants.scannedPageAspectRatio : 0.72;
+    final aspectRatio = QuranConstants.pageAspectRatio(
+      usesImage: page.usesImage,
+      assetPath: page.assetPath,
+    );
     final previewWidth = compact ? 220.0 : 260.0;
 
     return DecoratedBox(

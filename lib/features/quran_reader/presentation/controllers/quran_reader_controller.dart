@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
@@ -6,9 +7,10 @@ import 'package:just_audio/just_audio.dart';
 import '../../../../core/services/system_ui_service.dart';
 import '../../../../core/storage/reader_preferences.dart';
 import '../../data/repositories/quran_reader_repository.dart';
+import '../../data/services/quran_admin_ai_proxy_service.dart';
 import '../../data/services/quran_ai_feature_service.dart';
 import '../../data/services/quran_audio_service.dart';
-import '../../data/services/quran_ollama_service.dart';
+import '../../data/services/quran_reader_sync_service.dart';
 import '../../domain/models/quran_ai_models.dart';
 import '../../domain/models/quran_chapter_summary.dart';
 import '../../domain/models/quran_juz_navigation_entry.dart';
@@ -19,10 +21,13 @@ import '../../domain/models/quran_reciter.dart';
 import '../../domain/models/quran_search_result.dart';
 import '../../domain/models/quran_spread.dart';
 import '../../domain/models/quran_surah_navigation_entry.dart';
+import '../../domain/models/reader_admin_config.dart';
 import '../../domain/models/reader_bookmark.dart';
 import '../../domain/models/reader_daily_progress_state.dart';
+import '../../domain/models/reader_growth_models.dart';
 import '../../domain/models/reader_history_entry.dart';
 import '../../domain/models/reader_settings.dart';
+import '../../domain/models/reader_sync_snapshot.dart';
 import '../models/reader_audio_state.dart';
 
 class QuranReaderController extends ChangeNotifier {
@@ -40,19 +45,21 @@ class QuranReaderController extends ChangeNotifier {
   QuranReaderController({
     required QuranReaderRepository repository,
     required QuranAudioService audioService,
+    required QuranReaderSyncService readerSyncService,
     required ReaderPreferences preferences,
-    required QuranOllamaService ollamaService,
   })  : _repository = repository,
         _audioService = audioService,
+        _readerSyncService = readerSyncService,
         _preferences = preferences,
-        _ollamaService = ollamaService,
-        _aiFeatureService = QuranAiFeatureService(ollamaService: ollamaService);
+        _aiFeatureService = QuranAiFeatureService();
 
   final QuranReaderRepository _repository;
   final QuranAudioService _audioService;
+  final QuranReaderSyncService _readerSyncService;
   final ReaderPreferences _preferences;
-  final QuranOllamaService _ollamaService;
   final QuranAiFeatureService _aiFeatureService;
+  final QuranAdminAiProxyService _adminAiProxyService =
+      QuranAdminAiProxyService();
   final ValueNotifier<ReaderAudioState> _audioNotifier =
       ValueNotifier<ReaderAudioState>(const ReaderAudioState.idle());
   final ValueNotifier<int> _pageNotifier = ValueNotifier<int>(1);
@@ -61,12 +68,20 @@ class QuranReaderController extends ChangeNotifier {
       ValueNotifier<ReaderSettings>(const ReaderSettings.defaults());
   final ValueNotifier<ReaderAiSettings> _aiSettingsNotifier =
       ValueNotifier<ReaderAiSettings>(const ReaderAiSettings.defaults());
+  final ValueNotifier<ReaderExperienceSettings> _experienceNotifier =
+      ValueNotifier<ReaderExperienceSettings>(
+        const ReaderExperienceSettings.defaults(),
+      );
   final ValueNotifier<bool> _loadingNotifier = ValueNotifier<bool>(true);
   final ValueNotifier<int> _viewportNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> _contentNotifier = ValueNotifier<int>(0);
 
   ReaderSettings _settings = const ReaderSettings.defaults();
   ReaderAiSettings _aiSettings = const ReaderAiSettings.defaults();
+  ReaderReadingPlan _readingPlan = const ReaderReadingPlan.defaults();
+  ReaderExperienceSettings _experienceSettings =
+      const ReaderExperienceSettings.defaults();
+  ReaderAdminConfig _adminConfig = const ReaderAdminConfig.empty();
   ReaderAudioState _audioState = const ReaderAudioState.idle();
   bool _isLoading = true;
   bool _controlsVisible = true;
@@ -80,6 +95,7 @@ class QuranReaderController extends ChangeNotifier {
   Map<int, String> _pageNotes = const {};
   List<int> _favoritePages = const [];
   List<ReaderBookmark> _bookmarks = const [];
+  List<ReaderHifzReviewEntry> _hifzReviewEntries = const [];
   List<QuranReciter> _reciters = const [];
   Set<String> _downloadedAudioKeys = const <String>{};
   String? _audioDownloadKeyInProgress;
@@ -89,6 +105,8 @@ class QuranReaderController extends ChangeNotifier {
   Timer? _controlsTimer;
   Timer? _pagePersistenceTimer;
   Timer? _notesPersistenceTimer;
+  Timer? _cloudSyncTimer;
+  Future<void>? _supplementalContentWarmFuture;
   StreamSubscription<PlayerState>? _playerStateSubscription;
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<Duration?>? _durationSubscription;
@@ -123,11 +141,15 @@ class QuranReaderController extends ChangeNotifier {
   int? _smartHifzLineCount;
   bool _smartHifzRevealed = false;
   bool _isDisposed = false;
+  String _syncClientId = '';
 
   bool get isLoading => _isLoading;
   bool get controlsVisible => _controlsVisible;
   ReaderSettings get settings => _settings;
   ReaderAiSettings get aiSettings => _aiSettings;
+  ReaderReadingPlan get readingPlan => _readingPlan;
+  ReaderExperienceSettings get experienceSettings => _experienceSettings;
+  ReaderAdminConfig get adminConfig => _adminConfig;
   ReaderAudioState get audioState => _audioState;
   ValueListenable<ReaderAudioState> get audioListenable => _audioNotifier;
   ValueListenable<int> get pageListenable => _pageNotifier;
@@ -135,6 +157,8 @@ class QuranReaderController extends ChangeNotifier {
   ValueListenable<ReaderSettings> get settingsListenable => _settingsNotifier;
   ValueListenable<ReaderAiSettings> get aiSettingsListenable =>
       _aiSettingsNotifier;
+  ValueListenable<ReaderExperienceSettings> get experienceListenable =>
+      _experienceNotifier;
   ValueListenable<bool> get loadingListenable => _loadingNotifier;
   ValueListenable<int> get viewportListenable => _viewportNotifier;
   ValueListenable<int> get contentListenable => _contentNotifier;
@@ -155,13 +179,192 @@ class QuranReaderController extends ChangeNotifier {
   List<QuranJuzNavigationEntry> get juzEntries => _repository.juzs;
   List<QuranChapterSummary> get chapters => _repository.chapters;
   List<QuranReciter> get reciters => _reciters;
-  List<MushafEdition> get availableImageEditions =>
-      _repository.availableImageEditions;
+  List<MushafEdition> get availableImageEditions {
+    final editions = _repository.availableImageEditions;
+    if (!_adminConfig.hasEditionControls) {
+      return editions;
+    }
+    final filtered = editions
+        .where((edition) => _adminConfig.editionConfig(edition)?.enabled ?? true)
+        .toList(growable: false);
+    if (filtered.isEmpty) {
+      return editions;
+    }
+    return filtered;
+  }
   List<MushafEdition> get compareEditions => _repository.compareEditions;
+  List<ReaderAdminAnnouncement> get adminAnnouncements =>
+      _adminConfig.announcements;
+  bool get hasAdminManagedAssets => _adminConfig.hasRemoteAssetPacks;
+  bool get hasAdminSync => _adminConfig.source != ReaderAdminConfigSource.none;
+  String get adminSyncBaseUrl => _repository.adminConfigBaseUrl;
+  String get syncClientId => _syncClientId;
+  bool get hasAdminAiConfiguration =>
+      _adminAiProviderSetting.isNotEmpty ||
+      _adminAiModelSetting.isNotEmpty ||
+      _adminAiEndpointSetting.isNotEmpty ||
+      _adminAiStatusSetting.isNotEmpty ||
+      _adminAiLanguageOverride != null ||
+      _adminAiDepthOverride != null;
+  bool get isAiLanguageManagedByAdmin => _adminAiLanguageOverride != null;
+  bool get isAiDepthManagedByAdmin => _adminAiDepthOverride != null;
+  String get adminAiProviderLabel =>
+      switch (_normalizedAdminAiProvider) {
+        'ollama' => 'Ollama',
+        'openai' => 'ChatGPT',
+        'custom' => 'Custom AI',
+        _ => 'Local assistant',
+      };
+  String get adminAiModelLabel =>
+      _normalizedAdminAiProvider == 'local'
+          ? 'Built-in local mode'
+          : (_adminAiModelSetting.isEmpty
+              ? 'Provider default model'
+              : _adminAiModelSetting);
+  String get adminAiEndpointLabel => _adminAiEndpointSetting;
+  String get adminAiStatusLabel =>
+      _adminAiStatusSetting.isEmpty
+          ? switch (_normalizedAdminAiProvider) {
+              'ollama' => 'Ollama is active from the admin dashboard.',
+              'openai' => 'ChatGPT is active from the admin dashboard.',
+              'custom' => 'Custom AI is active from the admin dashboard.',
+              _ => 'Local assistant is active in the app.',
+            }
+          : _adminAiStatusSetting;
+  bool get isPlansPacksEnabled => _featureFlag(
+        'feature_plans_packs',
+        fallback: true,
+      );
+  bool get isInsightsEnabled => _featureFlag(
+        'feature_insights',
+        fallback: true,
+      );
+  bool get isAudioEnabled => _featureFlag(
+        'feature_audio',
+        fallback: true,
+      );
+  bool get isAiStudioEnabled => _featureFlag(
+        'feature_ai_studio',
+        fallback: true,
+      );
+  bool get isPageStripEnabled => _featureFlag(
+        'feature_page_thumbnails',
+        fallback: true,
+      );
+  bool get isCompareEnabled => _featureFlag(
+        'feature_compare',
+        fallback: true,
+      );
+  bool get isKanzulStudyEnabled => _featureFlag(
+        'feature_kanzul_study',
+        fallback: true,
+      );
+  String get appDisplayTitle =>
+      _adminConfig.setting('app_title')?.trim().isNotEmpty == true
+          ? _adminConfig.setting('app_title')!.trim()
+          : 'Quran Dual Page & Multi-Line Reader';
+  String get homeHeroTitle =>
+      _adminConfig.setting('home_hero_title')?.trim().isNotEmpty == true
+          ? _adminConfig.setting('home_hero_title')!.trim()
+          : appDisplayTitle;
+  String homeHeroSubtitle({
+    required String chapterLabel,
+    required String pageLabel,
+    required String editionLabel,
+  }) {
+    final configured = _adminConfig.setting('home_hero_subtitle')?.trim();
+    if (configured != null && configured.isNotEmpty) {
+      return configured;
+    }
+    return '$chapterLabel • $pageLabel • $editionLabel';
+  }
+
+  String get quickAccessSubtitle {
+    final configured =
+        _adminConfig.setting('home_quick_access_subtitle')?.trim();
+    if (configured != null && configured.isNotEmpty) {
+      return configured;
+    }
+    return 'Choose what you want to open. All reader options are available here.';
+  }
+  String get adminSyncStatusLabel => switch (_adminConfig.source) {
+        ReaderAdminConfigSource.live => 'Live admin dashboard connected',
+        ReaderAdminConfigSource.cached => 'Stored admin config loaded',
+        ReaderAdminConfigSource.none => 'Admin API not connected',
+      };
+  String get adminAssetsStatusLabel {
+    if (_adminConfig.assetPacks.isEmpty) {
+      return 'No admin-managed page pack is active.';
+    }
+    return '${_adminConfig.assetPacks.length} admin-managed page pack(s) active.';
+  }
+
+  String get _adminAiProviderSetting =>
+      _adminConfig.setting('ai_provider')?.trim() ?? '';
+
+  String get _normalizedAdminAiProvider {
+    final normalized = _adminAiProviderSetting.trim().toLowerCase();
+    switch (normalized) {
+      case 'ollama':
+        return 'ollama';
+      case 'openai':
+      case 'chatgpt':
+        return 'openai';
+      case 'custom':
+        return 'custom';
+      default:
+        return 'local';
+    }
+  }
+
+  String get _adminAiModelSetting =>
+      _adminConfig.setting('ai_model')?.trim() ?? '';
+
+  String get _adminAiEndpointSetting =>
+      _adminConfig.setting('ai_endpoint')?.trim() ?? '';
+
+  String get _adminAiStatusSetting =>
+      _adminConfig.setting('ai_status_label')?.trim() ?? '';
+
+  AiResponseLanguage? get _adminAiLanguageOverride {
+    final value = _adminConfig.setting('ai_default_language')?.trim().toLowerCase();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    switch (value) {
+      case 'urdu':
+        return AiResponseLanguage.urdu;
+      case 'english':
+        return AiResponseLanguage.english;
+      case 'bilingual':
+      case 'english+urdu':
+      case 'english_urdu':
+      case 'english-urdu':
+        return AiResponseLanguage.bilingual;
+    }
+    return null;
+  }
+
+  AiResponseDepth? get _adminAiDepthOverride {
+    final value = _adminConfig.setting('ai_default_depth')?.trim().toLowerCase();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    switch (value) {
+      case 'fast':
+        return AiResponseDepth.fast;
+      case 'balanced':
+        return AiResponseDepth.balanced;
+      case 'deep':
+        return AiResponseDepth.deep;
+    }
+    return null;
+  }
   List<ReaderHistoryEntry> get readingHistory => _readingHistory;
   Map<int, String> get pageNotes => _pageNotes;
   List<int> get favoritePages => _favoritePages;
   List<ReaderBookmark> get bookmarks => _bookmarks;
+  List<ReaderHifzReviewEntry> get hifzReviewEntries => _hifzReviewEntries;
   List<String> get bookmarkFolders => _bookmarkFoldersCache;
 
   Map<String, List<ReaderBookmark>> get bookmarksByFolder =>
@@ -265,12 +468,49 @@ class QuranReaderController extends ChangeNotifier {
 
   ReaderBookmark? bookmarkForPage(int pageNumber) => _bookmarkByPageCache[pageNumber];
 
+  ReaderHifzReviewEntry? hifzReviewEntryForPage(int pageNumber) {
+    for (final entry in _hifzReviewEntries) {
+      if (entry.pageNumber == pageNumber) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
   bool get hasActiveAudioSelection => _audioState.currentChapterId != null;
 
   bool get hasAudioResumePoint => _savedAudioPositionMillis > 0;
 
   int get audioResumePositionMillis => _savedAudioPositionMillis;
   int get downloadedAudioCount => _downloadedAudioKeys.length;
+  List<ReaderHifzReviewEntry> get prioritizedHifzReviewEntries {
+    final sorted = List<ReaderHifzReviewEntry>.from(_hifzReviewEntries);
+    sorted.sort((a, b) {
+      final priorityDiff = b.strength.priorityWeight - a.strength.priorityWeight;
+      if (priorityDiff != 0) {
+        return priorityDiff;
+      }
+      return b.reviewCount.compareTo(a.reviewCount);
+    });
+    return sorted;
+  }
+
+  List<OfflineEditionPack> get offlineEditionPacks {
+    final available = availableImageEditions.toSet();
+    return MushafEdition.values.map((edition) {
+      final state = remoteAssetPackForEdition(edition) != null
+          ? OfflinePackState.adminManaged
+          : available.contains(edition)
+              ? OfflinePackState.adminManaged
+              : edition == _settings.mushafEdition
+                  ? OfflinePackState.localOnly
+                  : OfflinePackState.planned;
+      return OfflineEditionPack(
+        edition: edition,
+        state: state,
+      );
+    }).toList(growable: false);
+  }
 
   Map<String, int> get readingActivityCounts => _readingActivityCountsCache;
 
@@ -359,31 +599,60 @@ class QuranReaderController extends ChangeNotifier {
 
     try {
       final launchState = await _repository.loadLaunchState();
+      final syncClientIdFuture = _preferences.loadOrCreateSyncClientId();
+      final aiSettingsFuture = _preferences.loadAiSettings();
+      final dailyTargetPagesFuture = _repository.loadDailyTargetPages();
+      final dailyProgressStateFuture = _repository.loadDailyProgressState(
+        todayKey: _todayKey(),
+        fallbackStartPage: launchState.initialPageNumber,
+      );
+      final readingPlanFuture = _repository.loadReadingPlan();
+      final experienceSettingsFuture = _repository.loadExperienceSettings();
+      final readingHistoryFuture = _repository.loadReadingHistory();
+      final pageNotesFuture = _repository.loadPageNotes();
+      final favoritePagesFuture = _repository.loadFavoritePages();
+      final bookmarksFuture = _repository.loadBookmarks();
+      final hifzRevisionEntriesFuture = _repository.loadHifzRevisionEntries();
+      final preferredReciterIdFuture = _repository.loadPreferredReciterId();
+      final audioChapterIdFuture = _repository.loadAudioChapterId();
+      final audioPositionMillisFuture = _repository.loadAudioPositionMillis();
+      final audioRepeatEnabledFuture = _repository.loadAudioRepeatEnabled();
+      final readingStreakCountFuture = _repository.loadReadingStreakCount();
+      final readingStreakLastDateFuture =
+          _repository.loadReadingStreakLastDate();
+
+      _syncClientId = await syncClientIdFuture;
       _settings = launchState.settings;
       _settingsNotifier.value = _settings;
-      _aiSettings = await _preferences.loadAiSettings();
+      _adminConfig = _repository.adminConfig;
+      _aiSettings = await aiSettingsFuture;
+      _syncCurrentAiSettingsWithAdminConfig();
       _aiSettingsNotifier.value = _aiSettings;
       _repository.setMushafEdition(_settings.mushafEdition);
       _currentPageNumber = launchState.initialPageNumber;
       _pageNotifier.value = _currentPageNumber;
       _controlsVisible = !_settings.fullscreenReading;
       _controlsNotifier.value = _controlsVisible;
-      _dailyTargetPages = await _repository.loadDailyTargetPages();
-      _dailyProgressState = await _repository.loadDailyProgressState(
-        todayKey: _todayKey(),
-        fallbackStartPage: _currentPageNumber,
-      );
-      _readingHistory = await _repository.loadReadingHistory();
-      _pageNotes = await _repository.loadPageNotes();
-      _favoritePages = await _repository.loadFavoritePages();
-      _bookmarks = await _repository.loadBookmarks();
+      _warmSupplementalContentInBackground();
+      _dailyTargetPages = await dailyTargetPagesFuture;
+      _dailyProgressState = await dailyProgressStateFuture;
+      _readingPlan = await readingPlanFuture;
+      _experienceSettings = await experienceSettingsFuture;
+      _experienceNotifier.value = _experienceSettings;
+      _readingHistory = await readingHistoryFuture;
+      _pageNotes = await pageNotesFuture;
+      _favoritePages = await favoritePagesFuture;
+      _bookmarks = await bookmarksFuture;
+      _hifzReviewEntries = await hifzRevisionEntriesFuture;
       _rebuildContentCaches();
-      preferredReciterId = await _repository.loadPreferredReciterId();
-      final audioChapterId = await _repository.loadAudioChapterId();
-      _savedAudioPositionMillis = await _repository.loadAudioPositionMillis();
-      final repeatEnabled = await _repository.loadAudioRepeatEnabled();
-      _readingStreakCount = await _repository.loadReadingStreakCount();
-      _readingStreakLastDate = await _repository.loadReadingStreakLastDate();
+      await _hydrateFromCloudIfNeeded();
+      preferredReciterId = await preferredReciterIdFuture;
+      final audioChapterId = await audioChapterIdFuture;
+      _savedAudioPositionMillis = await audioPositionMillisFuture;
+      final repeatEnabled = await audioRepeatEnabledFuture;
+      _readingStreakCount = await readingStreakCountFuture;
+      _readingStreakLastDate = await readingStreakLastDateFuture;
+      _applyAdminEditionVisibilityRules();
       _reciters = _audioService.fallbackReciters;
       final selectedReciter = _resolveSelectedReciter(preferredReciterId);
       _audioState = _audioState.copyWith(
@@ -403,7 +672,7 @@ class QuranReaderController extends ChangeNotifier {
             .timeout(const Duration(seconds: 2));
       } catch (_) {}
       await SystemUiService.setFullscreen(_settings.fullscreenReading);
-      await _recordCurrentPage();
+      unawaited(_recordCurrentPage());
     } finally {
       _isLoading = false;
       _loadingNotifier.value = false;
@@ -456,14 +725,47 @@ class QuranReaderController extends ChangeNotifier {
     );
   }
 
-  List<QuranSearchResult> searchPages(String query) {
+  Future<List<QuranSurahNavigationEntry>> searchSurahs(String query) {
+    return _repository.searchSurahsRemote(query);
+  }
+
+  Future<List<QuranJuzNavigationEntry>> searchJuzs(String query) {
+    return _repository.searchJuzsRemote(query);
+  }
+
+  Future<List<QuranNavigationMarker>> searchMarkers(
+    String query, {
+    required String category,
+  }) {
+    return _repository.searchMarkersRemote(
+      query,
+      category: category,
+      preferImageMode: _settings.preferImageMode,
+    );
+  }
+
+  Future<List<QuranSearchResult>> searchPages(String query) {
+    return _repository.searchPagesRemote(
+      query,
+      preferImageMode: _settings.preferImageMode,
+    );
+  }
+
+  Future<List<QuranSearchResult>> searchAyahs(String query) {
+    return _repository.searchAyahsRemote(
+      query,
+      preferImageMode: _settings.preferImageMode,
+    );
+  }
+
+  List<QuranSearchResult> searchPagesLocal(String query) {
     return _repository.searchPages(
       query,
       preferImageMode: _settings.preferImageMode,
     );
   }
 
-  List<QuranSearchResult> searchAyahs(String query) {
+  List<QuranSearchResult> searchAyahsLocal(String query) {
     return _repository.searchAyahs(
       query,
       preferImageMode: _settings.preferImageMode,
@@ -471,33 +773,146 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> setAiResponseLanguage(AiResponseLanguage language) async {
+    if (isAiLanguageManagedByAdmin) {
+      return;
+    }
     _aiSettings = _aiSettings.copyWith(responseLanguage: language);
     _publishAiSettings();
     await _preferences.saveAiSettings(_aiSettings);
   }
 
-  Future<void> setAiOllamaEnabled(bool enabled) async {
-    _aiSettings = _aiSettings.copyWith(ollamaEnabled: enabled);
+  Future<void> setAiResponseDepth(AiResponseDepth depth) async {
+    if (isAiDepthManagedByAdmin) {
+      return;
+    }
+    _aiSettings = _aiSettings.copyWith(responseDepth: depth);
     _publishAiSettings();
     await _preferences.saveAiSettings(_aiSettings);
   }
 
-  Future<void> setAiOllamaBaseUrl(String baseUrl) async {
-    _aiSettings = _aiSettings.copyWith(ollamaBaseUrl: baseUrl.trim());
-    _publishAiSettings();
-    await _preferences.saveAiSettings(_aiSettings);
+  Future<void> setReadingPlanPreset(ReadingGoalPreset preset) async {
+    _readingPlan = _readingPlan.copyWith(
+      preset: preset,
+      targetDays: preset.defaultTargetDays,
+      customPagesPerDay: preset == ReadingGoalPreset.custom
+          ? _readingPlan.customPagesPerDay
+          : pagesForCurrentPlanPreset(preset),
+      createdAtIso: DateTime.now().toUtc().toIso8601String(),
+    );
+    await _repository.saveReadingPlan(_readingPlan);
+    _publishContentChange();
   }
 
-  Future<void> setAiOllamaModel(String model) async {
-    final normalized =
-        model.trim().isEmpty ? 'qwen2.5:1.5b-instruct' : model.trim();
-    _aiSettings = _aiSettings.copyWith(ollamaModel: normalized);
-    _publishAiSettings();
-    await _preferences.saveAiSettings(_aiSettings);
+  Future<void> setCustomReadingPlan({
+    int? targetDays,
+    int? pagesPerDay,
+  }) async {
+    _readingPlan = _readingPlan.copyWith(
+      preset: ReadingGoalPreset.custom,
+      targetDays: targetDays ?? _readingPlan.targetDays,
+      customPagesPerDay: pagesPerDay ?? _readingPlan.customPagesPerDay,
+      createdAtIso: DateTime.now().toUtc().toIso8601String(),
+    );
+    await _repository.saveReadingPlan(_readingPlan);
+    _publishContentChange();
   }
 
-  Future<String> testAiConnection() {
-    return _ollamaService.testConnection(settings: _aiSettings);
+  int pagesForCurrentPlanPreset(ReadingGoalPreset preset) {
+    final tempPlan = _readingPlan.copyWith(
+      preset: preset,
+      targetDays: preset.defaultTargetDays,
+    );
+    return tempPlan.pagesPerDay(
+      remainingPages: remainingPages,
+      fallbackDailyTarget: _dailyTargetPages,
+    );
+  }
+
+  Future<void> markCurrentPageForHifz(HifzPageStrength strength) {
+    return markPageForHifz(_currentPageNumber, strength: strength);
+  }
+
+  Future<void> markPageForHifz(
+    int pageNumber, {
+    required HifzPageStrength strength,
+  }) async {
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    final entries = List<ReaderHifzReviewEntry>.from(_hifzReviewEntries);
+    final existingIndex =
+        entries.indexWhere((entry) => entry.pageNumber == pageNumber);
+    if (existingIndex >= 0) {
+      final existing = entries[existingIndex];
+      entries[existingIndex] = existing.copyWith(
+        strength: strength,
+        updatedAtIso: nowIso,
+        reviewCount: existing.reviewCount + 1,
+      );
+    } else {
+      entries.add(
+        ReaderHifzReviewEntry(
+          pageNumber: pageNumber,
+          strength: strength,
+          updatedAtIso: nowIso,
+          reviewCount: 1,
+        ),
+      );
+    }
+    _hifzReviewEntries = entries;
+    await _repository.saveHifzRevisionEntries(_hifzReviewEntries);
+    _publishContentChange();
+  }
+
+  Future<void> clearHifzReviewEntry(int pageNumber) async {
+    _hifzReviewEntries = _hifzReviewEntries
+        .where((entry) => entry.pageNumber != pageNumber)
+        .toList(growable: false);
+    await _repository.saveHifzRevisionEntries(_hifzReviewEntries);
+    _publishContentChange();
+  }
+
+  Future<void> setLargerTextMode(bool enabled) async {
+    _experienceSettings = _experienceSettings.copyWith(largerTextMode: enabled);
+    _publishExperienceSettings();
+    await _repository.saveExperienceSettings(_experienceSettings);
+  }
+
+  Future<void> setHighContrastMode(bool enabled) async {
+    _experienceSettings =
+        _experienceSettings.copyWith(highContrastMode: enabled);
+    _publishExperienceSettings();
+    await _repository.saveExperienceSettings(_experienceSettings);
+  }
+
+  Future<void> setReducedMotion(bool enabled) async {
+    _experienceSettings = _experienceSettings.copyWith(reducedMotion: enabled);
+    _publishExperienceSettings();
+    await _repository.saveExperienceSettings(_experienceSettings);
+  }
+
+  Future<void> setTajweedMode(bool enabled) async {
+    _experienceSettings = _experienceSettings.copyWith(tajweedMode: enabled);
+    _publishExperienceSettings();
+    await _repository.saveExperienceSettings(_experienceSettings);
+  }
+
+  Future<void> setRecitationSyncEnabled(bool enabled) async {
+    _experienceSettings = _experienceSettings.copyWith(
+      recitationSyncEnabled: enabled,
+    );
+    _publishExperienceSettings();
+    await _repository.saveExperienceSettings(_experienceSettings);
+  }
+
+  Future<void> setSyncMode(ReaderSyncMode mode) async {
+    _experienceSettings = _experienceSettings.copyWith(syncMode: mode);
+    _publishExperienceSettings();
+    await _repository.saveExperienceSettings(_experienceSettings);
+    if (mode == ReaderSyncMode.cloudReady) {
+      await _hydrateFromCloudIfNeeded();
+      _scheduleCloudSyncPush();
+    } else {
+      _cloudSyncTimer?.cancel();
+    }
   }
 
   Future<QuranAiToolResult> runAiTool(
@@ -505,13 +920,25 @@ class QuranReaderController extends ChangeNotifier {
     String userInput = '',
   }) async {
     final context = await _buildCurrentAiPageContext();
+    if (_shouldUseAdminAiProxy(tool)) {
+      final remoteResult = await _adminAiProxyService.runTool(
+        baseUrl: adminSyncBaseUrl,
+        tool: tool,
+        settings: _aiSettings,
+        context: context,
+        userInput: userInput,
+      );
+      if (remoteResult != null) {
+        return remoteResult;
+      }
+    }
     return _aiFeatureService.runTool(
       tool: tool,
       settings: _aiSettings,
       context: context,
       userInput: userInput,
-      pageSearch: searchPages,
-      ayahSearch: searchAyahs,
+      pageSearch: searchPagesLocal,
+      ayahSearch: searchAyahsLocal,
     );
   }
 
@@ -958,12 +1385,19 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   String buildReadingSummary() {
+    final planPagesPerDay = _readingPlan.pagesPerDay(
+      remainingPages: remainingPages,
+      fallbackDailyTarget: _dailyTargetPages,
+    );
     final buffer = StringBuffer()
       ..writeln('Quran Dual Page & Multi-Line Reader Summary')
       ..writeln('Current page: $_currentPageNumber / $totalPages')
       ..writeln('Khatam progress: ${(khatamProgress * 100).round()}%')
       ..writeln('Reading streak: $_readingStreakCount day(s)')
       ..writeln('Daily target: $_dailyTargetPages page(s)')
+      ..writeln('Reading plan: ${_readingPlan.preset.label} ($planPagesPerDay pages/day)')
+      ..writeln('Hifz tracked pages: ${_hifzReviewEntries.length}')
+      ..writeln('Sync mode: ${_experienceSettings.syncMode.label}')
       ..writeln('Favorites: ${_favoritePages.length}')
       ..writeln('Bookmarks: ${_bookmarks.length}');
 
@@ -974,6 +1408,29 @@ class QuranReaderController extends ChangeNotifier {
     }
 
     return buffer.toString().trimRight();
+  }
+
+  String buildStateBackupJson() {
+    final payload = <String, dynamic>{
+      'exportedAtIso': DateTime.now().toUtc().toIso8601String(),
+      'currentPageNumber': _currentPageNumber,
+      'settings': <String, dynamic>{
+        'mushafEdition': _settings.mushafEdition.storageValue,
+        'nightMode': _settings.nightMode,
+        'preferImageMode': _settings.preferImageMode,
+      },
+      'readingPlan': _readingPlan.toJson(),
+      'experienceSettings': _experienceSettings.toJson(),
+      'hifzRevisionEntries': _hifzReviewEntries
+          .map((entry) => entry.toJson())
+          .toList(growable: false),
+      'favoritePages': _favoritePages,
+      'bookmarks': _bookmarks.map((entry) => entry.toJson()).toList(),
+      'pageNotes': _pageNotes.map(
+        (key, value) => MapEntry('$key', value),
+      ),
+    };
+    return const JsonEncoder.withIndent('  ').convert(payload);
   }
 
   Future<String?> loadCurrentChapterInfo() {
@@ -1258,6 +1715,7 @@ class QuranReaderController extends ChangeNotifier {
       return;
     }
     _settingsNotifier.value = _settings;
+    _scheduleCloudSyncPush();
   }
 
   void _publishViewportChange() {
@@ -1272,6 +1730,7 @@ class QuranReaderController extends ChangeNotifier {
       return;
     }
     _contentNotifier.value = _contentNotifier.value + 1;
+    _scheduleCloudSyncPush();
   }
 
   Future<void> _persistSettings() {
@@ -1304,6 +1763,7 @@ class QuranReaderController extends ChangeNotifier {
       preferImageMode: _settings.preferImageMode,
     );
     await _recordCurrentPage();
+    _scheduleCloudSyncPush();
   }
 
   void _scheduleControlsAutoHide() {
@@ -1586,6 +2046,7 @@ class QuranReaderController extends ChangeNotifier {
     _isDisposed = true;
     _controlsTimer?.cancel();
     _pagePersistenceTimer?.cancel();
+    _cloudSyncTimer?.cancel();
     final shouldFlushNotes = _notesPersistenceTimer?.isActive ?? false;
     _notesPersistenceTimer?.cancel();
     _playerStateSubscription?.cancel();
@@ -1599,12 +2060,14 @@ class QuranReaderController extends ChangeNotifier {
     _controlsNotifier.dispose();
     _settingsNotifier.dispose();
     _aiSettingsNotifier.dispose();
+    _experienceNotifier.dispose();
     _loadingNotifier.dispose();
     _viewportNotifier.dispose();
     _contentNotifier.dispose();
     _audioNotifier.dispose();
-    _ollamaService.dispose();
+    _adminAiProxyService.dispose();
     _audioService.dispose();
+    _readerSyncService.dispose();
     _repository.dispose();
     super.dispose();
   }
@@ -1704,10 +2167,285 @@ class QuranReaderController extends ChangeNotifier {
     _audioNotifier.value = _audioState;
   }
 
+  void _syncCurrentAiSettingsWithAdminConfig() {
+    _aiSettings = _aiSettings.copyWith(
+      responseLanguage:
+          _adminAiLanguageOverride ?? _aiSettings.responseLanguage,
+      responseDepth: _adminAiDepthOverride ?? _aiSettings.responseDepth,
+    );
+  }
+
   void _publishAiSettings() {
     if (_isDisposed) {
       return;
     }
     _aiSettingsNotifier.value = _aiSettings;
+    _scheduleCloudSyncPush();
   }
+
+  Future<void> refreshAdminSync() async {
+    final nextConfig = await _repository.refreshAdminConfig();
+    _adminConfig = nextConfig;
+    _syncCurrentAiSettingsWithAdminConfig();
+    _applyAdminEditionVisibilityRules();
+    if (!_settings.preferImageMode &&
+        _repository.hasAssetsForEdition(_settings.mushafEdition)) {
+      _settings = _settings.copyWith(preferImageMode: true);
+      _publishSettings();
+      unawaited(_persistSettings());
+    }
+    _rebuildNavigationCaches();
+    _refreshCurrentCaches();
+    _publishContentChange();
+    _warmSupplementalContentInBackground(forceRefresh: true);
+    if (!_isDisposed) {
+      notifyListeners();
+    }
+  }
+
+  Future<bool> pushReaderSyncToCloud() async {
+    if (_syncClientId.trim().isEmpty || adminSyncBaseUrl.trim().isEmpty) {
+      return false;
+    }
+    return _readerSyncService.pushSnapshot(
+      baseUrl: adminSyncBaseUrl,
+      deviceId: _syncClientId,
+      snapshot: _buildSyncSnapshot(),
+    );
+  }
+
+  Future<bool> pullReaderSyncFromCloud() async {
+    if (_syncClientId.trim().isEmpty || adminSyncBaseUrl.trim().isEmpty) {
+      return false;
+    }
+    final snapshot = await _readerSyncService.pullSnapshot(
+      baseUrl: adminSyncBaseUrl,
+      deviceId: _syncClientId,
+    );
+    if (snapshot == null) {
+      return false;
+    }
+    await _applyRemoteSyncSnapshot(snapshot);
+    _publishSettings();
+    _publishAiSettings();
+    _publishExperienceSettings();
+    _publishCurrentPage();
+    _publishContentChange();
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> saveAdminSyncBaseUrl(String baseUrl) async {
+    await _preferences.saveAdminPublicBaseUrl(baseUrl);
+    await refreshAdminSync();
+    if (baseUrl.trim().isNotEmpty &&
+        _experienceSettings.syncMode == ReaderSyncMode.localOnly) {
+      _experienceSettings = _experienceSettings.copyWith(
+        syncMode: ReaderSyncMode.cloudReady,
+      );
+      _publishExperienceSettings();
+      await _repository.saveExperienceSettings(_experienceSettings);
+    }
+    _scheduleCloudSyncPush();
+  }
+
+  ReaderRemoteAssetPack? remoteAssetPackForEdition(MushafEdition edition) {
+    return _adminConfig.assetPacks[edition];
+  }
+
+  String adminPackStatusForEdition(MushafEdition edition) {
+    final remotePack = remoteAssetPackForEdition(edition);
+    if (remotePack != null) {
+      return 'Admin v${remotePack.version}';
+    }
+    return 'Not available';
+  }
+
+  String adminPackSubtitleForEdition(MushafEdition edition) {
+    final remotePack = remoteAssetPackForEdition(edition);
+    if (remotePack != null) {
+      return '${edition.bestUseLabel}. Admin pack ${remotePack.version} with ${remotePack.pageCount} imported pages is active.';
+    }
+    return '${edition.bestUseLabel}. No admin-managed pack is active yet.';
+  }
+
+  bool _featureFlag(String key, {required bool fallback}) {
+    return _adminConfig.isFeatureEnabled(key, fallback: fallback);
+  }
+
+  bool _shouldUseAdminAiProxy(QuranAiTool tool) {
+    if (adminSyncBaseUrl.trim().isEmpty) {
+      return false;
+    }
+    if (!QuranAdminAiProxyService.supportsRemoteTool(tool)) {
+      return false;
+    }
+    return _normalizedAdminAiProvider != 'local';
+  }
+
+  Future<void> _hydrateFromCloudIfNeeded() async {
+    if (_experienceSettings.syncMode != ReaderSyncMode.cloudReady ||
+        _syncClientId.trim().isEmpty ||
+        adminSyncBaseUrl.trim().isEmpty) {
+      return;
+    }
+    final hasLocalState = _bookmarks.isNotEmpty ||
+        _favoritePages.isNotEmpty ||
+        _pageNotes.isNotEmpty ||
+        _readingHistory.isNotEmpty ||
+        _hifzReviewEntries.isNotEmpty;
+    final snapshot = await _readerSyncService.pullSnapshot(
+      baseUrl: adminSyncBaseUrl,
+      deviceId: _syncClientId,
+    );
+    if (snapshot != null) {
+      await _applyRemoteSyncSnapshot(snapshot);
+      return;
+    }
+
+    if (hasLocalState) {
+      await _readerSyncService.pushSnapshot(
+        baseUrl: adminSyncBaseUrl,
+        deviceId: _syncClientId,
+        snapshot: _buildSyncSnapshot(),
+      );
+    }
+  }
+
+  ReaderSyncSnapshot _buildSyncSnapshot() {
+    return ReaderSyncSnapshot(
+      deviceId: _syncClientId,
+      lastPageNumber: _currentPageNumber,
+      settings: _settings,
+      aiSettings: _aiSettings,
+      readingPlan: _readingPlan,
+      experienceSettings: _experienceSettings,
+      dailyTargetPages: _dailyTargetPages,
+      dailyProgressState: _dailyProgressState,
+      readingHistory: _readingHistory,
+      pageNotes: _pageNotes,
+      favoritePages: _favoritePages,
+      bookmarks: _bookmarks,
+      hifzReviewEntries: _hifzReviewEntries,
+      updatedAtIso: DateTime.now().toUtc().toIso8601String(),
+    );
+  }
+
+  Future<void> _applyRemoteSyncSnapshot(ReaderSyncSnapshot snapshot) async {
+    _settings = snapshot.settings;
+    _aiSettings = snapshot.aiSettings;
+    _syncCurrentAiSettingsWithAdminConfig();
+    _readingPlan = snapshot.readingPlan;
+    _experienceSettings = snapshot.experienceSettings;
+    _dailyTargetPages = snapshot.dailyTargetPages;
+    _dailyProgressState = snapshot.dailyProgressState;
+    _readingHistory = snapshot.readingHistory;
+    _pageNotes = snapshot.pageNotes;
+    _favoritePages = snapshot.favoritePages;
+    _bookmarks = snapshot.bookmarks;
+    _hifzReviewEntries = snapshot.hifzReviewEntries;
+
+    _repository.setMushafEdition(_settings.mushafEdition);
+    _currentPageNumber = _repository.clampPage(
+      snapshot.lastPageNumber,
+      preferImageMode: _settings.preferImageMode,
+    );
+    _rebuildContentCaches();
+    _rebuildNavigationCaches();
+    _refreshCurrentCaches();
+
+    await Future.wait([
+      _repository.saveSettings(_settings),
+      _preferences.saveAiSettings(_aiSettings),
+      _repository.saveReadingPlan(_readingPlan),
+      _repository.saveExperienceSettings(_experienceSettings),
+      _repository.saveDailyTargetPages(_dailyTargetPages),
+      _repository.saveDailyProgressState(_dailyProgressState),
+      _repository.saveReadingHistory(_readingHistory),
+      _repository.savePageNotes(_pageNotes),
+      _repository.saveFavoritePages(_favoritePages),
+      _repository.saveBookmarks(_bookmarks),
+      _repository.saveHifzRevisionEntries(_hifzReviewEntries),
+      _repository.saveLastPageNumber(
+        _currentPageNumber,
+        preferImageMode: _settings.preferImageMode,
+      ),
+    ]);
+  }
+
+  void _scheduleCloudSyncPush() {
+    if (_experienceSettings.syncMode != ReaderSyncMode.cloudReady ||
+        _syncClientId.trim().isEmpty ||
+        adminSyncBaseUrl.trim().isEmpty) {
+      return;
+    }
+    _cloudSyncTimer?.cancel();
+    _cloudSyncTimer = Timer(const Duration(seconds: 2), () {
+      unawaited(pushReaderSyncToCloud());
+    });
+  }
+
+  void _warmSupplementalContentInBackground({bool forceRefresh = false}) {
+    if (_supplementalContentWarmFuture != null && !forceRefresh) {
+      return;
+    }
+
+    final future = _repository
+        .warmSupplementalContent(forceRefresh: forceRefresh)
+        .then((_) {
+      _rebuildNavigationCaches();
+      _refreshCurrentCaches();
+      _publishContentChange();
+      if (!_isDisposed) {
+        notifyListeners();
+      }
+    }).catchError((_) {
+      // Keep launch fast even if large remote datasets are temporarily missing.
+    });
+
+    _supplementalContentWarmFuture = future.whenComplete(() {
+      if (identical(_supplementalContentWarmFuture, future)) {
+        _supplementalContentWarmFuture = null;
+      }
+    });
+  }
+
+  void _applyAdminEditionVisibilityRules() {
+    if (!_adminConfig.hasEditionControls) {
+      return;
+    }
+
+    final enabledEditions = availableImageEditions;
+    if (enabledEditions.contains(_settings.mushafEdition)) {
+      return;
+    }
+
+    final standardPage = currentStandardPageNumber;
+    final fallbackEdition = enabledEditions.isNotEmpty
+        ? enabledEditions.first
+        : _repository.resolveSupportedEdition(_settings.mushafEdition);
+    final nextPreferImageMode = _repository.hasAssetsForEdition(fallbackEdition);
+
+    _settings = _settings.copyWith(
+      mushafEdition: fallbackEdition,
+      preferImageMode: nextPreferImageMode,
+    );
+    _repository.setMushafEdition(fallbackEdition);
+    _currentPageNumber = _repository.navigationPageForStandardPage(
+      standardPage,
+      preferImageMode: _settings.preferImageMode,
+    );
+    _publishSettings();
+    _publishCurrentPage();
+    unawaited(_persistSettings());
+  }
+
+  void _publishExperienceSettings() {
+    if (_isDisposed) {
+      return;
+    }
+    _experienceNotifier.value = _experienceSettings;
+    _scheduleCloudSyncPush();
+  }
+
 }

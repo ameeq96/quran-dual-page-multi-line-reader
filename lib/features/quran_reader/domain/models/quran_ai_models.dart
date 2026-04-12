@@ -6,6 +6,42 @@ enum AiResponseLanguage {
   bilingual,
 }
 
+enum AiResponseDepth {
+  fast,
+  balanced,
+  deep,
+}
+
+extension AiResponseDepthX on AiResponseDepth {
+  String get storageValue => switch (this) {
+        AiResponseDepth.fast => 'fast',
+        AiResponseDepth.balanced => 'balanced',
+        AiResponseDepth.deep => 'deep',
+      };
+
+  String get label => switch (this) {
+        AiResponseDepth.fast => 'Fast',
+        AiResponseDepth.balanced => 'Balanced',
+        AiResponseDepth.deep => 'Deep',
+      };
+
+  String get promptLabel => switch (this) {
+        AiResponseDepth.fast =>
+          'Prefer short answers, minimal context, and the quickest helpful output.',
+        AiResponseDepth.balanced =>
+          'Balance speed and depth. Use concise explanation with enough detail to be useful.',
+        AiResponseDepth.deep =>
+          'Use slightly deeper explanation, stronger structure, and more complete study help.',
+      };
+
+  static AiResponseDepth fromStorageValue(String? value) {
+    return AiResponseDepth.values.firstWhere(
+      (entry) => entry.storageValue == value,
+      orElse: () => AiResponseDepth.fast,
+    );
+  }
+}
+
 extension AiResponseLanguageX on AiResponseLanguage {
   String get storageValue => switch (this) {
         AiResponseLanguage.urdu => 'urdu',
@@ -169,47 +205,24 @@ extension QuranAiToolX on QuranAiTool {
 
 class ReaderAiSettings {
   const ReaderAiSettings({
-    required this.ollamaEnabled,
-    required this.ollamaBaseUrl,
-    required this.ollamaModel,
     required this.responseLanguage,
+    required this.responseDepth,
   });
 
   const ReaderAiSettings.defaults()
-      : ollamaEnabled = false,
-        ollamaBaseUrl = 'http://127.0.0.1:11434',
-        ollamaModel = 'qwen2.5:1.5b-instruct',
-        responseLanguage = AiResponseLanguage.english;
+      : responseLanguage = AiResponseLanguage.english,
+        responseDepth = AiResponseDepth.fast;
 
-  final bool ollamaEnabled;
-  final String ollamaBaseUrl;
-  final String ollamaModel;
   final AiResponseLanguage responseLanguage;
-
-  String get normalizedOllamaBaseUrl {
-    final trimmed = ollamaBaseUrl.trim();
-    if (trimmed.isEmpty) {
-      return 'http://127.0.0.1:11434';
-    }
-    return trimmed.endsWith('/') ? trimmed.substring(0, trimmed.length - 1) : trimmed;
-  }
-
-  bool get canUseOllama =>
-      ollamaEnabled &&
-      normalizedOllamaBaseUrl.isNotEmpty &&
-      ollamaModel.trim().isNotEmpty;
+  final AiResponseDepth responseDepth;
 
   ReaderAiSettings copyWith({
-    bool? ollamaEnabled,
-    String? ollamaBaseUrl,
-    String? ollamaModel,
     AiResponseLanguage? responseLanguage,
+    AiResponseDepth? responseDepth,
   }) {
     return ReaderAiSettings(
-      ollamaEnabled: ollamaEnabled ?? this.ollamaEnabled,
-      ollamaBaseUrl: ollamaBaseUrl ?? this.ollamaBaseUrl,
-      ollamaModel: ollamaModel ?? this.ollamaModel,
       responseLanguage: responseLanguage ?? this.responseLanguage,
+      responseDepth: responseDepth ?? this.responseDepth,
     );
   }
 }

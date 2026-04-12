@@ -5,10 +5,12 @@ import '../core/storage/reader_preferences.dart';
 import '../features/quran_reader/data/repositories/quran_reader_repository.dart';
 import '../features/quran_reader/data/services/quran_asset_resolver.dart';
 import '../features/quran_reader/data/services/quran_audio_service.dart';
+import '../features/quran_reader/data/services/quran_admin_config_service.dart';
 import '../features/quran_reader/data/services/quran_navigation_data_source.dart';
-import '../features/quran_reader/data/services/quran_ollama_service.dart';
 import '../features/quran_reader/data/services/quran_page_insights_data_source.dart';
 import '../features/quran_reader/data/services/quran_remote_content_service.dart';
+import '../features/quran_reader/data/services/quran_reader_sync_service.dart';
+import '../features/quran_reader/data/services/quran_search_api_service.dart';
 import '../features/quran_reader/data/services/quran_text_data_source.dart';
 import '../features/quran_reader/presentation/controllers/quran_reader_controller.dart';
 import '../features/quran_reader/presentation/screens/quran_home_screen.dart';
@@ -22,7 +24,7 @@ class QuranApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Quran Dual Page',
+      title: 'Quran Dual Page & Multi-Line Reader',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
@@ -50,19 +52,26 @@ class _AppBootstrapState extends State<_AppBootstrap> {
   void initState() {
     super.initState();
     _preferences = ReaderPreferences();
+    final adminConfigService = QuranAdminConfigService(
+      preferences: _preferences,
+    );
     final repository = QuranReaderRepository(
       assetResolver: QuranAssetResolver(),
       navigationDataSource: QuranNavigationDataSource(),
       textDataSource: QuranTextDataSource(),
       pageInsightsDataSource: QuranPageInsightsDataSource(),
+      adminConfigService: adminConfigService,
+      searchApiService: QuranSearchApiService(
+        adminConfigService: adminConfigService,
+      ),
       remoteContentService: QuranRemoteContentService(),
       preferences: _preferences,
     );
     _controller = QuranReaderController(
       repository: repository,
       audioService: QuranAudioService(),
+      readerSyncService: QuranReaderSyncService(),
       preferences: _preferences,
-      ollamaService: QuranOllamaService(),
     );
     _bootstrapFuture = _bootstrap();
   }

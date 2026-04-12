@@ -6,13 +6,13 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../app/app_theme.dart';
-import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
 import 'reader_sheet_frame.dart';
 
 Future<void> showReaderDashboardSheet(
   BuildContext context, {
   required QuranReaderController controller,
+  required VoidCallback onOpenGrowthHub,
   required VoidCallback onOpenSearch,
   required VoidCallback onOpenInsights,
   required VoidCallback onOpenAudio,
@@ -31,6 +31,7 @@ Future<void> showReaderDashboardSheet(
         child: ReaderSheetFrame(
           child: ReaderDashboardContent(
             controller: controller,
+            onOpenGrowthHub: onOpenGrowthHub,
             onOpenSearch: onOpenSearch,
             onOpenInsights: onOpenInsights,
             onOpenAudio: onOpenAudio,
@@ -51,6 +52,7 @@ class QuranDashboardScreen extends StatelessWidget {
   const QuranDashboardScreen({
     super.key,
     required this.controller,
+    required this.onOpenGrowthHub,
     required this.onOpenSearch,
     required this.onOpenInsights,
     required this.onOpenAudio,
@@ -62,6 +64,7 @@ class QuranDashboardScreen extends StatelessWidget {
   });
 
   final QuranReaderController controller;
+  final VoidCallback onOpenGrowthHub;
   final VoidCallback onOpenSearch;
   final VoidCallback onOpenInsights;
   final VoidCallback onOpenAudio;
@@ -73,15 +76,29 @@ class QuranDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ReaderSettings>(
-      valueListenable: controller.settingsListenable,
-      builder: (context, settings, _) {
+    return AnimatedBuilder(
+      animation: Listenable.merge(<Listenable>[
+        controller.settingsListenable,
+        controller.experienceListenable,
+      ]),
+      builder: (context, _) {
+        final settings = controller.settings;
+        final experience = controller.experienceSettings;
         return Theme(
-          data: settings.nightMode ? AppTheme.dark() : AppTheme.light(),
+          data: settings.nightMode
+              ? AppTheme.dark(
+                  highContrast: experience.highContrastMode,
+                  largerText: experience.largerTextMode,
+                )
+              : AppTheme.light(
+                  highContrast: experience.highContrastMode,
+                  largerText: experience.largerTextMode,
+                ),
           child: Scaffold(
             body: SafeArea(
               child: ReaderDashboardContent(
                 controller: controller,
+                onOpenGrowthHub: onOpenGrowthHub,
                 onOpenSearch: onOpenSearch,
                 onOpenInsights: onOpenInsights,
                 onOpenAudio: onOpenAudio,
@@ -108,6 +125,7 @@ class ReaderDashboardContent extends StatelessWidget {
   const ReaderDashboardContent({
     super.key,
     required this.controller,
+    required this.onOpenGrowthHub,
     required this.onOpenSearch,
     required this.onOpenInsights,
     required this.onOpenAudio,
@@ -121,6 +139,7 @@ class ReaderDashboardContent extends StatelessWidget {
   });
 
   final QuranReaderController controller;
+  final VoidCallback onOpenGrowthHub;
   final VoidCallback onOpenSearch;
   final VoidCallback onOpenInsights;
   final VoidCallback onOpenAudio;
@@ -153,7 +172,6 @@ class ReaderDashboardContent extends StatelessWidget {
     return AnimatedBuilder(
       animation: Listenable.merge(<Listenable>[
         controller.pageListenable,
-        controller.audioListenable,
         controller.contentListenable,
       ]),
       builder: (context, _) {
@@ -219,48 +237,61 @@ class ReaderDashboardContent extends StatelessWidget {
                         spacing: 10,
                         runSpacing: 10,
                         children: [
+                          if (controller.isPlansPacksEnabled)
+                            _QuickActionButton(
+                              icon: Icons.insights_outlined,
+                              label: 'Plans',
+                              onPressed: () =>
+                                  _handleAction(context, onOpenGrowthHub),
+                            ),
                           _QuickActionButton(
                             icon: Icons.search_rounded,
                             label: 'Search',
                             onPressed: () =>
                                 _handleAction(context, onOpenSearch),
                           ),
-                          _QuickActionButton(
-                            icon: Icons.auto_stories_outlined,
-                            label: 'Insights',
-                            onPressed: () =>
-                                _handleAction(context, onOpenInsights),
-                          ),
-                          _QuickActionButton(
-                            icon: Icons.headphones_rounded,
-                            label: 'Audio',
-                            onPressed: () =>
-                                _handleAction(context, onOpenAudio),
-                          ),
-                          _QuickActionButton(
-                            icon: Icons.auto_awesome_rounded,
-                            label: 'AI Studio',
-                            onPressed: () =>
-                                _handleAction(context, onOpenAiStudio),
-                          ),
-                          _QuickActionButton(
-                            icon: Icons.photo_library_outlined,
-                            label: 'Pages',
-                            onPressed: () =>
-                                _handleAction(context, onOpenPageStrip),
-                          ),
-                          _QuickActionButton(
-                            icon: Icons.compare_rounded,
-                            label: 'Compare',
-                            onPressed: () =>
-                                _handleAction(context, onOpenCompare),
-                          ),
-                          _QuickActionButton(
-                            icon: Icons.translate_rounded,
-                            label: 'Kanzul study',
-                            onPressed: () =>
-                                _handleAction(context, onOpenKanzulStudy),
-                          ),
+                          if (controller.isInsightsEnabled)
+                            _QuickActionButton(
+                              icon: Icons.auto_stories_outlined,
+                              label: 'Insights',
+                              onPressed: () =>
+                                  _handleAction(context, onOpenInsights),
+                            ),
+                          if (controller.isAudioEnabled)
+                            _QuickActionButton(
+                              icon: Icons.headphones_rounded,
+                              label: 'Audio',
+                              onPressed: () =>
+                                  _handleAction(context, onOpenAudio),
+                            ),
+                          if (controller.isAiStudioEnabled)
+                            _QuickActionButton(
+                              icon: Icons.auto_awesome_rounded,
+                              label: 'AI Studio',
+                              onPressed: () =>
+                                  _handleAction(context, onOpenAiStudio),
+                            ),
+                          if (controller.isPageStripEnabled)
+                            _QuickActionButton(
+                              icon: Icons.photo_library_outlined,
+                              label: 'Pages',
+                              onPressed: () =>
+                                  _handleAction(context, onOpenPageStrip),
+                            ),
+                          if (controller.isCompareEnabled)
+                            _QuickActionButton(
+                              icon: Icons.compare_rounded,
+                              label: 'Compare',
+                              onPressed: () =>
+                                  _handleAction(context, onOpenCompare),
+                            ),
+                          if (controller.isKanzulStudyEnabled)
+                            _QuickActionButton(
+                              icon: Icons.translate_rounded,
+                              label: 'Kanzul study',
+                              onPressed: () =>
+                                  _handleAction(context, onOpenKanzulStudy),
+                            ),
                         ],
                       ),
                     ],

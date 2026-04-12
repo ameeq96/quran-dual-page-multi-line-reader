@@ -2,7 +2,7 @@
     "source":  {
                    "name":  "Quran.com API v4",
                    "endpoint":  "https://api.quran.com/api/v4/verses/by_page/{page}",
-                   "generatedAt":  "2026-03-19T18:13:59.5939742Z",
+                   "generatedAt":  "2026-04-11T13:49:58.7407227Z",
                    "script":  "text_indopak",
                    "notes":  "Bundled IndoPak 16-line-compatible page text grouped by Mushaf line number for offline app use."
                },

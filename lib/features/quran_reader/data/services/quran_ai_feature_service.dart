@@ -1,13 +1,8 @@
 import '../../domain/models/quran_ai_models.dart';
 import '../../domain/models/quran_search_result.dart';
-import 'quran_ollama_service.dart';
 
 class QuranAiFeatureService {
-  QuranAiFeatureService({
-    required QuranOllamaService ollamaService,
-  }) : _ollamaService = ollamaService;
-
-  final QuranOllamaService _ollamaService;
+  QuranAiFeatureService();
 
   Future<QuranAiToolResult> runTool({
     required QuranAiTool tool,
@@ -158,22 +153,11 @@ class QuranAiFeatureService {
     required String offlineText,
     required String toolInstruction,
   }) async {
-    final ollamaOutput = await _tryOllamaNarrative(
-      settings: settings,
-      context: context,
-      userInput: userInput,
-      toolInstruction: toolInstruction,
-    );
-
     return QuranAiToolResult(
       tool: tool,
-      output: ollamaOutput ?? offlineText,
-      sourceLabel: _sourceLabel(
-        settings: settings,
-        usedOllama: ollamaOutput != null,
-        localLabel: 'Free local assistant',
-      ),
-      usedOnlineModel: ollamaOutput != null,
+      output: offlineText,
+      sourceLabel: 'Free local assistant',
+      usedOnlineModel: false,
     );
   }
 
@@ -264,24 +248,11 @@ class QuranAiFeatureService {
       english:
           'Best folder: ${suggestion.folder}\nSuggested label: ${suggestion.label}\nReason: ${suggestion.reason}',
     );
-    final ollamaOutput = await _tryOllamaNarrative(
-      settings: settings,
-      context: context,
-      userInput:
-          'Bookmark intent: ${userInput.isEmpty ? 'General page review' : userInput}. Suggested folder ${suggestion.folder}, label ${suggestion.label}, reason ${suggestion.reason}.',
-      toolInstruction:
-          'Give a short bookmark recommendation for the page. Keep it to 2 or 3 lines. Mention why the suggested folder and label make sense.',
-    );
-
     return QuranAiToolResult(
       tool: tool,
-      output: ollamaOutput ?? fallbackOutput,
-      sourceLabel: _sourceLabel(
-        settings: settings,
-        usedOllama: ollamaOutput != null,
-        localLabel: 'Free local bookmark helper',
-      ),
-      usedOnlineModel: ollamaOutput != null,
+      output: fallbackOutput,
+      sourceLabel: 'Free local bookmark helper',
+      usedOnlineModel: false,
       bookmarkSuggestion: suggestion,
     );
   }
@@ -385,24 +356,11 @@ class QuranAiFeatureService {
           'Closest match: Line ${match.lineNumber}\nSimilarity: ${(match.score * 100).round()}%\n${missingWords.isEmpty ? 'No obvious missing words were detected, but repeat the line slowly once more.' : 'Words to review: ${missingWords.join(', ')}'}\nTip: Revise the next one or two lines together with it.',
     );
 
-    final ollamaOutput = await _tryOllamaNarrative(
-      settings: settings,
-      context: context,
-      userInput:
-          'Student recall text:\n$userInput\n\nClosest page line:\n${match.text}\n\nMissing review words: ${missingWords.join(', ')}',
-      toolInstruction:
-          'Act as a gentle hifz coach. Compare the student recall text with the closest page line, point out weak spots, and give a short revision plan. Do not pretend to do audio analysis.',
-    );
-
     return QuranAiToolResult(
       tool: tool,
-      output: ollamaOutput ?? offlineText,
-      sourceLabel: _sourceLabel(
-        settings: settings,
-        usedOllama: ollamaOutput != null,
-        localLabel: 'Free local hifz coach',
-      ),
-      usedOnlineModel: ollamaOutput != null,
+      output: offlineText,
+      sourceLabel: 'Free local hifz coach',
+      usedOnlineModel: false,
       matchedLineNumber: match.lineNumber,
       matchedLineText: match.text,
     );
@@ -423,76 +381,12 @@ class QuranAiFeatureService {
           'Tajweed focus for the current page:\n${focusItems.isEmpty ? 'No strong tajweed markers were extracted from the visible lines. Focus on slow recitation and proper stopping points.' : focusItems.join('\n')}\n${userInput.isEmpty ? 'Paste a transcript for more focused feedback.' : 'While reviewing the pasted text, pay extra attention to madd, ghunna, and qalqala spots.'}',
     );
 
-    final ollamaOutput = await _tryOllamaNarrative(
-      settings: settings,
-      context: context,
-      userInput: userInput,
-      toolInstruction:
-          'Act as a tajweed tutor. Use the supplied Arabic lines to point out likely ghunna, madd, qalqala, and stopping focus areas. If there is no audio, say it is text-based guidance only.',
-    );
-
     return QuranAiToolResult(
       tool: tool,
-      output: ollamaOutput ?? offlineText,
-      sourceLabel: _sourceLabel(
-        settings: settings,
-        usedOllama: ollamaOutput != null,
-        localLabel: 'Free local tajweed helper',
-      ),
-      usedOnlineModel: ollamaOutput != null,
+      output: offlineText,
+      sourceLabel: 'Free local tajweed helper',
+      usedOnlineModel: false,
     );
-  }
-
-  String _sourceLabel({
-    required ReaderAiSettings settings,
-    required bool usedOllama,
-    required String localLabel,
-  }) {
-    if (usedOllama) {
-      return 'Ollama ${settings.ollamaModel.trim()}';
-    }
-    if (settings.canUseOllama) {
-      return '$localLabel (Ollama unavailable)';
-    }
-    return localLabel;
-  }
-
-  Future<String?> _tryOllamaNarrative({
-    required ReaderAiSettings settings,
-    required QuranAiPageContext context,
-    required String userInput,
-    required String toolInstruction,
-  }) async {
-    if (!settings.canUseOllama) {
-      return null;
-    }
-
-    final systemPrompt = [
-      'You are a careful Quran study assistant for a Flutter app.',
-      settings.responseLanguage.promptLabel,
-      toolInstruction,
-      'Keep answers concise, accurate to the supplied context, and respectful.',
-      'Prefer short paragraphs or 3 to 5 bullets only.',
-      'Do not use markdown headings, bold markers, code fences, or hash symbols.',
-      'Return clean plain text only.',
-      'Do not give long introductions or repetition.',
-      'Do not invent verse wording or unsupported fiqh rulings.',
-    ].join(' ');
-
-    final userPrompt = [
-      context.toPromptBlock(),
-      if (userInput.trim().isNotEmpty) '\nUser request:\n$userInput',
-    ].join('\n\n');
-
-    try {
-      return await _ollamaService.complete(
-        settings: settings,
-        systemPrompt: systemPrompt,
-        userPrompt: userPrompt,
-      );
-    } catch (_) {
-      return null;
-    }
   }
 
   String _buildExplainerText(

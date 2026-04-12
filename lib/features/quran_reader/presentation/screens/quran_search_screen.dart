@@ -24,6 +24,9 @@ class QuranSearchScreen extends StatelessWidget {
     required this.maxPage,
     required this.surahPageResolver,
     required this.juzPageResolver,
+    required this.surahSearch,
+    required this.juzSearch,
+    required this.markerSearch,
     required this.ayahSearch,
     required this.textSearch,
   });
@@ -42,8 +45,15 @@ class QuranSearchScreen extends StatelessWidget {
   final int maxPage;
   final int Function(QuranSurahNavigationEntry entry) surahPageResolver;
   final int Function(QuranJuzNavigationEntry entry) juzPageResolver;
-  final List<QuranSearchResult> Function(String query) ayahSearch;
-  final List<QuranSearchResult> Function(String query) textSearch;
+  final Future<List<QuranSurahNavigationEntry>> Function(String query)
+      surahSearch;
+  final Future<List<QuranJuzNavigationEntry>> Function(String query) juzSearch;
+  final Future<List<QuranNavigationMarker>> Function(
+    String query, {
+    required String category,
+  }) markerSearch;
+  final Future<List<QuranSearchResult>> Function(String query) ayahSearch;
+  final Future<List<QuranSearchResult>> Function(String query) textSearch;
 
   @override
   Widget build(BuildContext context) {
@@ -71,6 +81,9 @@ class QuranSearchScreen extends StatelessWidget {
                 applyKeyboardInset: false,
                 surahPageResolver: surahPageResolver,
                 juzPageResolver: juzPageResolver,
+                surahSearch: surahSearch,
+                juzSearch: juzSearch,
+                markerSearch: markerSearch,
                 ayahSearch: ayahSearch,
                 textSearch: textSearch,
               ),

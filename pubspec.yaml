@@ -58,19 +58,6 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-  assets:
-    - assets/quran_pages/quran_navigation_index.json
-    - assets/quran_pages/quran_page_insights.json
-    - assets/quran_pages/quran_text_by_page.json
-    - assets/quran_pages/taj_navigation_overrides.json
-    - assets/quran_pages/10_line/
-    - assets/quran_pages/13_line/
-    - assets/quran_pages/14_line/
-    - assets/quran_pages/15_line/
-    - assets/quran_pages/16_line/
-    - assets/quran_pages/17_line/
-    - assets/quran_pages/kanzul_iman/
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

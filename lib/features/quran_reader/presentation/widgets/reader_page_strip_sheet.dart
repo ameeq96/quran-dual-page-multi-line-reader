@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../app/app_theme.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
+import 'quran_page_image_provider.dart';
 import 'reader_sheet_frame.dart';
 
 Future<void> showReaderPageStripSheet(
@@ -137,8 +138,10 @@ class ReaderPageStripContent extends StatelessWidget {
             const SizedBox(height: 16),
             Expanded(
               child: GridView.builder(
-                cacheExtent: size.height * 1.1,
+                cacheExtent: size.height * 0.8,
                 itemCount: controller.totalPages,
+                addAutomaticKeepAlives: false,
+                addRepaintBoundaries: false,
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: columns,
                   crossAxisSpacing: 12,
@@ -187,11 +190,16 @@ class ReaderPageStripContent extends StatelessWidget {
                                             ),
                                           ),
                                         )
-                                      : Image.asset(
-                                          page.assetPath!,
+                                      : Image(
+                                          image: buildQuranPageImageProvider(
+                                            page,
+                                            cacheWidth: thumbnailCacheWidth,
+                                          ),
                                           fit: BoxFit.cover,
-                                          cacheWidth: thumbnailCacheWidth,
+                                          gaplessPlayback: true,
                                           filterQuality: FilterQuality.none,
+                                          errorBuilder: (_, __, ___) =>
+                                              const SizedBox.shrink(),
                                         ),
                                 ),
                               ),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../app/app_theme.dart';
@@ -14,9 +16,11 @@ import '../widgets/reader_dashboard_sheet.dart';
 import '../widgets/reader_insights_sheet.dart';
 import '../widgets/reader_motion.dart';
 import '../widgets/reader_page_strip_sheet.dart';
+import '../widgets/quran_page_image_provider.dart';
 import '../widgets/single_page_reader.dart';
 import 'quran_ai_studio_screen.dart';
 import 'quran_bookmarks_screen.dart';
+import 'quran_growth_hub_screen.dart';
 import 'quran_search_screen.dart';
 import 'quran_settings_screen.dart';
 
@@ -55,6 +59,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
   late final PageController _pageController;
   late int _lastKnownSpreadIndex;
   late int _lastKnownPageViewIndex;
+  Timer? _prefetchTimer;
   int? _lastPrefetchedPageNumber;
   bool? _lastPrefetchedLowMemoryMode;
   bool? _lastPrefetchedPreferImageMode;
@@ -78,7 +83,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     widget.controller.settingsListenable.addListener(_syncViewControllers);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _prefetchNearbyPages(force: true);
+        _schedulePrefetchNearbyPages(force: true);
         _runInitialActionIfNeeded();
       }
     });
@@ -146,7 +151,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     }
 
     if (mounted) {
-      _prefetchNearbyPages();
+      _schedulePrefetchNearbyPages();
     }
   }
 
@@ -156,6 +161,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     widget.controller.persistReadingPosition();
     widget.controller.pageListenable.removeListener(_syncViewControllers);
     widget.controller.settingsListenable.removeListener(_syncViewControllers);
+    _prefetchTimer?.cancel();
     _spreadController.dispose();
     _pageController.dispose();
     super.dispose();
@@ -245,6 +251,9 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
           maxPage: widget.controller.totalPages,
           surahPageResolver: widget.controller.navigationPageForSurahEntry,
           juzPageResolver: widget.controller.navigationPageForJuzEntry,
+          surahSearch: widget.controller.searchSurahs,
+          juzSearch: widget.controller.searchJuzs,
+          markerSearch: widget.controller.searchMarkers,
           ayahSearch: widget.controller.searchAyahs,
           textSearch: widget.controller.searchPages,
         ),
@@ -291,6 +300,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
       buildReaderPageRoute<int>(
         builder: (screenContext) => QuranDashboardScreen(
           controller: widget.controller,
+          onOpenGrowthHub: () => _openGrowthHub(),
           onOpenSearch: () => _openSearchSheet(),
           onOpenInsights: () => _openInsightsSheet(),
           onOpenAudio: () => _openAudioSheet(),
@@ -301,6 +311,21 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
           onSelectPage: (pageNumber) async {
             Navigator.of(screenContext).pop(pageNumber);
           },
+        ),
+      ),
+    ).then((page) async {
+      if (!mounted || page == null) {
+        return;
+      }
+      await widget.controller.jumpToPage(page);
+    });
+  }
+
+  Future<void> _openGrowthHub() {
+    return Navigator.of(context).push<int>(
+      buildReaderPageRoute<int>(
+        builder: (context) => QuranGrowthHubScreen(
+          controller: widget.controller,
         ),
       ),
     ).then((page) async {
@@ -371,6 +396,24 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     );
   }
 
+  void _schedulePrefetchNearbyPages({bool force = false}) {
+    _prefetchTimer?.cancel();
+    _prefetchTimer = Timer(
+      force ? Duration.zero : const Duration(milliseconds: 110),
+      () {
+        if (!mounted) {
+          return;
+        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) {
+            return;
+          }
+          _prefetchNearbyPages(force: force);
+        });
+      },
+    );
+  }
+
   void _prefetchNearbyPages({bool force = false}) {
     final currentPageNumber = widget.controller.currentPageNumber;
     final lowMemoryMode = widget.controller.settings.lowMemoryMode;
@@ -380,7 +423,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     final devicePixelRatio = mediaQuery?.devicePixelRatio ?? 1.0;
     final cacheWidth = (viewportWidth * devicePixelRatio)
         .round()
-        .clamp(lowMemoryMode ? 520 : 700, lowMemoryMode ? 980 : 1680)
+        .clamp(lowMemoryMode ? 420 : 520, lowMemoryMode ? 760 : 1080)
         .toInt();
     if (!force &&
         _lastPrefetchedPageNumber == currentPageNumber &&
@@ -396,6 +439,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     final pagesToWarm = widget.controller.settings.lowMemoryMode
         ? <int>{currentPageNumber}
         : <int>{
+            currentPageNumber - 2,
             currentPageNumber - 1,
             currentPageNumber,
             currentPageNumber + 1,
@@ -408,10 +452,9 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
       final assetPath = page.assetPath;
       if (assetPath != null) {
         precacheImage(
-          ResizeImage.resizeIfNeeded(
-            cacheWidth,
-            null,
-            AssetImage(assetPath),
+          buildQuranPageImageProvider(
+            page,
+            cacheWidth: cacheWidth,
           ),
           context,
         );
@@ -433,16 +476,28 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
           );
         }
 
-        return ValueListenableBuilder<ReaderSettings>(
-          valueListenable: widget.controller.settingsListenable,
-          builder: (context, settings, _) {
+        return AnimatedBuilder(
+          animation: Listenable.merge(<Listenable>[
+            widget.controller.settingsListenable,
+            widget.controller.experienceListenable,
+          ]),
+          builder: (context, _) {
+            final settings = widget.controller.settings;
+            final experience = widget.controller.experienceSettings;
             return LayoutBuilder(
               builder: (context, constraints) {
                 final isPortrait = constraints.maxHeight > constraints.maxWidth;
                 final compactPortrait = isPortrait &&
                     (constraints.maxHeight < 760 || constraints.maxWidth < 430);
-                final effectiveTheme =
-                    settings.nightMode ? AppTheme.dark() : AppTheme.light();
+                final effectiveTheme = settings.nightMode
+                    ? AppTheme.dark(
+                        highContrast: experience.highContrastMode,
+                        largerText: experience.largerTextMode,
+                      )
+                    : AppTheme.light(
+                        highContrast: experience.highContrastMode,
+                        largerText: experience.largerTextMode,
+                      );
 
                 return Theme(
                   data: effectiveTheme,
@@ -454,16 +509,20 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                         animation: widget.controller.controlsListenable,
                         builder: (context, _) {
                           final showControls = widget.controller.controlsVisible;
-                          final showAppBar = isPortrait || showControls;
-                          final showBottomDock = isPortrait && !showControls;
+                          final fullscreenReading =
+                              widget.controller.settings.fullscreenReading;
+                          final showAppBar =
+                              showControls || (isPortrait && !fullscreenReading);
+                          final showBottomDock =
+                              isPortrait && !showControls && !fullscreenReading;
                           final bodyTopPadding = showAppBar
                               ? (isPortrait
-                                  ? (compactPortrait ? 6.0 : 8.0)
-                                  : 4.0)
-                              : 4.0;
+                                  ? (compactPortrait ? 2.0 : 4.0)
+                                  : 2.0)
+                              : 0.0;
                           final bodyBottomPadding = showBottomDock
-                              ? (compactPortrait ? 84.0 : 96.0)
-                              : 10.0;
+                              ? (compactPortrait ? 74.0 : 84.0)
+                              : (fullscreenReading ? 0.0 : 6.0);
 
                           return Scaffold(
                             extendBodyBehindAppBar: false,
@@ -473,6 +532,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                                     portraitMode: isPortrait,
                                     onOpenSearch: _openSearchSheet,
                                     onOpenDashboard: _openDashboardSheet,
+                                    onOpenGrowthHub: _openGrowthHub,
                                     onOpenInsights: _openInsightsSheet,
                                     onOpenAudio: _openAudioSheet,
                                     onOpenAiStudio: _openAiStudio,
@@ -641,6 +701,7 @@ class _LandscapeSpreadReader extends StatelessWidget {
         controller: controller,
         reverse: true,
         padEnds: false,
+        allowImplicitScrolling: true,
         itemCount: readerController.totalSpreads,
         onPageChanged: onPageChanged,
         itemBuilder: (context, index) {
@@ -724,6 +785,7 @@ class _PortraitPageReader extends StatelessWidget {
         controller: controller,
         reverse: true,
         padEnds: false,
+        allowImplicitScrolling: true,
         itemCount: readerController.totalPages,
         onPageChanged: onPageChanged,
         itemBuilder: (context, index) {

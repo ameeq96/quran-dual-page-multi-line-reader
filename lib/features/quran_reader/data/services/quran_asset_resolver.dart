@@ -68,7 +68,14 @@ class QuranAssetResolver {
     _remoteAssetsBaseUrl = config.assetsBaseUrl;
     _remotePacksByEdition
       ..clear()
-      ..addAll(config.assetPacks);
+      ..addEntries(
+        config.assetPacks.entries.where((entry) {
+          if (!config.hasEditionControls) {
+            return true;
+          }
+          return config.editionConfig(entry.key)?.enabled ?? false;
+        }),
+      );
   }
 
   MushafEdition get selectedEdition => _selectedEdition;

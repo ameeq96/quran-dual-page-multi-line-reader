@@ -367,9 +367,10 @@ class _StudyPagePanel extends StatelessWidget {
                     child: SizedBox(
                       width: compact ? 230 : 280,
                       height: (compact ? 230 : 280) /
-                          (page.usesImage
-                              ? QuranConstants.scannedPageAspectRatio
-                              : 0.72),
+                          QuranConstants.pageAspectRatio(
+                            usesImage: page.usesImage,
+                            assetPath: page.assetPath,
+                          ),
                       child: MushafPageWidget(
                         page: page,
                         settings: settings,

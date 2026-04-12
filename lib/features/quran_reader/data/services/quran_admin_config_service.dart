@@ -8,7 +8,8 @@ import '../../domain/models/reader_admin_config.dart';
 import '../../domain/models/reader_settings.dart';
 
 class QuranAdminConfigService {
-  static const String _productionAdminBaseUrl = 'https://quranadminapi.opplexify.com';
+  static const String _productionAdminBaseUrl =
+      'https://quranadminapi.opplexify.com';
   static const Duration _requestTimeout = Duration(seconds: 4);
 
   QuranAdminConfigService({
@@ -29,7 +30,8 @@ class QuranAdminConfigService {
   Future<ReaderAdminConfig> loadConfig({bool forceRefresh = false}) async {
     final preferredBaseUrl = await _preferences.loadAdminPublicBaseUrl();
     final candidateBaseUrls = _buildCandidateBaseUrls(preferredBaseUrl);
-    _currentBaseUrl = candidateBaseUrls.isEmpty ? preferredBaseUrl : candidateBaseUrls.first;
+    _currentBaseUrl =
+        candidateBaseUrls.isEmpty ? preferredBaseUrl : candidateBaseUrls.first;
     if (candidateBaseUrls.isEmpty) {
       throw StateError('Admin API base URL is not configured.');
     }
@@ -53,10 +55,10 @@ class QuranAdminConfigService {
         ).timeout(_requestTimeout);
         if (response.statusCode == 200) {
           final parsedConfig = _configFromJsonString(
-                response.body,
-                publicBaseUrl: normalizedBaseUrl,
-                source: ReaderAdminConfigSource.live,
-              );
+            response.body,
+            publicBaseUrl: normalizedBaseUrl,
+            source: ReaderAdminConfigSource.live,
+          );
           if (parsedConfig == null) {
             lastStateError = StateError(
               'Admin public config returned invalid JSON.',
@@ -75,11 +77,13 @@ class QuranAdminConfigService {
           lastStateError = error;
           continue;
         }
-        lastStateError = StateError('Unable to load admin public config from API.');
+        lastStateError =
+            StateError('Unable to load admin public config from API.');
       }
     }
 
-    throw lastStateError ?? StateError('Unable to load admin public config from API.');
+    throw lastStateError ??
+        StateError('Unable to load admin public config from API.');
   }
 
   List<String> _buildCandidateBaseUrls(String preferredBaseUrl) {
@@ -102,8 +106,9 @@ class QuranAdminConfigService {
 
     if (defaultTargetPlatform == TargetPlatform.android) {
       final preferredUri = Uri.tryParse(preferredBaseUrl.trim());
-      final scheme =
-          preferredUri?.scheme.trim().isNotEmpty == true ? preferredUri!.scheme : 'http';
+      final scheme = preferredUri?.scheme.trim().isNotEmpty == true
+          ? preferredUri!.scheme
+          : 'http';
       final port = preferredUri?.hasPort == true ? preferredUri!.port : 5052;
       addCandidate('$scheme://127.0.0.1:$port');
       addCandidate('$scheme://localhost:$port');
@@ -142,14 +147,16 @@ class QuranAdminConfigService {
         final normalizedExtension =
             (item['fileExtension'] as String? ?? 'png').trim().toLowerCase();
         final folderName = (item['folderName'] as String? ?? rawEdition).trim();
-        final availableImportedPages =
-            (item['availableImportedPages'] as List<dynamic>? ?? const <dynamic>[])
-                .map((value) => value is num ? value.toInt() : int.tryParse('$value'))
-                .whereType<int>()
-                .where((value) => value > 0)
-                .toSet()
-                .toList()
-              ..sort();
+        final availableImportedPages = (item['availableImportedPages']
+                    as List<dynamic>? ??
+                const <dynamic>[])
+            .map((value) =>
+                value is num ? value.toInt() : int.tryParse('$value'))
+            .whereType<int>()
+            .where((value) => value > 0)
+            .toSet()
+            .toList()
+          ..sort();
         final contiguousImportedPageStart =
             (item['contiguousImportedPageStart'] as num?)?.toInt();
         final contiguousImportedPageEnd =
@@ -159,10 +166,10 @@ class QuranAdminConfigService {
           folderName: folderName.isEmpty ? rawEdition : folderName,
           version: (item['version'] as String? ?? '').trim(),
           pageCount: (item['pageCount'] as num? ?? 0).toInt(),
-          fileExtension: normalizedExtension.isEmpty
-              ? 'png'
-              : normalizedExtension,
-          availableImportedPages: List<int>.unmodifiable(availableImportedPages),
+          fileExtension:
+              normalizedExtension.isEmpty ? 'png' : normalizedExtension,
+          availableImportedPages:
+              List<int>.unmodifiable(availableImportedPages),
           contiguousImportedPageStart: contiguousImportedPageStart,
           contiguousImportedPageEnd: contiguousImportedPageEnd,
         );
@@ -174,7 +181,9 @@ class QuranAdminConfigService {
       for (final item in rawContentDatasets.whereType<Map<String, dynamic>>()) {
         final key = (item['key'] as String? ?? '').trim();
         final url = (item['url'] as String? ?? '').trim();
-        if (key.isEmpty || url.isEmpty) {
+        if (key.isEmpty ||
+            url.isEmpty ||
+            key.toLowerCase() == 'taj_navigation_overrides') {
           continue;
         }
         contentDatasets[key] = ReaderRemoteContentDataset(
@@ -219,18 +228,19 @@ class QuranAdminConfigService {
         flags[key] = item['enabled'] as bool? ?? false;
       }
 
-      final announcements = (payload['announcements'] as List<dynamic>? ?? const [])
-          .whereType<Map<String, dynamic>>()
-          .map(
-            (item) => ReaderAdminAnnouncement(
-              id: (item['id'] as num? ?? 0).toInt(),
-              title: (item['title'] as String? ?? '').trim(),
-              body: (item['body'] as String? ?? '').trim(),
-              publishAtIso: (item['publishAt'] as String? ?? '').trim(),
-            ),
-          )
-          .where((item) => item.title.isNotEmpty || item.body.isNotEmpty)
-          .toList(growable: false);
+      final announcements =
+          (payload['announcements'] as List<dynamic>? ?? const [])
+              .whereType<Map<String, dynamic>>()
+              .map(
+                (item) => ReaderAdminAnnouncement(
+                  id: (item['id'] as num? ?? 0).toInt(),
+                  title: (item['title'] as String? ?? '').trim(),
+                  body: (item['body'] as String? ?? '').trim(),
+                  publishAtIso: (item['publishAt'] as String? ?? '').trim(),
+                ),
+              )
+              .where((item) => item.title.isNotEmpty || item.body.isNotEmpty)
+              .toList(growable: false);
 
       return ReaderAdminConfig(
         source: source,
@@ -239,8 +249,7 @@ class QuranAdminConfigService {
         assetPacks: Map<MushafEdition, ReaderRemoteAssetPack>.unmodifiable(
           assetPacks,
         ),
-        contentDatasets:
-            Map<String, ReaderRemoteContentDataset>.unmodifiable(
+        contentDatasets: Map<String, ReaderRemoteContentDataset>.unmodifiable(
           contentDatasets,
         ),
         editions: Map<MushafEdition, ReaderAdminEdition>.unmodifiable(editions),

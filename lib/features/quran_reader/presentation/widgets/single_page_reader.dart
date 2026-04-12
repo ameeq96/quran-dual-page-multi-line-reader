@@ -36,10 +36,17 @@ class SinglePageReader extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final pageAspectRatio =
-            page.usesImage ? QuranConstants.scannedPageAspectRatio : 0.72;
-        final horizontalPadding = math.max(4.0, constraints.maxWidth * 0.012);
-        final verticalPadding = math.max(4.0, constraints.maxHeight * 0.006);
+        final pageAspectRatio = QuranConstants.pageAspectRatio(
+          usesImage: page.usesImage,
+          assetPath: page.assetPath,
+        );
+        final fullscreen = settings.fullscreenReading;
+        final horizontalPadding = fullscreen
+            ? 0.0
+            : math.max(2.0, constraints.maxWidth * 0.0045);
+        final verticalPadding = fullscreen
+            ? 0.0
+            : math.max(2.0, constraints.maxHeight * 0.003);
         final availableWidth = math.max(
           0.0,
           constraints.maxWidth - (horizontalPadding * 2),
@@ -51,15 +58,6 @@ class SinglePageReader extends StatelessWidget {
         final widthFitHeight = availableWidth / pageAspectRatio;
         final pageHeight = math.min(availableHeight, widthFitHeight);
         final pageWidth = pageHeight * pageAspectRatio;
-        final clampedOffset = pageOffset.clamp(-1.0, 1.0);
-        final pageTransform =
-            settings.lowMemoryMode || clampedOffset.abs() < 0.001
-                ? Matrix4.identity()
-                : (Matrix4.identity()
-                  ..setEntry(3, 2, 0.0011)
-                  ..translate(clampedOffset * constraints.maxWidth * 0.012)
-                  ..scale(1 - (clampedOffset.abs() * 0.014)));
-
         return Padding(
           padding: EdgeInsets.symmetric(
             horizontal: horizontalPadding,
@@ -68,27 +66,22 @@ class SinglePageReader extends StatelessWidget {
           child: Align(
             alignment: Alignment.center,
             child: RepaintBoundary(
-              child: Transform(
-                alignment: Alignment.center,
-                transform: pageTransform,
-                child: SizedBox(
-                  width: pageWidth,
-                  height: pageHeight,
-                  child: MushafPageWidget(
-                    page: page,
-                    settings: settings,
-                    showPageNumbers: settings.showPageNumbers,
-                    smartHifzHiddenLines: smartHifzHiddenLines,
-                    smartHifzManualMaskAnchors: smartHifzManualMaskAnchors,
-                    onSmartHifzManualMaskAnchorChanged:
-                        onSmartHifzManualMaskAnchorChanged,
-                    smartHifzRevealed: smartHifzRevealed,
-                    smartHifzEdition: smartHifzEdition,
-                    smartHifzLineCount: smartHifzLineCount,
-                    alignment: Alignment.center,
-                    turnAmount:
-                        settings.lowMemoryMode ? 0 : clampedOffset * 0.1,
-                  ),
+              child: SizedBox(
+                width: pageWidth,
+                height: pageHeight,
+                child: MushafPageWidget(
+                  page: page,
+                  settings: settings,
+                  showPageNumbers: settings.showPageNumbers,
+                  smartHifzHiddenLines: smartHifzHiddenLines,
+                  smartHifzManualMaskAnchors: smartHifzManualMaskAnchors,
+                  onSmartHifzManualMaskAnchorChanged:
+                      onSmartHifzManualMaskAnchorChanged,
+                  smartHifzRevealed: smartHifzRevealed,
+                  smartHifzEdition: smartHifzEdition,
+                  smartHifzLineCount: smartHifzLineCount,
+                  alignment: Alignment.center,
+                  turnAmount: 0,
                 ),
               ),
             ),

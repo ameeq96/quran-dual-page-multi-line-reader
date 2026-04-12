@@ -23,4 +23,7 @@ class QuranPage {
 
   bool get usesImage => contentType == QuranPageContentType.image;
   bool get usesText => contentType == QuranPageContentType.text;
+  bool get usesRemoteImage =>
+      assetPath != null &&
+      (assetPath!.startsWith('http://') || assetPath!.startsWith('https://'));
 }

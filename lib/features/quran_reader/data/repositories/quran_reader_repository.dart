@@ -8,6 +8,8 @@ import '../../domain/models/quran_page_insight.dart';
 import '../../domain/models/quran_search_result.dart';
 import '../../domain/models/quran_spread.dart';
 import '../../domain/models/quran_surah_navigation_entry.dart';
+import '../../domain/models/reader_admin_config.dart';
+import '../../domain/models/reader_growth_models.dart';
 import '../../domain/models/reader_bookmark.dart';
 import '../../domain/models/reader_daily_progress_state.dart';
 import '../../domain/models/reader_history_entry.dart';
@@ -16,7 +18,9 @@ import '../models/reader_launch_state.dart';
 import '../services/quran_asset_resolver.dart';
 import '../services/quran_navigation_data_source.dart';
 import '../services/quran_page_insights_data_source.dart';
+import '../services/quran_admin_config_service.dart';
 import '../services/quran_remote_content_service.dart';
+import '../services/quran_search_api_service.dart';
 import '../services/quran_text_data_source.dart';
 
 class QuranReaderRepository {
@@ -25,12 +29,16 @@ class QuranReaderRepository {
     required QuranNavigationDataSource navigationDataSource,
     required QuranTextDataSource textDataSource,
     required QuranPageInsightsDataSource pageInsightsDataSource,
+    required QuranAdminConfigService adminConfigService,
+    required QuranSearchApiService searchApiService,
     required QuranRemoteContentService remoteContentService,
     required ReaderPreferences preferences,
   })  : _assetResolver = assetResolver,
         _navigationDataSource = navigationDataSource,
         _textDataSource = textDataSource,
         _pageInsightsDataSource = pageInsightsDataSource,
+        _adminConfigService = adminConfigService,
+        _searchApiService = searchApiService,
         _remoteContentService = remoteContentService,
         _preferences = preferences;
 
@@ -39,6 +47,8 @@ class QuranReaderRepository {
   final QuranNavigationDataSource _navigationDataSource;
   final QuranTextDataSource _textDataSource;
   final QuranPageInsightsDataSource _pageInsightsDataSource;
+  final QuranAdminConfigService _adminConfigService;
+  final QuranSearchApiService _searchApiService;
   final QuranRemoteContentService _remoteContentService;
   final ReaderPreferences _preferences;
   final Map<String, QuranPage> _pageCache = <String, QuranPage>{};
@@ -55,15 +65,23 @@ class QuranReaderRepository {
       <String, List<QuranSearchResult>>{};
   final Map<String, List<QuranSearchResult>> _ayahSearchCache =
       <String, List<QuranSearchResult>>{};
+  Future<void>? _supplementalContentWarmFuture;
 
   Future<ReaderLaunchState> loadLaunchState() async {
-    await Future.wait([
-      _assetResolver.initialize(),
-      _navigationDataSource.initialize(),
-      _textDataSource.initialize(),
-      _pageInsightsDataSource.initialize(),
-    ]);
-    var settings = await _preferences.loadSettings();
+    final settingsFuture = _preferences.loadSettings();
+    final initialPageNumberFuture = _preferences.loadLastPageNumber();
+    final adminConfig = await _adminConfigService.loadConfig();
+    final effectiveAdminConfig = await _initializeNavigationConfig(adminConfig);
+    _assetResolver.applyRemoteConfig(effectiveAdminConfig);
+    await _assetResolver.initialize();
+    var settings = await settingsFuture;
+    if (effectiveAdminConfig.hasEditionControls &&
+        !_assetResolver.hasAssetsForEdition(settings.mushafEdition)) {
+      final enabledEditions = _assetResolver.availableImageEditions;
+      if (enabledEditions.isNotEmpty) {
+        settings = settings.copyWith(mushafEdition: enabledEditions.first);
+      }
+    }
     final hasSelectedEditionAssets =
         _assetResolver.hasAssetsForEdition(settings.mushafEdition);
     final normalizedPreferImageMode = hasSelectedEditionAssets;
@@ -74,7 +92,7 @@ class QuranReaderRepository {
       await _preferences.saveSettings(settings);
     }
     _assetResolver.setSelectedEdition(settings.mushafEdition);
-    final initialPageNumber = await _preferences.loadLastPageNumber();
+    final initialPageNumber = await initialPageNumberFuture;
     return ReaderLaunchState(
       initialPageNumber: clampPage(
         initialPageNumber,
@@ -84,8 +102,36 @@ class QuranReaderRepository {
     );
   }
 
+  Future<void> warmSupplementalContent({bool forceRefresh = false}) {
+    if (!forceRefresh && _supplementalContentWarmFuture != null) {
+      return _supplementalContentWarmFuture!;
+    }
+
+    final config = _adminConfigService.currentConfig;
+    final future = Future.wait([
+      _textDataSource.initialize(
+        adminConfig: config,
+        forceRefresh: forceRefresh,
+      ),
+      _pageInsightsDataSource.initialize(
+        adminConfig: config,
+        forceRefresh: forceRefresh,
+      ),
+    ]).then((_) {
+      _clearResolvedPageCaches();
+    });
+
+    _supplementalContentWarmFuture = future.whenComplete(() {
+      if (identical(_supplementalContentWarmFuture, future)) {
+        _supplementalContentWarmFuture = null;
+      }
+    });
+
+    return _supplementalContentWarmFuture!;
+  }
+
   bool get hasAnyPageAssets => _assetResolver.hasAnyPageAssets;
-  bool get hasBundledImageEdition => _assetResolver.hasBundledImageEdition;
+  bool get hasRemoteImageEdition => _assetResolver.hasRemoteImageEdition;
   int get imagePageCount => _assetResolver.imagePageCount;
   int get imageLeadingPagesToSkip => _assetResolver.leadingPagesToSkip;
   MushafEdition get mushafEdition => _assetResolver.selectedEdition;
@@ -94,6 +140,8 @@ class QuranReaderRepository {
   List<QuranJuzNavigationEntry> get juzs => _navigationDataSource.juzs;
   List<QuranChapterSummary> get chapters =>
       _pageInsightsDataSource.chapters.toList(growable: false);
+  ReaderAdminConfig get adminConfig => _adminConfigService.currentConfig;
+  String get adminConfigBaseUrl => _adminConfigService.currentBaseUrl;
   List<MushafEdition> get availableImageEditions =>
       _assetResolver.availableImageEditions;
   List<MushafEdition> get compareEditions => const <MushafEdition>[
@@ -640,6 +688,95 @@ class QuranReaderRepository {
     return frozenResults;
   }
 
+  Future<List<QuranSurahNavigationEntry>> searchSurahsRemote(
+    String query,
+  ) {
+    return _searchApiService.searchSurahs(query);
+  }
+
+  Future<List<QuranJuzNavigationEntry>> searchJuzsRemote(
+    String query,
+  ) {
+    return _searchApiService.searchJuzs(query);
+  }
+
+  Future<List<QuranNavigationMarker>> searchMarkersRemote(
+    String query, {
+    required String category,
+    required bool preferImageMode,
+  }) async {
+    final results = await _searchApiService.searchMarkers(
+      category: category,
+      query: query,
+    );
+    return results
+        .map(
+          (item) => QuranNavigationMarker(
+            id: item.id,
+            title: item.title,
+            subtitle: item.subtitle,
+            pageNumber: navigationPageForStandardPage(
+              item.pageNumber,
+              preferImageMode: preferImageMode,
+            ),
+            category: item.category,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<List<QuranSearchResult>> searchPagesRemote(
+    String query, {
+    required bool preferImageMode,
+    int limit = 40,
+  }) async {
+    final results = await _searchApiService.searchText(
+      query,
+      limit: limit,
+    );
+    return results
+        .map(
+          (result) => QuranSearchResult(
+            pageNumber: navigationPageForStandardPage(
+              result.pageNumber,
+              preferImageMode: preferImageMode,
+            ),
+            referencePageNumber: result.referencePageNumber,
+            title: result.title,
+            snippet: result.snippet,
+            category: result.category,
+            verseKey: result.verseKey,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  Future<List<QuranSearchResult>> searchAyahsRemote(
+    String query, {
+    required bool preferImageMode,
+    int limit = 40,
+  }) async {
+    final results = await _searchApiService.searchAyahs(
+      query,
+      limit: limit,
+    );
+    return results
+        .map(
+          (result) => QuranSearchResult(
+            pageNumber: navigationPageForStandardPage(
+              result.pageNumber,
+              preferImageMode: preferImageMode,
+            ),
+            referencePageNumber: result.referencePageNumber,
+            title: result.title,
+            snippet: result.snippet,
+            category: result.category,
+            verseKey: result.verseKey,
+          ),
+        )
+        .toList(growable: false);
+  }
+
   Future<String?> loadChapterInfoForPage(
     int pageNumber, {
     required bool preferImageMode,
@@ -768,7 +905,69 @@ class QuranReaderRepository {
     return _preferences.saveReadingStreakLastDate(dateKey);
   }
 
+  Future<ReaderReadingPlan> loadReadingPlan() => _preferences.loadReadingPlan();
+
+  Future<void> saveReadingPlan(ReaderReadingPlan plan) {
+    return _preferences.saveReadingPlan(plan);
+  }
+
+  Future<List<ReaderHifzReviewEntry>> loadHifzRevisionEntries() {
+    return _preferences.loadHifzRevisionEntries();
+  }
+
+  Future<void> saveHifzRevisionEntries(List<ReaderHifzReviewEntry> entries) {
+    return _preferences.saveHifzRevisionEntries(entries);
+  }
+
+  Future<ReaderExperienceSettings> loadExperienceSettings() {
+    return _preferences.loadExperienceSettings();
+  }
+
+  Future<void> saveExperienceSettings(ReaderExperienceSettings settings) {
+    return _preferences.saveExperienceSettings(settings);
+  }
+
+  Future<ReaderAdminConfig> refreshAdminConfig() async {
+    final config = await _adminConfigService.loadConfig(forceRefresh: true);
+    final effectiveConfig = await _initializeNavigationConfig(
+      config,
+      forceRefresh: true,
+    );
+    _assetResolver.applyRemoteConfig(effectiveConfig);
+    _clearResolvedPageCaches();
+    return effectiveConfig;
+  }
+
+  Future<ReaderAdminConfig> _initializeNavigationConfig(
+    ReaderAdminConfig config, {
+    bool forceRefresh = false,
+  }) async {
+    try {
+      await _navigationDataSource.initialize(
+        adminConfig: config,
+        forceRefresh: forceRefresh,
+      );
+      return config;
+    } catch (error) {
+      final message = error.toString();
+      if (!message.contains('taj_navigation_overrides')) {
+        rethrow;
+      }
+
+      final sanitizedConfig = config.withoutContentDataset(
+        'taj_navigation_overrides',
+      );
+      await _navigationDataSource.initialize(
+        adminConfig: sanitizedConfig,
+        forceRefresh: true,
+      );
+      return sanitizedConfig;
+    }
+  }
+
   void dispose() {
+    _adminConfigService.dispose();
+    _searchApiService.dispose();
     _remoteContentService.dispose();
   }
 
@@ -837,15 +1036,11 @@ class QuranReaderRepository {
       };
     }
 
-    if (edition == MushafEdition.lines16) {
-      return _buildTajStandardToNavigationPageCache();
-    }
-
-    final lineCount = edition.lineCount;
-    if (lineCount != null) {
-      return _buildLineCountStandardToNavigationPageCache(
+    final anchors = _buildNavigationAnchorsForEdition(edition);
+    if (anchors.length >= 2) {
+      return _buildAnchorStandardToNavigationPageCache(
         edition: edition,
-        lineCount: lineCount,
+        anchors: anchors,
       );
     }
 
@@ -873,31 +1068,6 @@ class QuranReaderRepository {
     return inverseMap;
   }
 
-  Map<int, int> _buildLineCountStandardToNavigationPageCache({
-    required MushafEdition edition,
-    required int lineCount,
-  }) {
-    final totalPages = totalPagesForEdition(edition);
-    final pageMap = <int, int>{};
-
-    for (var standardPage = 1; standardPage <= _standardTotalPages; standardPage++) {
-      final pageData = _textDataSource.pageForNumber(standardPage);
-      final startLine = pageData == null || pageData.lines.isEmpty
-          ? 1
-          : pageData.lines.first.lineNumber;
-      final contentOffset =
-          ((standardPage - 1) * QuranConstants.mushafTextLineSlots) +
-              (startLine - 1);
-      final estimatedPage = 1 + (contentOffset ~/ lineCount);
-      pageMap[standardPage] = QuranConstants.clampPage(
-        estimatedPage,
-        totalPages: totalPages,
-      );
-    }
-
-    return pageMap;
-  }
-
   Map<int, int> _buildRatioStandardToNavigationPageCache(
     MushafEdition edition,
   ) {
@@ -916,31 +1086,18 @@ class QuranReaderRepository {
     return pageMap;
   }
 
-  Map<int, int> _buildTajStandardToNavigationPageCache() {
-    final totalPages = totalPagesForEdition(MushafEdition.lines16);
+  Map<int, int> _buildAnchorStandardToNavigationPageCache({
+    required MushafEdition edition,
+    required List<({int standardPage, int navigationPage})> anchors,
+  }) {
+    final totalPages = totalPagesForEdition(edition);
     final pageMap = <int, int>{};
-    final anchors = surahs
-        .map(
-          (entry) => (
-            standardPage: entry.standardStartPage,
-            logicalPage:
-                _assetResolver.logicalPageForImportedPage(entry.tajScanStartPage),
-          ),
-        )
-        .toList(growable: false);
-
-    if (anchors.isEmpty) {
-      return _buildRatioStandardToNavigationPageCache(MushafEdition.lines16);
-    }
 
     for (var index = 0; index < anchors.length; index++) {
       final current = anchors[index];
-      final nextStandardPage = index + 1 < anchors.length
-          ? anchors[index + 1].standardPage
-          : _standardTotalPages + 1;
-      final nextLogicalPage = index + 1 < anchors.length
-          ? anchors[index + 1].logicalPage
-          : totalPages + 1;
+      final next = index + 1 < anchors.length ? anchors[index + 1] : null;
+      final nextStandardPage = next?.standardPage ?? (_standardTotalPages + 1);
+      final nextNavigationPage = next?.navigationPage ?? totalPages;
       final segmentLength = nextStandardPage - current.standardPage;
 
       for (var standardPage = current.standardPage;
@@ -949,8 +1106,8 @@ class QuranReaderRepository {
         final progress = segmentLength <= 0
             ? 0.0
             : (standardPage - current.standardPage) / segmentLength;
-        final estimatedPage = current.logicalPage +
-            ((nextLogicalPage - current.logicalPage) * progress).round();
+        final estimatedPage = current.navigationPage +
+            ((nextNavigationPage - current.navigationPage) * progress).round();
         pageMap[standardPage] = QuranConstants.clampPage(
           estimatedPage,
           totalPages: totalPages,
@@ -959,7 +1116,116 @@ class QuranReaderRepository {
     }
 
     pageMap.putIfAbsent(1, () => 1);
+    pageMap[_standardTotalPages] ??= totalPages;
     return pageMap;
+  }
+
+  List<({int standardPage, int navigationPage})> _buildNavigationAnchorsForEdition(
+    MushafEdition edition,
+  ) {
+    final totalPages = totalPagesForEdition(edition);
+    if (totalPages == 0) {
+      return const [];
+    }
+
+    final anchorsByStandardPage = <int, int>{
+      1: 1,
+      _standardTotalPages: totalPages,
+    };
+
+    for (final surah in surahs) {
+      final anchorPage = _navigationAnchorPageForImportedPage(
+        edition,
+        surah.tajScanStartPage,
+      );
+      _storeEarliestAnchorPage(
+        anchorsByStandardPage,
+        surah.standardStartPage,
+        anchorPage,
+      );
+    }
+
+    for (final juz in juzs) {
+      final anchorPage = _navigationAnchorPageForImportedPage(
+        edition,
+        juz.tajScanStartPage,
+      );
+      _storeEarliestAnchorPage(
+        anchorsByStandardPage,
+        juz.standardStartPage,
+        anchorPage,
+      );
+    }
+
+    final sortedAnchors = anchorsByStandardPage.entries
+        .map(
+          (entry) => (
+            standardPage: entry.key,
+            navigationPage: QuranConstants.clampPage(
+              entry.value,
+              totalPages: totalPages,
+            ),
+          ),
+        )
+        .toList(growable: false)
+      ..sort((left, right) => left.standardPage.compareTo(right.standardPage));
+
+    final normalizedAnchors = <({int standardPage, int navigationPage})>[];
+    var previousPage = 1;
+    for (final anchor in sortedAnchors) {
+      final navigationPage = anchor.navigationPage < previousPage
+          ? previousPage
+          : anchor.navigationPage;
+      normalizedAnchors.add(
+        (
+          standardPage: anchor.standardPage,
+          navigationPage: navigationPage,
+        ),
+      );
+      previousPage = navigationPage;
+    }
+
+    return normalizedAnchors;
+  }
+
+  void _storeEarliestAnchorPage(
+    Map<int, int> cache,
+    int standardPage,
+    int navigationPage,
+  ) {
+    final existingPage = cache[standardPage];
+    if (existingPage == null || navigationPage < existingPage) {
+      cache[standardPage] = navigationPage;
+    }
+  }
+
+  int _navigationAnchorPageForImportedPage(
+    MushafEdition edition,
+    int importedPageNumber,
+  ) {
+    final totalPages = totalPagesForEdition(edition);
+    if (totalPages <= 1) {
+      return 1;
+    }
+
+    final tajTotalPages = totalPagesForEdition(MushafEdition.lines16);
+    final tajLogicalPage = _assetResolver.logicalPageForImportedPageInEdition(
+      MushafEdition.lines16,
+      importedPageNumber,
+    );
+    if (edition == MushafEdition.lines16 || tajTotalPages <= 1) {
+      return QuranConstants.clampPage(
+        tajLogicalPage,
+        totalPages: totalPages,
+      );
+    }
+
+    final progress = (tajLogicalPage - 1) / (tajTotalPages - 1);
+    final scaledPage = 1 + ((totalPages - 1) * progress).round();
+    return QuranConstants.clampPage(
+      scaledPage,
+      totalPages: totalPages,
+    );
   }
 
   String _editionNavigationCacheKey(MushafEdition edition) {
@@ -991,57 +1257,39 @@ class QuranReaderRepository {
   Map<int, int> _buildSurahStartPageCache({
     required bool preferImageMode,
   }) {
-    final cache = <int, int>{};
-    final totalPages = totalPagesForMode(preferImageMode: preferImageMode);
-
-    for (var pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
-      final standardPage = standardPageForNavigationPage(
-        pageNumber,
-        preferImageMode: preferImageMode,
-      );
-      final insight = _pageInsightsDataSource.pageForNumber(standardPage);
-      if (insight == null) {
-        continue;
-      }
-
-      final startingChapterIds = insight.verses
-          .where((verse) => verse.verseNumber == 1)
-          .map((verse) => verse.chapterId)
-          .toSet();
-      final candidateChapterIds = startingChapterIds.isEmpty
-          ? insight.chapterIds.toSet()
-          : startingChapterIds;
-
-      for (final chapterId in candidateChapterIds) {
-        cache.putIfAbsent(chapterId, () => pageNumber);
-      }
+    if (!preferImageMode || _assetResolver.imagePageCount == 0) {
+      return <int, int>{
+        for (final surah in surahs) surah.id: surah.standardStartPage,
+      };
     }
 
-    return cache;
+    final edition = _assetResolver.selectedEdition;
+    return <int, int>{
+      for (final surah in surahs)
+        surah.id: _navigationAnchorPageForImportedPage(
+          edition,
+          surah.tajScanStartPage,
+        ),
+    };
   }
 
   Map<int, int> _buildJuzStartPageCache({
     required bool preferImageMode,
   }) {
-    final cache = <int, int>{};
-    final totalPages = totalPagesForMode(preferImageMode: preferImageMode);
-
-    for (var pageNumber = 1; pageNumber <= totalPages; pageNumber++) {
-      final standardPage = standardPageForNavigationPage(
-        pageNumber,
-        preferImageMode: preferImageMode,
-      );
-      final insight = _pageInsightsDataSource.pageForNumber(standardPage);
-      if (insight == null) {
-        continue;
-      }
-
-      for (final juzNumber in insight.juzNumbers) {
-        cache.putIfAbsent(juzNumber, () => pageNumber);
-      }
+    if (!preferImageMode || _assetResolver.imagePageCount == 0) {
+      return <int, int>{
+        for (final juz in juzs) juz.number: juz.standardStartPage,
+      };
     }
 
-    return cache;
+    final edition = _assetResolver.selectedEdition;
+    return <int, int>{
+      for (final juz in juzs)
+        juz.number: _navigationAnchorPageForImportedPage(
+          edition,
+          juz.tajScanStartPage,
+        ),
+    };
   }
 
   String _navigationCacheKey(bool preferImageMode) {

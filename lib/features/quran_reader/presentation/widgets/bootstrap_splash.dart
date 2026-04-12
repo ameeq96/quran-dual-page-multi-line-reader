@@ -168,7 +168,7 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                                   : (compact ? 18 : 24),
                                             ),
                                             Text(
-                                              'Quran Dual Page',
+                                              'Quran Dual Page & Multi-Line Reader',
                                               textAlign: TextAlign.center,
                                               style: (ultraCompact
                                                       ? theme.textTheme.titleLarge

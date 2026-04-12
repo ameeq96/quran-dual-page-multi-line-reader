@@ -1,25 +1,37 @@
 import 'dart:convert';
 
-import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../../domain/models/quran_chapter_summary.dart';
 import '../../domain/models/quran_page_insight.dart';
+import '../../domain/models/reader_admin_config.dart';
 
 class QuranPageInsightsDataSource {
-  static const _assetPath = 'assets/quran_pages/quran_page_insights.json';
+  static const Duration _requestTimeout = Duration(seconds: 8);
+
+  QuranPageInsightsDataSource({
+    http.Client? client,
+  }) : _client = client ?? http.Client();
 
   final Map<int, QuranPageInsight> _pages = <int, QuranPageInsight>{};
   final Map<int, QuranChapterSummary> _chapters = <int, QuranChapterSummary>{};
+  final http.Client _client;
   bool _isInitialized = false;
 
-  Future<void> initialize() async {
+  Future<void> initialize({
+    ReaderAdminConfig? adminConfig,
+    bool forceRefresh = false,
+  }) async {
     if (_isInitialized) {
-      return;
+      if (!forceRefresh) {
+        return;
+      }
+      _isInitialized = false;
     }
 
     try {
-      final jsonString = await rootBundle.loadString(_assetPath);
-      final payload = json.decode(jsonString) as Map<String, dynamic>;
+      final payload = await _loadPayload(adminConfig);
 
       final pagesJson = payload['pages'] as List<dynamic>? ?? const [];
       final chaptersJson = payload['chapters'] as List<dynamic>? ?? const [];
@@ -46,6 +58,7 @@ class QuranPageInsightsDataSource {
     } catch (_) {
       _pages.clear();
       _chapters.clear();
+      rethrow;
     }
 
     _isInitialized = true;
@@ -58,4 +71,39 @@ class QuranPageInsightsDataSource {
   Iterable<QuranPageInsight> get pages => _pages.values;
 
   Iterable<QuranChapterSummary> get chapters => _chapters.values;
+
+  Future<Map<String, dynamic>> _loadPayload(ReaderAdminConfig? adminConfig) async {
+    final remoteDataset = adminConfig?.contentDataset('page_insights');
+    if (remoteDataset == null || remoteDataset.url.trim().isEmpty) {
+      throw StateError('Admin dataset "page_insights" is not configured.');
+    }
+
+    try {
+      final response = await _client.get(
+        Uri.parse(remoteDataset.url),
+        headers: const <String, String>{'Accept': 'application/json'},
+      ).timeout(_requestTimeout);
+      if (response.statusCode == 200) {
+        return compute(_decodePageInsightsPayload, response.body);
+      }
+      throw StateError(
+        'Admin dataset "page_insights" request failed with status ${response.statusCode}.',
+      );
+    } catch (error) {
+      if (error is StateError) {
+        rethrow;
+      }
+      throw StateError(
+        'Unable to load admin dataset "page_insights" from API.',
+      );
+    }
+  }
+}
+
+Map<String, dynamic> _decodePageInsightsPayload(String responseBody) {
+  final payload = json.decode(responseBody);
+  if (payload is Map<String, dynamic>) {
+    return payload;
+  }
+  throw StateError('Page insights payload returned invalid JSON.');
 }

@@ -68,6 +68,17 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
       ],
     ),
     _OnboardingItem(
+      title: 'Plan, revise, and scale',
+      subtitle:
+          'Use the new plans and packs hub for reading goals, hifz revision, offline edition pack strategy, accessibility, and backup-ready sync settings.',
+      icon: Icons.insights_outlined,
+      highlights: <String>[
+        'Reading plans for steady flow, Ramadan, 30-day khatam, and custom goals',
+        'Weak-page hifz tracking and quick revision queue',
+        'Offline pack planning, AI depth modes, larger text, and backup export',
+      ],
+    ),
+    _OnboardingItem(
       title: 'Built for daily use',
       subtitle:
           'Track streaks, continue from your last page, and keep everything ready from the home menu.',
@@ -120,10 +131,23 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder(
-      valueListenable: widget.controller.settingsListenable,
-      builder: (context, settings, _) {
-        final themeData = settings.nightMode ? AppTheme.dark() : AppTheme.light();
+    return AnimatedBuilder(
+      animation: Listenable.merge(<Listenable>[
+        widget.controller.settingsListenable,
+        widget.controller.contentListenable,
+      ]),
+      builder: (context, _) {
+        final settings = widget.controller.settings;
+        final experience = widget.controller.experienceSettings;
+        final themeData = settings.nightMode
+            ? AppTheme.dark(
+                highContrast: experience.highContrastMode,
+                largerText: experience.largerTextMode,
+              )
+            : AppTheme.light(
+                highContrast: experience.highContrastMode,
+                largerText: experience.largerTextMode,
+              );
         return Theme(
           data: themeData,
           child: Builder(
@@ -180,7 +204,7 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Welcome to Quran Dual Page',
+                                      'Welcome to Quran Dual Page & Multi-Line Reader',
                                       style: theme.textTheme.titleLarge?.copyWith(
                                         fontWeight: FontWeight.w900,
                                       ),

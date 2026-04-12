@@ -266,8 +266,10 @@ class _ManualHifzPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final aspectRatio =
-        page.usesImage ? QuranConstants.scannedPageAspectRatio : 0.72;
+    final aspectRatio = QuranConstants.pageAspectRatio(
+      usesImage: page.usesImage,
+      assetPath: page.assetPath,
+    );
 
     return DecoratedBox(
       decoration: BoxDecoration(

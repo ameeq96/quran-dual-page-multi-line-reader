@@ -4,6 +4,7 @@ import '../controllers/quran_reader_controller.dart';
 
 enum ReaderMoreAction {
   dashboard,
+  growthHub,
   insights,
   audio,
   aiStudio,
@@ -20,6 +21,7 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.portraitMode,
     required this.onOpenSearch,
     required this.onOpenDashboard,
+    required this.onOpenGrowthHub,
     required this.onOpenInsights,
     required this.onOpenAudio,
     required this.onOpenAiStudio,
@@ -33,6 +35,7 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool portraitMode;
   final VoidCallback onOpenSearch;
   final VoidCallback onOpenDashboard;
+  final VoidCallback onOpenGrowthHub;
   final VoidCallback onOpenInsights;
   final VoidCallback onOpenAudio;
   final VoidCallback onOpenAiStudio;
@@ -42,7 +45,7 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onOpenSettings;
 
   @override
-  Size get preferredSize => const Size.fromHeight(104);
+  Size get preferredSize => Size.fromHeight(portraitMode ? 88 : 76);
 
   @override
   Widget build(BuildContext context) {
@@ -55,9 +58,9 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
       bottom: false,
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-          compact ? 10 : 14,
-          compact ? 8 : 10,
-          compact ? 10 : 14,
+          compact ? 8 : 12,
+          compact ? 6 : 8,
+          compact ? 8 : 12,
           0,
         ),
         child: DecoratedBox(
@@ -78,12 +81,12 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
               ),
             ],
           ),
-          child: Padding(
+              child: Padding(
             padding: EdgeInsets.fromLTRB(
-              compact ? 14 : 18,
-              compact ? 12 : 14,
-              compact ? 12 : 14,
-              compact ? 12 : 14,
+              compact ? 12 : 16,
+              compact ? 10 : 12,
+              compact ? 10 : 12,
+              compact ? 10 : 12,
             ),
             child: Row(
               children: [
@@ -97,22 +100,28 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                       final secondaryLabel = portraitMode
                           ? controller.pageProgressLabel
                           : controller.spreadProgressLabel;
+                      final title = portraitMode
+                          ? 'Quran Dual Page'
+                          : 'Quran Dual Page & Multi-Line Reader';
 
                       return Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Quran Dual Page',
+                            title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleLarge?.copyWith(
+                            style: (portraitMode
+                                    ? theme.textTheme.titleMedium
+                                    : theme.textTheme.titleLarge)
+                                ?.copyWith(
                               fontWeight: FontWeight.w900,
                               color: theme.colorScheme.onSurface,
                               letterSpacing: -0.35,
                             ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 2),
                           Text(
                             '$primaryLabel | $secondaryLabel',
                             maxLines: 1,
@@ -142,6 +151,9 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                       case ReaderMoreAction.dashboard:
                         onOpenDashboard();
                         break;
+                      case ReaderMoreAction.growthHub:
+                        onOpenGrowthHub();
+                        break;
                       case ReaderMoreAction.insights:
                         onOpenInsights();
                         break;
@@ -165,57 +177,71 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                         break;
                     }
                   },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem(
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
                       value: ReaderMoreAction.dashboard,
                       child: _MenuRow(
                         icon: Icons.dashboard_customize_outlined,
                         label: 'Dashboard',
                       ),
                     ),
-                    PopupMenuItem(
-                      value: ReaderMoreAction.insights,
-                      child: _MenuRow(
-                        icon: Icons.auto_stories_outlined,
-                        label: 'Insights',
+                    if (controller.isPlansPacksEnabled)
+                      const PopupMenuItem(
+                        value: ReaderMoreAction.growthHub,
+                        child: _MenuRow(
+                          icon: Icons.insights_outlined,
+                          label: 'Plans & Packs',
+                        ),
                       ),
-                    ),
-                    PopupMenuItem(
-                      value: ReaderMoreAction.audio,
-                      child: _MenuRow(
-                        icon: Icons.headphones_rounded,
-                        label: 'Audio',
+                    if (controller.isInsightsEnabled)
+                      const PopupMenuItem(
+                        value: ReaderMoreAction.insights,
+                        child: _MenuRow(
+                          icon: Icons.auto_stories_outlined,
+                          label: 'Insights',
+                        ),
                       ),
-                    ),
-                    PopupMenuItem(
-                      value: ReaderMoreAction.aiStudio,
-                      child: _MenuRow(
-                        icon: Icons.auto_awesome_rounded,
-                        label: 'AI Studio',
+                    if (controller.isAudioEnabled)
+                      const PopupMenuItem(
+                        value: ReaderMoreAction.audio,
+                        child: _MenuRow(
+                          icon: Icons.headphones_rounded,
+                          label: 'Audio',
+                        ),
                       ),
-                    ),
-                    PopupMenuItem(
-                      value: ReaderMoreAction.pageStrip,
-                      child: _MenuRow(
-                        icon: Icons.photo_library_outlined,
-                        label: 'Pages',
+                    if (controller.isAiStudioEnabled)
+                      const PopupMenuItem(
+                        value: ReaderMoreAction.aiStudio,
+                        child: _MenuRow(
+                          icon: Icons.auto_awesome_rounded,
+                          label: 'AI Studio',
+                        ),
                       ),
-                    ),
-                    PopupMenuItem(
-                      value: ReaderMoreAction.compare,
-                      child: _MenuRow(
-                        icon: Icons.compare_rounded,
-                        label: 'Compare',
+                    if (controller.isPageStripEnabled)
+                      const PopupMenuItem(
+                        value: ReaderMoreAction.pageStrip,
+                        child: _MenuRow(
+                          icon: Icons.photo_library_outlined,
+                          label: 'Pages',
+                        ),
                       ),
-                    ),
-                    PopupMenuItem(
-                      value: ReaderMoreAction.kanzulStudy,
-                      child: _MenuRow(
-                        icon: Icons.translate_rounded,
-                        label: 'Kanzul study',
+                    if (controller.isCompareEnabled)
+                      const PopupMenuItem(
+                        value: ReaderMoreAction.compare,
+                        child: _MenuRow(
+                          icon: Icons.compare_rounded,
+                          label: 'Compare',
+                        ),
                       ),
-                    ),
-                    PopupMenuItem(
+                    if (controller.isKanzulStudyEnabled)
+                      const PopupMenuItem(
+                        value: ReaderMoreAction.kanzulStudy,
+                        child: _MenuRow(
+                          icon: Icons.translate_rounded,
+                          label: 'Kanzul study',
+                        ),
+                      ),
+                    const PopupMenuItem(
                       value: ReaderMoreAction.settings,
                       child: _MenuRow(
                         icon: Icons.tune_rounded,
