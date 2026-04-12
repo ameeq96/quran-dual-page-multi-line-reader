@@ -105,7 +105,8 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     _lastKnownSpreadIndex = widget.controller.currentSpreadIndex;
     _lastKnownPageViewIndex = widget.controller.currentPageViewIndex;
     oldWidget.controller.pageListenable.removeListener(_syncViewControllers);
-    oldWidget.controller.settingsListenable.removeListener(_syncViewControllers);
+    oldWidget.controller.settingsListenable
+        .removeListener(_syncViewControllers);
     widget.controller.pageListenable.addListener(_syncViewControllers);
     widget.controller.settingsListenable.addListener(_syncViewControllers);
   }
@@ -266,13 +267,15 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
   }
 
   Future<void> _openInsightsSheet() {
-    return Navigator.of(context).push<int>(
+    return Navigator.of(context)
+        .push<int>(
       buildReaderPageRoute<int>(
         builder: (context) => QuranInsightsScreen(
           controller: widget.controller,
         ),
       ),
-    ).then((page) async {
+    )
+        .then((page) async {
       if (!mounted || page == null) {
         return;
       }
@@ -281,13 +284,15 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
   }
 
   Future<void> _openBookmarksSheet() {
-    return Navigator.of(context).push<int>(
+    return Navigator.of(context)
+        .push<int>(
       buildReaderPageRoute<int>(
         builder: (context) => QuranBookmarksScreen(
           controller: widget.controller,
         ),
       ),
-    ).then((page) async {
+    )
+        .then((page) async {
       if (!mounted || page == null) {
         return;
       }
@@ -296,7 +301,8 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
   }
 
   Future<void> _openDashboardSheet() {
-    return Navigator.of(context).push<int>(
+    return Navigator.of(context)
+        .push<int>(
       buildReaderPageRoute<int>(
         builder: (screenContext) => QuranDashboardScreen(
           controller: widget.controller,
@@ -313,7 +319,8 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
           },
         ),
       ),
-    ).then((page) async {
+    )
+        .then((page) async {
       if (!mounted || page == null) {
         return;
       }
@@ -322,13 +329,15 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
   }
 
   Future<void> _openGrowthHub() {
-    return Navigator.of(context).push<int>(
+    return Navigator.of(context)
+        .push<int>(
       buildReaderPageRoute<int>(
         builder: (context) => QuranGrowthHubScreen(
           controller: widget.controller,
         ),
       ),
-    ).then((page) async {
+    )
+        .then((page) async {
       if (!mounted || page == null) {
         return;
       }
@@ -347,13 +356,15 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
   }
 
   Future<void> _openAiStudio() {
-    return Navigator.of(context).push<int>(
+    return Navigator.of(context)
+        .push<int>(
       buildReaderPageRoute<int>(
         builder: (context) => QuranAiStudioScreen(
           controller: widget.controller,
         ),
       ),
-    ).then((page) async {
+    )
+        .then((page) async {
       if (!mounted || page == null) {
         return;
       }
@@ -362,13 +373,15 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
   }
 
   Future<void> _openPageStripSheet() {
-    return Navigator.of(context).push<int>(
+    return Navigator.of(context)
+        .push<int>(
       buildReaderPageRoute<int>(
         builder: (context) => QuranPageStripScreen(
           controller: widget.controller,
         ),
       ),
-    ).then((page) async {
+    )
+        .then((page) async {
       if (!mounted || page == null) {
         return;
       }
@@ -508,11 +521,12 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                       return AnimatedBuilder(
                         animation: widget.controller.controlsListenable,
                         builder: (context, _) {
-                          final showControls = widget.controller.controlsVisible;
+                          final showControls =
+                              widget.controller.controlsVisible;
                           final fullscreenReading =
                               widget.controller.settings.fullscreenReading;
-                          final showAppBar =
-                              showControls || (isPortrait && !fullscreenReading);
+                          final showAppBar = showControls ||
+                              (isPortrait && !fullscreenReading);
                           final showBottomDock =
                               isPortrait && !showControls && !fullscreenReading;
                           final bodyTopPadding = showAppBar
@@ -579,14 +593,17 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                                           child: AnimatedBuilder(
                                             animation: Listenable.merge(
                                               <Listenable>[
-                                                widget.controller.pageListenable,
-                                                widget.controller.viewportListenable,
+                                                widget
+                                                    .controller.pageListenable,
+                                                widget.controller
+                                                    .viewportListenable,
                                               ],
                                             ),
                                             builder: (context, _) {
                                               return isPortrait
                                                   ? _PortraitPageReader(
-                                                      controller: _pageController,
+                                                      controller:
+                                                          _pageController,
                                                       readerController:
                                                           widget.controller,
                                                       lastKnownPageViewIndex:
@@ -621,9 +638,8 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                                         ),
                                         Positioned.fill(
                                           child: IgnorePointer(
-                                            ignoring:
-                                                widget.controller.settings
-                                                    .hifzFocusMode,
+                                            ignoring: widget.controller.settings
+                                                .hifzFocusMode,
                                             child: GestureDetector(
                                               behavior:
                                                   HitTestBehavior.translucent,
@@ -696,6 +712,7 @@ class _LandscapeSpreadReader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final viewportWidth = MediaQuery.of(context).size.width;
     return RepaintBoundary(
       child: PageView.builder(
         controller: controller,
@@ -733,28 +750,22 @@ class _LandscapeSpreadReader extends StatelessWidget {
                 readerController.smartHifzAppliesToPage(spread.rightPage.number)
                     ? readerController.updateSmartHifzManualMaskAnchor
                     : null,
-            leftSmartHifzRevealed:
-                readerController.smartHifzRevealedForPage(
+            leftSmartHifzRevealed: readerController.smartHifzRevealedForPage(
               spread.leftPage.number,
             ),
-            rightSmartHifzRevealed:
-                readerController.smartHifzRevealedForPage(
+            rightSmartHifzRevealed: readerController.smartHifzRevealedForPage(
               spread.rightPage.number,
             ),
-            leftSmartHifzEdition:
-                readerController.smartHifzEditionForPage(
+            leftSmartHifzEdition: readerController.smartHifzEditionForPage(
               spread.leftPage.number,
             ),
-            rightSmartHifzEdition:
-                readerController.smartHifzEditionForPage(
+            rightSmartHifzEdition: readerController.smartHifzEditionForPage(
               spread.rightPage.number,
             ),
-            leftSmartHifzLineCount:
-                readerController.smartHifzLineCountForPage(
+            leftSmartHifzLineCount: readerController.smartHifzLineCountForPage(
               spread.leftPage.number,
             ),
-            rightSmartHifzLineCount:
-                readerController.smartHifzLineCountForPage(
+            rightSmartHifzLineCount: readerController.smartHifzLineCountForPage(
               spread.rightPage.number,
             ),
             spreadOffset: index - lastKnownSpreadIndex.toDouble(),
@@ -780,6 +791,7 @@ class _PortraitPageReader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final viewportWidth = MediaQuery.of(context).size.width;
     return RepaintBoundary(
       child: PageView.builder(
         controller: controller,

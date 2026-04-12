@@ -172,10 +172,11 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
                             _runTool();
                           },
                     icon: _isRunning
-                        ? const SizedBox(
+                        ? const ReaderSkeletonBlock(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2.2),
+                            borderRadius:
+                                BorderRadius.all(Radius.circular(6)),
                           )
                         : Icon(_toolIcon(_selectedTool)),
                     label: Text(_selectedTool.actionLabel),

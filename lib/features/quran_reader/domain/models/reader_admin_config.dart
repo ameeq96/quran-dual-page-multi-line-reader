@@ -12,12 +12,14 @@ class ReaderAdminAnnouncement {
     required this.title,
     required this.body,
     required this.publishAtIso,
+    required this.active,
   });
 
   final int id;
   final String title;
   final String body;
   final String publishAtIso;
+  final bool active;
 }
 
 class ReaderRemoteAssetPack {

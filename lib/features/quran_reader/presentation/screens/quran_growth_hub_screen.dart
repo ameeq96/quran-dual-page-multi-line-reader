@@ -37,8 +37,53 @@ class QuranGrowthHubScreen extends StatelessWidget {
     await Share.shareXFiles(
       <XFile>[XFile(file.path)],
       subject: 'Quran Dual Page & Multi-Line Reader backup',
-      text: 'Reader backup export with bookmarks, notes, plan, and hifz tracking.',
+      text:
+          'Reader backup export with bookmarks, notes, plan, and hifz tracking.',
     );
+  }
+
+  Future<void> _downloadOfflinePack(
+    BuildContext context,
+    MushafEdition edition,
+  ) async {
+    try {
+      await controller.downloadOfflineEditionPack(edition);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${edition.label} is now available offline.')),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to download ${edition.label}: $error')),
+      );
+    }
+  }
+
+  Future<void> _removeOfflinePack(
+    BuildContext context,
+    MushafEdition edition,
+  ) async {
+    try {
+      await controller.removeOfflineEditionPack(edition);
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${edition.label} offline pack removed.')),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to remove ${edition.label}: $error')),
+      );
+    }
   }
 
   @override
@@ -112,11 +157,13 @@ class QuranGrowthHubScreen extends StatelessWidget {
                           ),
                           _Pill(
                             icon: Icons.flag_circle_outlined,
-                            label: '${plan.preset.label} · $planPagesPerDay/day',
+                            label:
+                                '${plan.preset.label} · $planPagesPerDay/day',
                           ),
                           _Pill(
                             icon: Icons.school_outlined,
-                            label: '${controller.hifzReviewEntries.length} hifz pages',
+                            label:
+                                '${controller.hifzReviewEntries.length} hifz pages',
                           ),
                           _Pill(
                             icon: Icons.sync_outlined,
@@ -162,9 +209,11 @@ class QuranGrowthHubScreen extends StatelessWidget {
                       const SizedBox(height: 12),
                       _MetricGrid(
                         metrics: [
-                          _MetricItem(label: 'Target', value: plan.preset.label),
+                          _MetricItem(
+                              label: 'Target', value: plan.preset.label),
                           _MetricItem(label: 'Days', value: '$targetDays'),
-                          _MetricItem(label: 'Pages/day', value: '$planPagesPerDay'),
+                          _MetricItem(
+                              label: 'Pages/day', value: '$planPagesPerDay'),
                           _MetricItem(
                             label: 'Remaining',
                             value: '${controller.remainingPages}',
@@ -311,7 +360,7 @@ class QuranGrowthHubScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Prepare your app for smaller installs and edition-based packs.',
+                        'Download the exact Quran scan packs you use online so the same editions keep working offline.',
                         style: themeData.textTheme.bodyMedium?.copyWith(
                           color: themeData.colorScheme.onSurfaceVariant,
                         ),
@@ -320,81 +369,139 @@ class QuranGrowthHubScreen extends StatelessWidget {
                       ...controller.offlineEditionPacks.map((pack) {
                         final remotePack =
                             controller.remoteAssetPackForEdition(pack.edition);
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: CircleAvatar(
-                            radius: 18,
-                            backgroundColor:
-                                themeData.colorScheme.primary.withOpacity(0.12),
-                            child: Text(
-                              pack.edition.shortLabel,
-                              style: themeData.textTheme.labelLarge?.copyWith(
-                                color: themeData.colorScheme.primary,
+                        final isDownloading =
+                            controller.isOfflinePackDownloading(pack.edition);
+                        final isDownloaded =
+                            controller.isOfflinePackDownloaded(pack.edition);
+                        final isBundled =
+                            controller.isBundledPackForEdition(pack.edition);
+                        final canDownload = remotePack != null &&
+                            !isDownloading &&
+                            !isDownloaded &&
+                            !isBundled;
+                        final canRemove =
+                            isDownloaded && !isDownloading && !isBundled;
+                        final progress =
+                            controller.offlinePackProgressForEdition(
+                          pack.edition,
+                        );
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color:
+                                  themeData.colorScheme.surfaceContainerLowest,
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 18,
+                                        backgroundColor: themeData
+                                            .colorScheme.primary
+                                            .withOpacity(0.12),
+                                        child: Text(
+                                          pack.edition.shortLabel,
+                                          style: themeData.textTheme.labelLarge
+                                              ?.copyWith(
+                                            color:
+                                                themeData.colorScheme.primary,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              pack.title,
+                                              style: themeData
+                                                  .textTheme.titleMedium
+                                                  ?.copyWith(
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              controller
+                                                  .adminPackSubtitleForEdition(
+                                                pack.edition,
+                                              ),
+                                              style: themeData
+                                                  .textTheme.bodySmall
+                                                  ?.copyWith(
+                                                color: themeData.colorScheme
+                                                    .onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      _StatusChip(
+                                        label: controller
+                                            .adminPackStatusForEdition(
+                                          pack.edition,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (isDownloading) ...[
+                                    const SizedBox(height: 12),
+                                    LinearProgressIndicator(
+                                      value: progress <= 0 || progress >= 1
+                                          ? null
+                                          : progress,
+                                      minHeight: 8,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 12),
+                                  Wrap(
+                                    spacing: 10,
+                                    runSpacing: 10,
+                                    children: [
+                                      FilledButton.tonal(
+                                        onPressed: canDownload
+                                            ? () => _downloadOfflinePack(
+                                                  context,
+                                                  pack.edition,
+                                                )
+                                            : null,
+                                        child: Text(
+                                          isBundled
+                                              ? 'Built-in'
+                                              : isDownloaded
+                                                  ? 'Downloaded'
+                                                  : isDownloading
+                                                      ? 'Downloading...'
+                                                      : 'Download offline',
+                                        ),
+                                      ),
+                                      OutlinedButton(
+                                        onPressed: canRemove
+                                            ? () => _removeOfflinePack(
+                                                  context,
+                                                  pack.edition,
+                                                )
+                                            : null,
+                                        child: const Text('Remove'),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                          title: Text(pack.title),
-                          subtitle: Text(
-                            controller.adminPackSubtitleForEdition(pack.edition),
-                          ),
-                          trailing: _StatusChip(
-                            label: remotePack == null
-                                ? pack.state.label
-                                : 'Admin v${remotePack.version}',
-                          ),
                         );
                       }),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _HubCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'AI quality',
-                        style: themeData.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Switch between fast, balanced, and deep answers for AI study tools.',
-                        style: themeData.textTheme.bodyMedium?.copyWith(
-                          color: themeData.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (!controller.isAiStudioEnabled)
-                        Text(
-                          'AI tools are currently disabled by the admin dashboard feature flags.',
-                          style: themeData.textTheme.bodyMedium?.copyWith(
-                            color: themeData.colorScheme.onSurfaceVariant,
-                          ),
-                        )
-                      else ...[
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: AiResponseDepth.values.map((depth) {
-                            return ChoiceChip(
-                              label: Text(depth.label),
-                              selected: aiSettings.responseDepth == depth,
-                              onSelected: (_) {
-                                controller.setAiResponseDepth(depth);
-                              },
-                            );
-                          }).toList(growable: false),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          aiSettings.responseDepth.promptLabel,
-                          style: themeData.textTheme.bodyMedium?.copyWith(
-                            color: themeData.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -415,35 +522,40 @@ class QuranGrowthHubScreen extends StatelessWidget {
                         value: experience.largerTextMode,
                         onChanged: controller.setLargerTextMode,
                         title: const Text('Larger text mode'),
-                        subtitle: const Text('Increase app text size slightly.'),
+                        subtitle:
+                            const Text('Increase app text size slightly.'),
                       ),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
                         value: experience.highContrastMode,
                         onChanged: controller.setHighContrastMode,
                         title: const Text('High contrast mode'),
-                        subtitle: const Text('Stronger borders and clearer contrast.'),
+                        subtitle: const Text(
+                            'Stronger borders and clearer contrast.'),
                       ),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
                         value: experience.reducedMotion,
                         onChanged: controller.setReducedMotion,
                         title: const Text('Reduced motion'),
-                        subtitle: const Text('Prepare the app for lighter transitions.'),
+                        subtitle: const Text(
+                            'Prepare the app for lighter transitions.'),
                       ),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
                         value: experience.tajweedMode,
                         onChanged: controller.setTajweedMode,
                         title: const Text('Tajweed mode'),
-                        subtitle: const Text('Keep tajweed-ready reading mode enabled.'),
+                        subtitle: const Text(
+                            'Keep tajweed-ready reading mode enabled.'),
                       ),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
                         value: experience.recitationSyncEnabled,
                         onChanged: controller.setRecitationSyncEnabled,
                         title: const Text('Recitation sync'),
-                        subtitle: const Text('Keep audio follow mode ready for page sync.'),
+                        subtitle: const Text(
+                            'Keep audio follow mode ready for page sync.'),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -473,33 +585,6 @@ class QuranGrowthHubScreen extends StatelessWidget {
                         },
                         icon: const Icon(Icons.upload_file_outlined),
                         label: const Text('Export backup JSON'),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _HubCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Launch roadmap now supported',
-                        style: themeData.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      ...const [
-                        'Offline edition packs foundation is now ready.',
-                        'Reading plans and hifz revision tracking are now stored in app state.',
-                        'AI tools now support Fast, Balanced, and Deep modes.',
-                        'Accessibility toggles and sync-ready backup export are available.',
-                        'This foundation makes Play Store launch prep and future cloud sync easier.',
-                      ].map(
-                        (line) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _BulletLine(text: line),
-                        ),
                       ),
                     ],
                   ),

@@ -1,0 +1,1249 @@
+{
+  "profile": {
+    "standardTotalPages": 604,
+    "tajScanTotalPages": 550,
+    "tajQuranStartPage": 2,
+    "tajQuranEndPage": 549,
+    "notes": "Official Quran.com surah and juz anchors mapped onto the Taj Company scan profile bundled in this app."
+  },
+  "surahs": [
+    {
+      "id": 1,
+      "nameSimple": "Al-Fatihah",
+      "nameComplex": "Al-Fātiĥah",
+      "nameArabic": "الفاتحة",
+      "translatedName": "The Opener",
+      "standardStartPage": 1,
+      "tajScanStartPage": 2
+    },
+    {
+      "id": 2,
+      "nameSimple": "Al-Baqarah",
+      "nameComplex": "Al-Baqarah",
+      "nameArabic": "البقرة",
+      "translatedName": "The Cow",
+      "standardStartPage": 2,
+      "tajScanStartPage": 3
+    },
+    {
+      "id": 3,
+      "nameSimple": "Ali 'Imran",
+      "nameComplex": "Āli `Imrān",
+      "nameArabic": "آل عمران",
+      "translatedName": "Family of Imran",
+      "standardStartPage": 50,
+      "tajScanStartPage": 46
+    },
+    {
+      "id": 4,
+      "nameSimple": "An-Nisa",
+      "nameComplex": "An-Nisā",
+      "nameArabic": "النساء",
+      "translatedName": "The Women",
+      "standardStartPage": 77,
+      "tajScanStartPage": 71
+    },
+    {
+      "id": 5,
+      "nameSimple": "Al-Ma'idah",
+      "nameComplex": "Al-Mā'idah",
+      "nameArabic": "المائدة",
+      "translatedName": "The Table Spread",
+      "standardStartPage": 106,
+      "tajScanStartPage": 97
+    },
+    {
+      "id": 6,
+      "nameSimple": "Al-An'am",
+      "nameComplex": "Al-'An`ām",
+      "nameArabic": "الأنعام",
+      "translatedName": "The Cattle",
+      "standardStartPage": 128,
+      "tajScanStartPage": 117
+    },
+    {
+      "id": 7,
+      "nameSimple": "Al-A'raf",
+      "nameComplex": "Al-'A`rāf",
+      "nameArabic": "الأعراف",
+      "translatedName": "The Heights",
+      "standardStartPage": 151,
+      "tajScanStartPage": 138
+    },
+    {
+      "id": 8,
+      "nameSimple": "Al-Anfal",
+      "nameComplex": "Al-'Anfāl",
+      "nameArabic": "الأنفال",
+      "translatedName": "The Spoils of War",
+      "standardStartPage": 177,
+      "tajScanStartPage": 162
+    },
+    {
+      "id": 9,
+      "nameSimple": "At-Tawbah",
+      "nameComplex": "At-Tawbah",
+      "nameArabic": "التوبة",
+      "translatedName": "The Repentance",
+      "standardStartPage": 187,
+      "tajScanStartPage": 171
+    },
+    {
+      "id": 10,
+      "nameSimple": "Yunus",
+      "nameComplex": "Yūnus",
+      "nameArabic": "يونس",
+      "translatedName": "Jonah",
+      "standardStartPage": 208,
+      "tajScanStartPage": 190
+    },
+    {
+      "id": 11,
+      "nameSimple": "Hud",
+      "nameComplex": "Hūd",
+      "nameArabic": "هود",
+      "translatedName": "Hud",
+      "standardStartPage": 221,
+      "tajScanStartPage": 202
+    },
+    {
+      "id": 12,
+      "nameSimple": "Yusuf",
+      "nameComplex": "Yūsuf",
+      "nameArabic": "يوسف",
+      "translatedName": "Joseph",
+      "standardStartPage": 235,
+      "tajScanStartPage": 214
+    },
+    {
+      "id": 13,
+      "nameSimple": "Ar-Ra'd",
+      "nameComplex": "Ar-Ra`d",
+      "nameArabic": "الرعد",
+      "translatedName": "The Thunder",
+      "standardStartPage": 249,
+      "tajScanStartPage": 227
+    },
+    {
+      "id": 14,
+      "nameSimple": "Ibrahim",
+      "nameComplex": "Ibrāhīm",
+      "nameArabic": "ابراهيم",
+      "translatedName": "Abraham",
+      "standardStartPage": 255,
+      "tajScanStartPage": 232
+    },
+    {
+      "id": 15,
+      "nameSimple": "Al-Hijr",
+      "nameComplex": "Al-Ĥijr",
+      "nameArabic": "الحجر",
+      "translatedName": "The Rocky Tract",
+      "standardStartPage": 262,
+      "tajScanStartPage": 239
+    },
+    {
+      "id": 16,
+      "nameSimple": "An-Nahl",
+      "nameComplex": "An-Naĥl",
+      "nameArabic": "النحل",
+      "translatedName": "The Bee",
+      "standardStartPage": 267,
+      "tajScanStartPage": 243
+    },
+    {
+      "id": 17,
+      "nameSimple": "Al-Isra",
+      "nameComplex": "Al-'Isrā",
+      "nameArabic": "الإسراء",
+      "translatedName": "The Night Journey",
+      "standardStartPage": 282,
+      "tajScanStartPage": 257
+    },
+    {
+      "id": 18,
+      "nameSimple": "Al-Kahf",
+      "nameComplex": "Al-Kahf",
+      "nameArabic": "الكهف",
+      "translatedName": "The Cave",
+      "standardStartPage": 293,
+      "tajScanStartPage": 267
+    },
+    {
+      "id": 19,
+      "nameSimple": "Maryam",
+      "nameComplex": "Maryam",
+      "nameArabic": "مريم",
+      "translatedName": "Mary",
+      "standardStartPage": 305,
+      "tajScanStartPage": 278
+    },
+    {
+      "id": 20,
+      "nameSimple": "Taha",
+      "nameComplex": "Ţāhā",
+      "nameArabic": "طه",
+      "translatedName": "Ta-Ha",
+      "standardStartPage": 312,
+      "tajScanStartPage": 284
+    },
+    {
+      "id": 21,
+      "nameSimple": "Al-Anbya",
+      "nameComplex": "Al-'Anbyā",
+      "nameArabic": "الأنبياء",
+      "translatedName": "The Prophets",
+      "standardStartPage": 322,
+      "tajScanStartPage": 293
+    },
+    {
+      "id": 22,
+      "nameSimple": "Al-Hajj",
+      "nameComplex": "Al-Ĥajj",
+      "nameArabic": "الحج",
+      "translatedName": "The Pilgrimage",
+      "standardStartPage": 332,
+      "tajScanStartPage": 302
+    },
+    {
+      "id": 23,
+      "nameSimple": "Al-Mu'minun",
+      "nameComplex": "Al-Mu'minūn",
+      "nameArabic": "المؤمنون",
+      "translatedName": "The Believers",
+      "standardStartPage": 342,
+      "tajScanStartPage": 311
+    },
+    {
+      "id": 24,
+      "nameSimple": "An-Nur",
+      "nameComplex": "An-Nūr",
+      "nameArabic": "النور",
+      "translatedName": "The Light",
+      "standardStartPage": 350,
+      "tajScanStartPage": 319
+    },
+    {
+      "id": 25,
+      "nameSimple": "Al-Furqan",
+      "nameComplex": "Al-Furqān",
+      "nameArabic": "الفرقان",
+      "translatedName": "The Criterion",
+      "standardStartPage": 359,
+      "tajScanStartPage": 327
+    },
+    {
+      "id": 26,
+      "nameSimple": "Ash-Shu'ara",
+      "nameComplex": "Ash-Shu`arā",
+      "nameArabic": "الشعراء",
+      "translatedName": "The Poets",
+      "standardStartPage": 367,
+      "tajScanStartPage": 334
+    },
+    {
+      "id": 27,
+      "nameSimple": "An-Naml",
+      "nameComplex": "An-Naml",
+      "nameArabic": "النمل",
+      "translatedName": "The Ant",
+      "standardStartPage": 377,
+      "tajScanStartPage": 343
+    },
+    {
+      "id": 28,
+      "nameSimple": "Al-Qasas",
+      "nameComplex": "Al-Qaşaş",
+      "nameArabic": "القصص",
+      "translatedName": "The Stories",
+      "standardStartPage": 385,
+      "tajScanStartPage": 350
+    },
+    {
+      "id": 29,
+      "nameSimple": "Al-'Ankabut",
+      "nameComplex": "Al-`Ankabūt",
+      "nameArabic": "العنكبوت",
+      "translatedName": "The Spider",
+      "standardStartPage": 396,
+      "tajScanStartPage": 360
+    },
+    {
+      "id": 30,
+      "nameSimple": "Ar-Rum",
+      "nameComplex": "Ar-Rūm",
+      "nameArabic": "الروم",
+      "translatedName": "The Romans",
+      "standardStartPage": 404,
+      "tajScanStartPage": 368
+    },
+    {
+      "id": 31,
+      "nameSimple": "Luqman",
+      "nameComplex": "Luqmān",
+      "nameArabic": "لقمان",
+      "translatedName": "Luqman",
+      "standardStartPage": 411,
+      "tajScanStartPage": 374
+    },
+    {
+      "id": 32,
+      "nameSimple": "As-Sajdah",
+      "nameComplex": "As-Sajdah",
+      "nameArabic": "السجدة",
+      "translatedName": "The Prostration",
+      "standardStartPage": 415,
+      "tajScanStartPage": 378
+    },
+    {
+      "id": 33,
+      "nameSimple": "Al-Ahzab",
+      "nameComplex": "Al-'Aĥzāb",
+      "nameArabic": "الأحزاب",
+      "translatedName": "The Combined Forces",
+      "standardStartPage": 418,
+      "tajScanStartPage": 380
+    },
+    {
+      "id": 34,
+      "nameSimple": "Saba",
+      "nameComplex": "Saba",
+      "nameArabic": "سبإ",
+      "translatedName": "Sheba",
+      "standardStartPage": 428,
+      "tajScanStartPage": 389
+    },
+    {
+      "id": 35,
+      "nameSimple": "Fatir",
+      "nameComplex": "Fāţir",
+      "nameArabic": "فاطر",
+      "translatedName": "Originator",
+      "standardStartPage": 434,
+      "tajScanStartPage": 395
+    },
+    {
+      "id": 36,
+      "nameSimple": "Ya-Sin",
+      "nameComplex": "Yā-Sīn",
+      "nameArabic": "يس",
+      "translatedName": "Ya Sin",
+      "standardStartPage": 440,
+      "tajScanStartPage": 400
+    },
+    {
+      "id": 37,
+      "nameSimple": "As-Saffat",
+      "nameComplex": "Aş-Şāffāt",
+      "nameArabic": "الصافات",
+      "translatedName": "Those who set the Ranks",
+      "standardStartPage": 446,
+      "tajScanStartPage": 406
+    },
+    {
+      "id": 38,
+      "nameSimple": "Sad",
+      "nameComplex": "Şād",
+      "nameArabic": "ص",
+      "translatedName": "The Letter \"Saad\"",
+      "standardStartPage": 453,
+      "tajScanStartPage": 412
+    },
+    {
+      "id": 39,
+      "nameSimple": "Az-Zumar",
+      "nameComplex": "Az-Zumar",
+      "nameArabic": "الزمر",
+      "translatedName": "The Troops",
+      "standardStartPage": 458,
+      "tajScanStartPage": 417
+    },
+    {
+      "id": 40,
+      "nameSimple": "Ghafir",
+      "nameComplex": "Ghāfir",
+      "nameArabic": "غافر",
+      "translatedName": "The Forgiver",
+      "standardStartPage": 467,
+      "tajScanStartPage": 425
+    },
+    {
+      "id": 41,
+      "nameSimple": "Fussilat",
+      "nameComplex": "Fuşşilat",
+      "nameArabic": "فصلت",
+      "translatedName": "Explained in Detail",
+      "standardStartPage": 477,
+      "tajScanStartPage": 434
+    },
+    {
+      "id": 42,
+      "nameSimple": "Ash-Shuraa",
+      "nameComplex": "Ash-Shūraá",
+      "nameArabic": "الشورى",
+      "translatedName": "The Consultation",
+      "standardStartPage": 483,
+      "tajScanStartPage": 439
+    },
+    {
+      "id": 43,
+      "nameSimple": "Az-Zukhruf",
+      "nameComplex": "Az-Zukhruf",
+      "nameArabic": "الزخرف",
+      "translatedName": "The Ornaments of Gold",
+      "standardStartPage": 489,
+      "tajScanStartPage": 445
+    },
+    {
+      "id": 44,
+      "nameSimple": "Ad-Dukhan",
+      "nameComplex": "Ad-Dukhān",
+      "nameArabic": "الدخان",
+      "translatedName": "The Smoke",
+      "standardStartPage": 496,
+      "tajScanStartPage": 451
+    },
+    {
+      "id": 45,
+      "nameSimple": "Al-Jathiyah",
+      "nameComplex": "Al-Jāthiyah",
+      "nameArabic": "الجاثية",
+      "translatedName": "The Crouching",
+      "standardStartPage": 499,
+      "tajScanStartPage": 454
+    },
+    {
+      "id": 46,
+      "nameSimple": "Al-Ahqaf",
+      "nameComplex": "Al-'Aĥqāf",
+      "nameArabic": "الأحقاف",
+      "translatedName": "The Wind-Curved Sandhills",
+      "standardStartPage": 502,
+      "tajScanStartPage": 456
+    },
+    {
+      "id": 47,
+      "nameSimple": "Muhammad",
+      "nameComplex": "Muĥammad",
+      "nameArabic": "محمد",
+      "translatedName": "Muhammad",
+      "standardStartPage": 507,
+      "tajScanStartPage": 461
+    },
+    {
+      "id": 48,
+      "nameSimple": "Al-Fath",
+      "nameComplex": "Al-Fatĥ",
+      "nameArabic": "الفتح",
+      "translatedName": "The Victory",
+      "standardStartPage": 511,
+      "tajScanStartPage": 465
+    },
+    {
+      "id": 49,
+      "nameSimple": "Al-Hujurat",
+      "nameComplex": "Al-Ĥujurāt",
+      "nameArabic": "الحجرات",
+      "translatedName": "The Rooms",
+      "standardStartPage": 515,
+      "tajScanStartPage": 468
+    },
+    {
+      "id": 50,
+      "nameSimple": "Qaf",
+      "nameComplex": "Qāf",
+      "nameArabic": "ق",
+      "translatedName": "The Letter \"Qaf\"",
+      "standardStartPage": 518,
+      "tajScanStartPage": 471
+    },
+    {
+      "id": 51,
+      "nameSimple": "Adh-Dhariyat",
+      "nameComplex": "Adh-Dhāriyāt",
+      "nameArabic": "الذاريات",
+      "translatedName": "The Winnowing Winds",
+      "standardStartPage": 520,
+      "tajScanStartPage": 473
+    },
+    {
+      "id": 52,
+      "nameSimple": "At-Tur",
+      "nameComplex": "Aţ-Ţūr",
+      "nameArabic": "الطور",
+      "translatedName": "The Mount",
+      "standardStartPage": 523,
+      "tajScanStartPage": 476
+    },
+    {
+      "id": 53,
+      "nameSimple": "An-Najm",
+      "nameComplex": "An-Najm",
+      "nameArabic": "النجم",
+      "translatedName": "The Star",
+      "standardStartPage": 526,
+      "tajScanStartPage": 478
+    },
+    {
+      "id": 54,
+      "nameSimple": "Al-Qamar",
+      "nameComplex": "Al-Qamar",
+      "nameArabic": "القمر",
+      "translatedName": "The Moon",
+      "standardStartPage": 528,
+      "tajScanStartPage": 480
+    },
+    {
+      "id": 55,
+      "nameSimple": "Ar-Rahman",
+      "nameComplex": "Ar-Raĥmān",
+      "nameArabic": "الرحمن",
+      "translatedName": "The Beneficent",
+      "standardStartPage": 531,
+      "tajScanStartPage": 483
+    },
+    {
+      "id": 56,
+      "nameSimple": "Al-Waqi'ah",
+      "nameComplex": "Al-Wāqi`ah",
+      "nameArabic": "الواقعة",
+      "translatedName": "The Inevitable",
+      "standardStartPage": 534,
+      "tajScanStartPage": 486
+    },
+    {
+      "id": 57,
+      "nameSimple": "Al-Hadid",
+      "nameComplex": "Al-Ĥadīd",
+      "nameArabic": "الحديد",
+      "translatedName": "The Iron",
+      "standardStartPage": 537,
+      "tajScanStartPage": 488
+    },
+    {
+      "id": 58,
+      "nameSimple": "Al-Mujadila",
+      "nameComplex": "Al-Mujādila",
+      "nameArabic": "المجادلة",
+      "translatedName": "The Pleading Woman",
+      "standardStartPage": 542,
+      "tajScanStartPage": 493
+    },
+    {
+      "id": 59,
+      "nameSimple": "Al-Hashr",
+      "nameComplex": "Al-Ĥashr",
+      "nameArabic": "الحشر",
+      "translatedName": "The Exile",
+      "standardStartPage": 545,
+      "tajScanStartPage": 495
+    },
+    {
+      "id": 60,
+      "nameSimple": "Al-Mumtahanah",
+      "nameComplex": "Al-Mumtaĥanah",
+      "nameArabic": "الممتحنة",
+      "translatedName": "She that is to be examined",
+      "standardStartPage": 549,
+      "tajScanStartPage": 499
+    },
+    {
+      "id": 61,
+      "nameSimple": "As-Saf",
+      "nameComplex": "Aş-Şaf",
+      "nameArabic": "الصف",
+      "translatedName": "The Ranks",
+      "standardStartPage": 551,
+      "tajScanStartPage": 501
+    },
+    {
+      "id": 62,
+      "nameSimple": "Al-Jumu'ah",
+      "nameComplex": "Al-Jumu`ah",
+      "nameArabic": "الجمعة",
+      "translatedName": "The Congregation, Friday",
+      "standardStartPage": 553,
+      "tajScanStartPage": 503
+    },
+    {
+      "id": 63,
+      "nameSimple": "Al-Munafiqun",
+      "nameComplex": "Al-Munāfiqūn",
+      "nameArabic": "المنافقون",
+      "translatedName": "The Hypocrites",
+      "standardStartPage": 554,
+      "tajScanStartPage": 504
+    },
+    {
+      "id": 64,
+      "nameSimple": "At-Taghabun",
+      "nameComplex": "At-Taghābun",
+      "nameArabic": "التغابن",
+      "translatedName": "The Mutual Disillusion",
+      "standardStartPage": 556,
+      "tajScanStartPage": 505
+    },
+    {
+      "id": 65,
+      "nameSimple": "At-Talaq",
+      "nameComplex": "Aţ-Ţalāq",
+      "nameArabic": "الطلاق",
+      "translatedName": "The Divorce",
+      "standardStartPage": 558,
+      "tajScanStartPage": 507
+    },
+    {
+      "id": 66,
+      "nameSimple": "At-Tahrim",
+      "nameComplex": "At-Taĥrīm",
+      "nameArabic": "التحريم",
+      "translatedName": "The Prohibition",
+      "standardStartPage": 560,
+      "tajScanStartPage": 509
+    },
+    {
+      "id": 67,
+      "nameSimple": "Al-Mulk",
+      "nameComplex": "Al-Mulk",
+      "nameArabic": "الملك",
+      "translatedName": "The Sovereignty",
+      "standardStartPage": 562,
+      "tajScanStartPage": 511
+    },
+    {
+      "id": 68,
+      "nameSimple": "Al-Qalam",
+      "nameComplex": "Al-Qalam",
+      "nameArabic": "القلم",
+      "translatedName": "The Pen",
+      "standardStartPage": 564,
+      "tajScanStartPage": 513
+    },
+    {
+      "id": 69,
+      "nameSimple": "Al-Haqqah",
+      "nameComplex": "Al-Ĥāqqah",
+      "nameArabic": "الحاقة",
+      "translatedName": "The Reality",
+      "standardStartPage": 566,
+      "tajScanStartPage": 515
+    },
+    {
+      "id": 70,
+      "nameSimple": "Al-Ma'arij",
+      "nameComplex": "Al-Ma`ārij",
+      "nameArabic": "المعارج",
+      "translatedName": "The Ascending Stairways",
+      "standardStartPage": 568,
+      "tajScanStartPage": 516
+    },
+    {
+      "id": 71,
+      "nameSimple": "Nuh",
+      "nameComplex": "Nūĥ",
+      "nameArabic": "نوح",
+      "translatedName": "Noah",
+      "standardStartPage": 570,
+      "tajScanStartPage": 518
+    },
+    {
+      "id": 72,
+      "nameSimple": "Al-Jinn",
+      "nameComplex": "Al-Jinn",
+      "nameArabic": "الجن",
+      "translatedName": "The Jinn",
+      "standardStartPage": 572,
+      "tajScanStartPage": 520
+    },
+    {
+      "id": 73,
+      "nameSimple": "Al-Muzzammil",
+      "nameComplex": "Al-Muzzammil",
+      "nameArabic": "المزمل",
+      "translatedName": "The Enshrouded One",
+      "standardStartPage": 574,
+      "tajScanStartPage": 522
+    },
+    {
+      "id": 74,
+      "nameSimple": "Al-Muddaththir",
+      "nameComplex": "Al-Muddaththir",
+      "nameArabic": "المدثر",
+      "translatedName": "The Cloaked One",
+      "standardStartPage": 575,
+      "tajScanStartPage": 523
+    },
+    {
+      "id": 75,
+      "nameSimple": "Al-Qiyamah",
+      "nameComplex": "Al-Qiyāmah",
+      "nameArabic": "القيامة",
+      "translatedName": "The Resurrection",
+      "standardStartPage": 577,
+      "tajScanStartPage": 525
+    },
+    {
+      "id": 76,
+      "nameSimple": "Al-Insan",
+      "nameComplex": "Al-'Insān",
+      "nameArabic": "الانسان",
+      "translatedName": "The Man",
+      "standardStartPage": 578,
+      "tajScanStartPage": 525
+    },
+    {
+      "id": 77,
+      "nameSimple": "Al-Mursalat",
+      "nameComplex": "Al-Mursalāt",
+      "nameArabic": "المرسلات",
+      "translatedName": "The Emissaries",
+      "standardStartPage": 580,
+      "tajScanStartPage": 527
+    },
+    {
+      "id": 78,
+      "nameSimple": "An-Naba",
+      "nameComplex": "An-Naba",
+      "nameArabic": "النبإ",
+      "translatedName": "The Tidings",
+      "standardStartPage": 582,
+      "tajScanStartPage": 529
+    },
+    {
+      "id": 79,
+      "nameSimple": "An-Nazi'at",
+      "nameComplex": "An-Nāzi`āt",
+      "nameArabic": "النازعات",
+      "translatedName": "Those who drag forth",
+      "standardStartPage": 583,
+      "tajScanStartPage": 530
+    },
+    {
+      "id": 80,
+      "nameSimple": "'Abasa",
+      "nameComplex": "`Abasa",
+      "nameArabic": "عبس",
+      "translatedName": "He Frowned",
+      "standardStartPage": 585,
+      "tajScanStartPage": 532
+    },
+    {
+      "id": 81,
+      "nameSimple": "At-Takwir",
+      "nameComplex": "At-Takwīr",
+      "nameArabic": "التكوير",
+      "translatedName": "The Overthrowing",
+      "standardStartPage": 586,
+      "tajScanStartPage": 533
+    },
+    {
+      "id": 82,
+      "nameSimple": "Al-Infitar",
+      "nameComplex": "Al-'Infiţār",
+      "nameArabic": "الإنفطار",
+      "translatedName": "The Cleaving",
+      "standardStartPage": 587,
+      "tajScanStartPage": 534
+    },
+    {
+      "id": 83,
+      "nameSimple": "Al-Mutaffifin",
+      "nameComplex": "Al-Muţaffifīn",
+      "nameArabic": "المطففين",
+      "translatedName": "The Defrauding",
+      "standardStartPage": 587,
+      "tajScanStartPage": 534
+    },
+    {
+      "id": 84,
+      "nameSimple": "Al-Inshiqaq",
+      "nameComplex": "Al-'Inshiqāq",
+      "nameArabic": "الإنشقاق",
+      "translatedName": "The Sundering",
+      "standardStartPage": 589,
+      "tajScanStartPage": 535
+    },
+    {
+      "id": 85,
+      "nameSimple": "Al-Buruj",
+      "nameComplex": "Al-Burūj",
+      "nameArabic": "البروج",
+      "translatedName": "The Mansions of the Stars",
+      "standardStartPage": 590,
+      "tajScanStartPage": 536
+    },
+    {
+      "id": 86,
+      "nameSimple": "At-Tariq",
+      "nameComplex": "Aţ-Ţāriq",
+      "nameArabic": "الطارق",
+      "translatedName": "The Nightcommer",
+      "standardStartPage": 591,
+      "tajScanStartPage": 537
+    },
+    {
+      "id": 87,
+      "nameSimple": "Al-A'la",
+      "nameComplex": "Al-'A`lá",
+      "nameArabic": "الأعلى",
+      "translatedName": "The Most High",
+      "standardStartPage": 591,
+      "tajScanStartPage": 537
+    },
+    {
+      "id": 88,
+      "nameSimple": "Al-Ghashiyah",
+      "nameComplex": "Al-Ghāshiyah",
+      "nameArabic": "الغاشية",
+      "translatedName": "The Overwhelming",
+      "standardStartPage": 592,
+      "tajScanStartPage": 538
+    },
+    {
+      "id": 89,
+      "nameSimple": "Al-Fajr",
+      "nameComplex": "Al-Fajr",
+      "nameArabic": "الفجر",
+      "translatedName": "The Dawn",
+      "standardStartPage": 593,
+      "tajScanStartPage": 539
+    },
+    {
+      "id": 90,
+      "nameSimple": "Al-Balad",
+      "nameComplex": "Al-Balad",
+      "nameArabic": "البلد",
+      "translatedName": "The City",
+      "standardStartPage": 594,
+      "tajScanStartPage": 540
+    },
+    {
+      "id": 91,
+      "nameSimple": "Ash-Shams",
+      "nameComplex": "Ash-Shams",
+      "nameArabic": "الشمس",
+      "translatedName": "The Sun",
+      "standardStartPage": 595,
+      "tajScanStartPage": 541
+    },
+    {
+      "id": 92,
+      "nameSimple": "Al-Layl",
+      "nameComplex": "Al-Layl",
+      "nameArabic": "الليل",
+      "translatedName": "The Night",
+      "standardStartPage": 595,
+      "tajScanStartPage": 541
+    },
+    {
+      "id": 93,
+      "nameSimple": "Ad-Duhaa",
+      "nameComplex": "Ađ-Đuĥaá",
+      "nameArabic": "الضحى",
+      "translatedName": "The Morning Hours",
+      "standardStartPage": 596,
+      "tajScanStartPage": 542
+    },
+    {
+      "id": 94,
+      "nameSimple": "Ash-Sharh",
+      "nameComplex": "Ash-Sharĥ",
+      "nameArabic": "الشرح",
+      "translatedName": "The Relief",
+      "standardStartPage": 596,
+      "tajScanStartPage": 542
+    },
+    {
+      "id": 95,
+      "nameSimple": "At-Tin",
+      "nameComplex": "At-Tīn",
+      "nameArabic": "التين",
+      "translatedName": "The Fig",
+      "standardStartPage": 597,
+      "tajScanStartPage": 543
+    },
+    {
+      "id": 96,
+      "nameSimple": "Al-'Alaq",
+      "nameComplex": "Al-`Alaq",
+      "nameArabic": "العلق",
+      "translatedName": "The Clot",
+      "standardStartPage": 597,
+      "tajScanStartPage": 543
+    },
+    {
+      "id": 97,
+      "nameSimple": "Al-Qadr",
+      "nameComplex": "Al-Qadr",
+      "nameArabic": "القدر",
+      "translatedName": "The Power",
+      "standardStartPage": 598,
+      "tajScanStartPage": 544
+    },
+    {
+      "id": 98,
+      "nameSimple": "Al-Bayyinah",
+      "nameComplex": "Al-Bayyinah",
+      "nameArabic": "البينة",
+      "translatedName": "The Clear Proof",
+      "standardStartPage": 598,
+      "tajScanStartPage": 544
+    },
+    {
+      "id": 99,
+      "nameSimple": "Az-Zalzalah",
+      "nameComplex": "Az-Zalzalah",
+      "nameArabic": "الزلزلة",
+      "translatedName": "The Earthquake",
+      "standardStartPage": 599,
+      "tajScanStartPage": 544
+    },
+    {
+      "id": 100,
+      "nameSimple": "Al-'Adiyat",
+      "nameComplex": "Al-`Ādiyāt",
+      "nameArabic": "العاديات",
+      "translatedName": "The Courser",
+      "standardStartPage": 599,
+      "tajScanStartPage": 544
+    },
+    {
+      "id": 101,
+      "nameSimple": "Al-Qari'ah",
+      "nameComplex": "Al-Qāri`ah",
+      "nameArabic": "القارعة",
+      "translatedName": "The Calamity",
+      "standardStartPage": 600,
+      "tajScanStartPage": 545
+    },
+    {
+      "id": 102,
+      "nameSimple": "At-Takathur",
+      "nameComplex": "At-Takāthur",
+      "nameArabic": "التكاثر",
+      "translatedName": "The Rivalry in world increase",
+      "standardStartPage": 600,
+      "tajScanStartPage": 545
+    },
+    {
+      "id": 103,
+      "nameSimple": "Al-'Asr",
+      "nameComplex": "Al-`Aşr",
+      "nameArabic": "العصر",
+      "translatedName": "The Declining Day",
+      "standardStartPage": 601,
+      "tajScanStartPage": 546
+    },
+    {
+      "id": 104,
+      "nameSimple": "Al-Humazah",
+      "nameComplex": "Al-Humazah",
+      "nameArabic": "الهمزة",
+      "translatedName": "The Traducer",
+      "standardStartPage": 601,
+      "tajScanStartPage": 546
+    },
+    {
+      "id": 105,
+      "nameSimple": "Al-Fil",
+      "nameComplex": "Al-Fīl",
+      "nameArabic": "الفيل",
+      "translatedName": "The Elephant",
+      "standardStartPage": 601,
+      "tajScanStartPage": 546
+    },
+    {
+      "id": 106,
+      "nameSimple": "Quraysh",
+      "nameComplex": "Quraysh",
+      "nameArabic": "قريش",
+      "translatedName": "Quraysh",
+      "standardStartPage": 602,
+      "tajScanStartPage": 547
+    },
+    {
+      "id": 107,
+      "nameSimple": "Al-Ma'un",
+      "nameComplex": "Al-Mā`ūn",
+      "nameArabic": "الماعون",
+      "translatedName": "The Small kindnesses",
+      "standardStartPage": 602,
+      "tajScanStartPage": 547
+    },
+    {
+      "id": 108,
+      "nameSimple": "Al-Kawthar",
+      "nameComplex": "Al-Kawthar",
+      "nameArabic": "الكوثر",
+      "translatedName": "The Abundance",
+      "standardStartPage": 602,
+      "tajScanStartPage": 547
+    },
+    {
+      "id": 109,
+      "nameSimple": "Al-Kafirun",
+      "nameComplex": "Al-Kāfirūn",
+      "nameArabic": "الكافرون",
+      "translatedName": "The Disbelievers",
+      "standardStartPage": 603,
+      "tajScanStartPage": 548
+    },
+    {
+      "id": 110,
+      "nameSimple": "An-Nasr",
+      "nameComplex": "An-Naşr",
+      "nameArabic": "النصر",
+      "translatedName": "The Divine Support",
+      "standardStartPage": 603,
+      "tajScanStartPage": 548
+    },
+    {
+      "id": 111,
+      "nameSimple": "Al-Masad",
+      "nameComplex": "Al-Masad",
+      "nameArabic": "المسد",
+      "translatedName": "The Palm Fiber",
+      "standardStartPage": 603,
+      "tajScanStartPage": 548
+    },
+    {
+      "id": 112,
+      "nameSimple": "Al-Ikhlas",
+      "nameComplex": "Al-'Ikhlāş",
+      "nameArabic": "الإخلاص",
+      "translatedName": "The Sincerity",
+      "standardStartPage": 604,
+      "tajScanStartPage": 549
+    },
+    {
+      "id": 113,
+      "nameSimple": "Al-Falaq",
+      "nameComplex": "Al-Falaq",
+      "nameArabic": "الفلق",
+      "translatedName": "The Daybreak",
+      "standardStartPage": 604,
+      "tajScanStartPage": 549
+    },
+    {
+      "id": 114,
+      "nameSimple": "An-Nas",
+      "nameComplex": "An-Nās",
+      "nameArabic": "الناس",
+      "translatedName": "Mankind",
+      "standardStartPage": 604,
+      "tajScanStartPage": 549
+    }
+  ],
+  "siparas": [
+    {
+      "number": 1,
+      "name": "Alif Lam Meem",
+      "nameArabic": "الم",
+      "standardStartPage": 1,
+      "tajScanStartPage": 2
+    },
+    {
+      "number": 2,
+      "name": "Sayaqool",
+      "nameArabic": "سَيَقُولُ",
+      "standardStartPage": 22,
+      "tajScanStartPage": 21
+    },
+    {
+      "number": 3,
+      "name": "Tilka Rusul",
+      "nameArabic": "تِلْكَ الرُّسُلُ",
+      "standardStartPage": 42,
+      "tajScanStartPage": 39
+    },
+    {
+      "number": 4,
+      "name": "Lan Tana Loo",
+      "nameArabic": "لَن تَنَالُوا",
+      "standardStartPage": 62,
+      "tajScanStartPage": 57
+    },
+    {
+      "number": 5,
+      "name": "Wal Mohsanat",
+      "nameArabic": "وَالْمُحْصَنَاتُ",
+      "standardStartPage": 82,
+      "tajScanStartPage": 75
+    },
+    {
+      "number": 6,
+      "name": "La Yuhibbullah",
+      "nameArabic": "لَا يُحِبُّ ٱللَّهُ",
+      "standardStartPage": 102,
+      "tajScanStartPage": 94
+    },
+    {
+      "number": 7,
+      "name": "Wa Iza Samiu",
+      "nameArabic": "وَإِذَا سَمِعُوا",
+      "standardStartPage": 121,
+      "tajScanStartPage": 111
+    },
+    {
+      "number": 8,
+      "name": "Wa Lau Annana",
+      "nameArabic": "وَلَوْ أَنَّنَا",
+      "standardStartPage": 142,
+      "tajScanStartPage": 130
+    },
+    {
+      "number": 9,
+      "name": "Qalal Malao",
+      "nameArabic": "قَالَ ٱلْمَلَأُ",
+      "standardStartPage": 162,
+      "tajScanStartPage": 148
+    },
+    {
+      "number": 10,
+      "name": "Wa A'lamu",
+      "nameArabic": "وَٱعْلَمُوا",
+      "standardStartPage": 182,
+      "tajScanStartPage": 166
+    },
+    {
+      "number": 11,
+      "name": "Yatazeroon",
+      "nameArabic": "يَعْتَذِرُونَ",
+      "standardStartPage": 201,
+      "tajScanStartPage": 183
+    },
+    {
+      "number": 12,
+      "name": "Wa Mamin Da'abat",
+      "nameArabic": "وَمَا مِن دَآبَّةٍ",
+      "standardStartPage": 222,
+      "tajScanStartPage": 202
+    },
+    {
+      "number": 13,
+      "name": "Wa Ma Ubrioo",
+      "nameArabic": "وَمَا أُبَرِّئُ",
+      "standardStartPage": 242,
+      "tajScanStartPage": 221
+    },
+    {
+      "number": 14,
+      "name": "Rubama",
+      "nameArabic": "رُبَمَا",
+      "standardStartPage": 262,
+      "tajScanStartPage": 239
+    },
+    {
+      "number": 15,
+      "name": "Subhanallazi",
+      "nameArabic": "سُبْحَانَ ٱلَّذِى",
+      "standardStartPage": 282,
+      "tajScanStartPage": 257
+    },
+    {
+      "number": 16,
+      "name": "Qal Alam",
+      "nameArabic": "قَالَ أَلَمْ",
+      "standardStartPage": 302,
+      "tajScanStartPage": 275
+    },
+    {
+      "number": 17,
+      "name": "اقترب",
+      "nameArabic": "ٱقْتَرَبَ",
+      "standardStartPage": 322,
+      "tajScanStartPage": 293
+    },
+    {
+      "number": 18,
+      "name": "Qad Aflaha",
+      "nameArabic": "قَدْ أَفْلَحَ",
+      "standardStartPage": 342,
+      "tajScanStartPage": 311
+    },
+    {
+      "number": 19,
+      "name": "Wa Qalallazina",
+      "nameArabic": "وَقَالَ ٱلَّذِينَ",
+      "standardStartPage": 362,
+      "tajScanStartPage": 329
+    },
+    {
+      "number": 20,
+      "name": "Aman Khalaq",
+      "nameArabic": "أَمَّنْ خَلَقَ",
+      "standardStartPage": 382,
+      "tajScanStartPage": 348
+    },
+    {
+      "number": 21,
+      "name": "Utlu Ma Oohi",
+      "nameArabic": "ٱتْلُ مَآ أُوحِىَ",
+      "standardStartPage": 402,
+      "tajScanStartPage": 366
+    },
+    {
+      "number": 22,
+      "name": "Wa Manyaqnut",
+      "nameArabic": "وَمَن يَقْنُتْ",
+      "standardStartPage": 422,
+      "tajScanStartPage": 384
+    },
+    {
+      "number": 23,
+      "name": "Wa Mali",
+      "nameArabic": "وَمَا لِىَ",
+      "standardStartPage": 442,
+      "tajScanStartPage": 402
+    },
+    {
+      "number": 24,
+      "name": "Faman Azlam",
+      "nameArabic": "فَمَنْ أَظْلَمُ",
+      "standardStartPage": 462,
+      "tajScanStartPage": 420
+    },
+    {
+      "number": 25,
+      "name": "Elahe Yuruddu",
+      "nameArabic": "إِلَيْهِ يُرَدُّ",
+      "standardStartPage": 482,
+      "tajScanStartPage": 438
+    },
+    {
+      "number": 26,
+      "name": "Ha Meem",
+      "nameArabic": "حم",
+      "standardStartPage": 502,
+      "tajScanStartPage": 456
+    },
+    {
+      "number": 27,
+      "name": "Qala فما خطبكم",
+      "nameArabic": "قَالَ فَمَا خَطْبُكُم",
+      "standardStartPage": 522,
+      "tajScanStartPage": 475
+    },
+    {
+      "number": 28,
+      "name": "Qad Sami Allah",
+      "nameArabic": "قَدْ سَمِعَ ٱللَّهُ",
+      "standardStartPage": 542,
+      "tajScanStartPage": 493
+    },
+    {
+      "number": 29,
+      "name": "Tabarakallazi",
+      "nameArabic": "تَبَارَكَ ٱلَّذِى",
+      "standardStartPage": 562,
+      "tajScanStartPage": 511
+    },
+    {
+      "number": 30,
+      "name": "Amma",
+      "nameArabic": "عَمَّ",
+      "standardStartPage": 582,
+      "tajScanStartPage": 529
+    }
+  ]
+}

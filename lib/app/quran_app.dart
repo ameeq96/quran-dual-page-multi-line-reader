@@ -10,7 +10,6 @@ import '../features/quran_reader/data/services/quran_navigation_data_source.dart
 import '../features/quran_reader/data/services/quran_page_insights_data_source.dart';
 import '../features/quran_reader/data/services/quran_remote_content_service.dart';
 import '../features/quran_reader/data/services/quran_reader_sync_service.dart';
-import '../features/quran_reader/data/services/quran_search_api_service.dart';
 import '../features/quran_reader/data/services/quran_text_data_source.dart';
 import '../features/quran_reader/presentation/controllers/quran_reader_controller.dart';
 import '../features/quran_reader/presentation/screens/quran_home_screen.dart';
@@ -61,9 +60,6 @@ class _AppBootstrapState extends State<_AppBootstrap> {
       textDataSource: QuranTextDataSource(),
       pageInsightsDataSource: QuranPageInsightsDataSource(),
       adminConfigService: adminConfigService,
-      searchApiService: QuranSearchApiService(
-        adminConfigService: adminConfigService,
-      ),
       remoteContentService: QuranRemoteContentService(),
       preferences: _preferences,
     );

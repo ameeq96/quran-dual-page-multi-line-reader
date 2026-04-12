@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../app/app_theme.dart';
+import '../../domain/models/reader_admin_config.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
 import '../widgets/kanzul_iman_study_sheet.dart';
@@ -303,13 +304,36 @@ class QuranHomeScreen extends StatelessWidget {
                       children: [
                         ReaderEntranceMotion(
                           child: _HomeTopCard(
-                          title: controller.homeHeroTitle,
-                          subtitle: heroSubtitle, /*
-                              '$chapterLabel • $pageLabel • $editionLabel',
-                          */ streakLabel:
-                              '${controller.readingStreakCount} day streak',
-                          onResume: () => _openReader(context),
+                            title: controller.homeHeroTitle,
+                            subtitle: heroSubtitle,
+                            /* '$chapterLabel • $pageLabel • $editionLabel', */
+                            streakLabel:
+                                '${controller.readingStreakCount} day streak',
+                            onResume: () => _openReader(context),
                           ),
+                        ),
+                        Builder(
+                          builder: (context) {
+                            final activeAnnouncements = controller
+                                .adminAnnouncements
+                                .where((announcement) => announcement.active)
+                                .toList(growable: false);
+                            if (activeAnnouncements.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const SizedBox(height: 16),
+                                ReaderEntranceMotion(
+                                  distance: 16,
+                                  child: _AnnouncementsCard(
+                                    announcements: activeAnnouncements,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
                         const SizedBox(height: 16),
                         ReaderEntranceMotion(
@@ -1087,6 +1111,105 @@ class _InfoPill extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AnnouncementsCard extends StatelessWidget {
+  const _AnnouncementsCard({
+    required this.announcements,
+  });
+
+  final List<ReaderAdminAnnouncement> announcements;
+
+  String _formatDate(String isoValue) {
+    final parsed = DateTime.tryParse(isoValue);
+    if (parsed == null) {
+      return '';
+    }
+    final local = parsed.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    return '${local.year}-$month-$day';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.shadow.withOpacity(0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Announcements',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...announcements.map((announcement) {
+            final dateLabel = _formatDate(announcement.publishAtIso);
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: theme.dividerColor.withOpacity(0.6),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          announcement.title,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (dateLabel.isNotEmpty)
+                        Text(
+                          dateLabel,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (announcement.body.trim().isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      announcement.body,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/painting.dart';
 import 'package:flutter/widgets.dart';
 import 'package:just_audio_background/just_audio_background.dart';
 
@@ -7,8 +8,15 @@ import 'app/quran_app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await _initializeBackgroundAudio();
+  _configureImageCache();
+  unawaited(_initializeBackgroundAudio());
   runApp(const QuranApp());
+}
+
+void _configureImageCache() {
+  final cache = PaintingBinding.instance.imageCache;
+  cache.maximumSizeBytes = 160 << 20;
+  cache.maximumSize = 220;
 }
 
 Future<void> _initializeBackgroundAudio() async {

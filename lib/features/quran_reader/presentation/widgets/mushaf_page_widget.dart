@@ -6,7 +6,6 @@ import '../../../../core/constants/quran_constants.dart';
 import '../../domain/models/quran_page.dart';
 import '../../domain/models/reader_settings.dart';
 import '../models/reader_page_appearance.dart';
-import 'authentic_quran_page.dart';
 import 'placeholder_quran_page.dart';
 import 'quran_page_image_provider.dart';
 import 'reader_hifz_line_mask.dart';
@@ -75,7 +74,7 @@ class MushafPageWidget extends StatelessWidget {
     return RepaintBoundary(
       child: Align(
         alignment: alignment,
-          child: Transform(
+        child: Transform(
           alignment: hingeAlignment,
           transform: transform,
           child: AspectRatio(
@@ -104,7 +103,8 @@ class MushafPageWidget extends StatelessWidget {
                   BoxShadow(
                     color: appearance.outerShadowColor,
                     blurRadius: useLiteFrame ? 10 : 22,
-                    offset: Offset(page.isLeftPage ? -4 : 4, useLiteFrame ? 8 : 14),
+                    offset:
+                        Offset(page.isLeftPage ? -4 : 4, useLiteFrame ? 8 : 14),
                   ),
                 ],
               ),
@@ -371,7 +371,7 @@ class _PageSurfaceState extends State<_PageSurface> {
           appearance: widget.appearance,
           lowMemoryMode: widget.settings.lowMemoryMode,
         ),
-      QuranPageContentType.text => AuthenticQuranPage(
+      QuranPageContentType.text => PlaceholderQuranPage(
           page: widget.page,
           appearance: widget.appearance,
         ),
@@ -463,8 +463,9 @@ class _PageSurfaceState extends State<_PageSurface> {
                     ? widget.appearance.baseColorSecondary
                     : const Color(0xFF090909),
                 maskOpacity: _isFocusModeManualMaskActive ? 0.996 : 0.92,
-                coverHeightFactorOverride:
-                    _isFocusModeManualMaskActive ? _focusModePlateHeightFactor : null,
+                coverHeightFactorOverride: _isFocusModeManualMaskActive
+                    ? _focusModePlateHeightFactor
+                    : null,
               ),
             ),
           if (_isFocusModeManualMaskActive)
@@ -562,18 +563,17 @@ class _ImagePageContent extends StatelessWidget {
             if (loadingProgress == null) {
               return child;
             }
+            final assetPath = page.assetPath ?? '';
+            if (assetPath.startsWith('assets/asset_packs/')) {
+              return child;
+            }
             return const ReaderSkeletonPage();
           },
           errorBuilder: (_, __, ___) {
-            return page.lines.isNotEmpty
-                ? AuthenticQuranPage(
-                    page: page,
-                    appearance: appearance,
-                  )
-                : PlaceholderQuranPage(
-                    page: page,
-                    appearance: appearance,
-                  );
+            return PlaceholderQuranPage(
+              page: page,
+              appearance: appearance,
+            );
           },
         );
 

@@ -1,14 +1,20 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../../domain/models/reader_admin_config.dart';
+import '../../domain/models/reader_settings.dart';
 import '../../domain/models/quran_juz_navigation_entry.dart';
 import '../../domain/models/quran_surah_navigation_entry.dart';
 
 class QuranNavigationDataSource {
   static const Duration _requestTimeout = Duration(seconds: 4);
+  static const String _bundledNavigationAssetPath =
+      'assets/quran_pages/quran_navigation_index.json';
+  static const String _bundledOverrideAssetPath =
+      'assets/quran_pages/taj_navigation_overrides.json';
 
   QuranNavigationDataSource({
     http.Client? client,
@@ -18,17 +24,26 @@ class QuranNavigationDataSource {
   final List<QuranJuzNavigationEntry> _juzs = <QuranJuzNavigationEntry>[];
   final http.Client _client;
   bool _isInitialized = false;
+  MushafEdition? _activeEdition;
 
   Future<void> initialize({
     ReaderAdminConfig? adminConfig,
+    MushafEdition? edition,
     bool forceRefresh = false,
   }) async {
+    final normalizedEdition = edition;
+    if (_isInitialized &&
+        !forceRefresh &&
+        _activeEdition == normalizedEdition) {
+      return;
+    }
     if (_isInitialized) {
       if (!forceRefresh) {
         return;
       }
       _isInitialized = false;
     }
+    _activeEdition = normalizedEdition;
 
     try {
       final payloadFuture = _loadPrimaryPayload(adminConfig);
@@ -96,23 +111,34 @@ class QuranNavigationDataSource {
   Future<Map<String, dynamic>> _loadPrimaryPayload(
     ReaderAdminConfig? adminConfig,
   ) async {
-    return _loadRemotePayload(
-      adminConfig?.contentDataset('navigation_index'),
-      datasetKey: 'navigation_index',
-    );
+    try {
+      return await _loadRemotePayload(
+        adminConfig?.contentDataset('navigation_index'),
+        datasetKey: 'navigation_index',
+      );
+    } catch (_) {
+      return _loadBundledPayload(
+        _bundledNavigationAssetPathForEdition(
+          _activeEdition ?? MushafEdition.lines16,
+        ),
+        datasetKey: 'navigation_index',
+      );
+    }
   }
 
   Future<Map<String, dynamic>> _loadOptionalOverridePayload(
     ReaderAdminConfig? adminConfig,
   ) async {
     final dataset = adminConfig?.contentDataset('taj_navigation_overrides');
-    if (dataset == null || dataset.url.trim().isEmpty) {
-      return const <String, dynamic>{};
-    }
-
     try {
-      return await _loadRemotePayload(
-        dataset,
+      if (dataset != null && dataset.url.trim().isNotEmpty) {
+        return await _loadRemotePayload(
+          dataset,
+          datasetKey: 'taj_navigation_overrides',
+        );
+      }
+      return await _loadBundledPayload(
+        _bundledOverrideAssetPath,
         datasetKey: 'taj_navigation_overrides',
       );
     } catch (_) {
@@ -149,6 +175,20 @@ class QuranNavigationDataSource {
     }
   }
 
+  Future<Map<String, dynamic>> _loadBundledPayload(
+    String assetPath, {
+    required String datasetKey,
+  }) async {
+    try {
+      final payload = await rootBundle.loadString(assetPath);
+      return compute(_decodeNavigationPayload, payload);
+    } catch (_) {
+      throw StateError(
+        'Unable to load bundled dataset "$datasetKey" from assets.',
+      );
+    }
+  }
+
   Map<int, int> _parseOverrideMap(dynamic rawValue) {
     if (rawValue is! Map) {
       return const {};
@@ -163,6 +203,25 @@ class QuranNavigationDataSource {
       }
     }
     return parsed;
+  }
+
+  String _bundledNavigationAssetPathForEdition(MushafEdition edition) {
+    switch (edition) {
+      case MushafEdition.lines10:
+        return 'assets/quran_pages/quran_navigation_index_10_line.json';
+      case MushafEdition.lines13:
+        return 'assets/quran_pages/quran_navigation_index_13_line.json';
+      case MushafEdition.lines14:
+        return 'assets/quran_pages/quran_navigation_index_14_line.json';
+      case MushafEdition.lines15:
+        return 'assets/quran_pages/quran_navigation_index_15_line.json';
+      case MushafEdition.lines16:
+        return 'assets/quran_pages/quran_navigation_index_16_line.json';
+      case MushafEdition.lines17:
+        return 'assets/quran_pages/quran_navigation_index_17_line.json';
+      case MushafEdition.kanzulIman:
+        return 'assets/quran_pages/quran_navigation_index_kanzul_iman.json';
+    }
   }
 }
 

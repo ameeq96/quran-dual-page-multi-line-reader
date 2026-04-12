@@ -20,7 +20,6 @@ import '../services/quran_navigation_data_source.dart';
 import '../services/quran_page_insights_data_source.dart';
 import '../services/quran_admin_config_service.dart';
 import '../services/quran_remote_content_service.dart';
-import '../services/quran_search_api_service.dart';
 import '../services/quran_text_data_source.dart';
 
 class QuranReaderRepository {
@@ -30,7 +29,6 @@ class QuranReaderRepository {
     required QuranTextDataSource textDataSource,
     required QuranPageInsightsDataSource pageInsightsDataSource,
     required QuranAdminConfigService adminConfigService,
-    required QuranSearchApiService searchApiService,
     required QuranRemoteContentService remoteContentService,
     required ReaderPreferences preferences,
   })  : _assetResolver = assetResolver,
@@ -38,7 +36,6 @@ class QuranReaderRepository {
         _textDataSource = textDataSource,
         _pageInsightsDataSource = pageInsightsDataSource,
         _adminConfigService = adminConfigService,
-        _searchApiService = searchApiService,
         _remoteContentService = remoteContentService,
         _preferences = preferences;
 
@@ -48,7 +45,6 @@ class QuranReaderRepository {
   final QuranTextDataSource _textDataSource;
   final QuranPageInsightsDataSource _pageInsightsDataSource;
   final QuranAdminConfigService _adminConfigService;
-  final QuranSearchApiService _searchApiService;
   final QuranRemoteContentService _remoteContentService;
   final ReaderPreferences _preferences;
   final Map<String, QuranPage> _pageCache = <String, QuranPage>{};
@@ -71,10 +67,13 @@ class QuranReaderRepository {
     final settingsFuture = _preferences.loadSettings();
     final initialPageNumberFuture = _preferences.loadLastPageNumber();
     final adminConfig = await _adminConfigService.loadConfig();
-    final effectiveAdminConfig = await _initializeNavigationConfig(adminConfig);
+    var settings = await settingsFuture;
+    final effectiveAdminConfig = await _initializeNavigationConfig(
+      adminConfig,
+      edition: settings.mushafEdition,
+    );
     _assetResolver.applyRemoteConfig(effectiveAdminConfig);
     await _assetResolver.initialize();
-    var settings = await settingsFuture;
     if (effectiveAdminConfig.hasEditionControls &&
         !_assetResolver.hasAssetsForEdition(settings.mushafEdition)) {
       final enabledEditions = _assetResolver.availableImageEditions;
@@ -163,6 +162,30 @@ class QuranReaderRepository {
 
   bool hasAssetsForEdition(MushafEdition edition) {
     return _assetResolver.hasAssetsForEdition(edition);
+  }
+
+  bool hasBundledPackForEdition(MushafEdition edition) {
+    return _assetResolver.hasBundledPackForEdition(edition);
+  }
+
+  Future<bool> hasOfflinePackForEdition(MushafEdition edition) {
+    return _assetResolver.hasOfflinePackForEdition(edition);
+  }
+
+  Future<void> downloadOfflinePack(
+    MushafEdition edition, {
+    void Function(double progress)? onProgress,
+  }) async {
+    await _assetResolver.downloadOfflinePack(
+      edition,
+      onProgress: onProgress,
+    );
+    _clearResolvedPageCaches();
+  }
+
+  Future<void> removeOfflinePack(MushafEdition edition) async {
+    await _assetResolver.removeOfflinePack(edition);
+    _clearResolvedPageCaches();
   }
 
   int totalPagesForEdition(MushafEdition edition) {
@@ -690,14 +713,14 @@ class QuranReaderRepository {
 
   Future<List<QuranSurahNavigationEntry>> searchSurahsRemote(
     String query,
-  ) {
-    return _searchApiService.searchSurahs(query);
+  ) async {
+    return _searchSurahsLocal(query);
   }
 
   Future<List<QuranJuzNavigationEntry>> searchJuzsRemote(
     String query,
-  ) {
-    return _searchApiService.searchJuzs(query);
+  ) async {
+    return _searchJuzsLocal(query);
   }
 
   Future<List<QuranNavigationMarker>> searchMarkersRemote(
@@ -705,24 +728,11 @@ class QuranReaderRepository {
     required String category,
     required bool preferImageMode,
   }) async {
-    final results = await _searchApiService.searchMarkers(
+    return _searchMarkersLocal(
+      query,
       category: category,
-      query: query,
+      preferImageMode: preferImageMode,
     );
-    return results
-        .map(
-          (item) => QuranNavigationMarker(
-            id: item.id,
-            title: item.title,
-            subtitle: item.subtitle,
-            pageNumber: navigationPageForStandardPage(
-              item.pageNumber,
-              preferImageMode: preferImageMode,
-            ),
-            category: item.category,
-          ),
-        )
-        .toList(growable: false);
   }
 
   Future<List<QuranSearchResult>> searchPagesRemote(
@@ -730,25 +740,11 @@ class QuranReaderRepository {
     required bool preferImageMode,
     int limit = 40,
   }) async {
-    final results = await _searchApiService.searchText(
+    return searchPages(
       query,
+      preferImageMode: preferImageMode,
       limit: limit,
     );
-    return results
-        .map(
-          (result) => QuranSearchResult(
-            pageNumber: navigationPageForStandardPage(
-              result.pageNumber,
-              preferImageMode: preferImageMode,
-            ),
-            referencePageNumber: result.referencePageNumber,
-            title: result.title,
-            snippet: result.snippet,
-            category: result.category,
-            verseKey: result.verseKey,
-          ),
-        )
-        .toList(growable: false);
   }
 
   Future<List<QuranSearchResult>> searchAyahsRemote(
@@ -756,25 +752,11 @@ class QuranReaderRepository {
     required bool preferImageMode,
     int limit = 40,
   }) async {
-    final results = await _searchApiService.searchAyahs(
+    return searchAyahs(
       query,
+      preferImageMode: preferImageMode,
       limit: limit,
     );
-    return results
-        .map(
-          (result) => QuranSearchResult(
-            pageNumber: navigationPageForStandardPage(
-              result.pageNumber,
-              preferImageMode: preferImageMode,
-            ),
-            referencePageNumber: result.referencePageNumber,
-            title: result.title,
-            snippet: result.snippet,
-            category: result.category,
-            verseKey: result.verseKey,
-          ),
-        )
-        .toList(growable: false);
   }
 
   Future<String?> loadChapterInfoForPage(
@@ -931,6 +913,7 @@ class QuranReaderRepository {
     final config = await _adminConfigService.loadConfig(forceRefresh: true);
     final effectiveConfig = await _initializeNavigationConfig(
       config,
+      edition: _assetResolver.selectedEdition,
       forceRefresh: true,
     );
     _assetResolver.applyRemoteConfig(effectiveConfig);
@@ -940,11 +923,13 @@ class QuranReaderRepository {
 
   Future<ReaderAdminConfig> _initializeNavigationConfig(
     ReaderAdminConfig config, {
+    MushafEdition? edition,
     bool forceRefresh = false,
   }) async {
     try {
       await _navigationDataSource.initialize(
         adminConfig: config,
+        edition: edition,
         forceRefresh: forceRefresh,
       );
       return config;
@@ -959,6 +944,7 @@ class QuranReaderRepository {
       );
       await _navigationDataSource.initialize(
         adminConfig: sanitizedConfig,
+        edition: edition,
         forceRefresh: true,
       );
       return sanitizedConfig;
@@ -966,8 +952,8 @@ class QuranReaderRepository {
   }
 
   void dispose() {
+    _assetResolver.dispose();
     _adminConfigService.dispose();
-    _searchApiService.dispose();
     _remoteContentService.dispose();
   }
 
@@ -999,7 +985,8 @@ class QuranReaderRepository {
     final assetPath = preferImageMode
         ? explicitEdition == null
             ? _assetResolver.assetPathForPage(pageNumber)
-            : _assetResolver.assetPathForEditionPage(explicitEdition, pageNumber)
+            : _assetResolver.assetPathForEditionPage(
+                explicitEdition, pageNumber)
         : null;
     final pageText = _textDataSource.pageForNumber(resolvedStandardPage);
     final page = QuranPage(
@@ -1009,9 +996,7 @@ class QuranReaderRepository {
       lines: pageText?.lines ?? const [],
       contentType: assetPath != null
           ? QuranPageContentType.image
-          : pageText != null
-              ? QuranPageContentType.text
-              : QuranPageContentType.placeholder,
+          : QuranPageContentType.placeholder,
     );
     _pageCache[cacheKey] = page;
     return page;
@@ -1056,7 +1041,9 @@ class QuranReaderRepository {
     final inverseMap = <int, int>{};
     var currentStandardPage = 1;
 
-    for (var navigationPage = 1; navigationPage <= totalPages; navigationPage++) {
+    for (var navigationPage = 1;
+        navigationPage <= totalPages;
+        navigationPage++) {
       while (currentStandardPage < _standardTotalPages &&
           (forwardMap[currentStandardPage + 1] ?? _standardTotalPages) <=
               navigationPage) {
@@ -1074,7 +1061,9 @@ class QuranReaderRepository {
     final totalPages = totalPagesForEdition(edition);
     final pageMap = <int, int>{};
 
-    for (var standardPage = 1; standardPage <= _standardTotalPages; standardPage++) {
+    for (var standardPage = 1;
+        standardPage <= _standardTotalPages;
+        standardPage++) {
       final ratio = (standardPage - 1) / (_standardTotalPages - 1);
       final estimatedPage = 1 + (ratio * (totalPages - 1)).round();
       pageMap[standardPage] = QuranConstants.clampPage(
@@ -1120,7 +1109,8 @@ class QuranReaderRepository {
     return pageMap;
   }
 
-  List<({int standardPage, int navigationPage})> _buildNavigationAnchorsForEdition(
+  List<({int standardPage, int navigationPage})>
+      _buildNavigationAnchorsForEdition(
     MushafEdition edition,
   ) {
     final totalPages = totalPagesForEdition(edition);
@@ -1429,5 +1419,148 @@ class QuranReaderRepository {
       default:
         return 'Marker';
     }
+  }
+
+  List<QuranSurahNavigationEntry> _searchSurahsLocal(String query) {
+    final normalizedQuery = _normalizeSearchQuery(query);
+    if (normalizedQuery.isEmpty) {
+      return surahs;
+    }
+
+    final results = surahs
+        .where(
+          (surah) => _matchesSearchQuery(<String>[
+            surah.id.toString(),
+            surah.nameSimple,
+            surah.nameComplex,
+            surah.nameArabic,
+            surah.translatedName,
+          ], normalizedQuery),
+        )
+        .toList(growable: false);
+
+    results.sort(
+      (left, right) => _surahSearchScore(
+        right,
+        normalizedQuery,
+      ).compareTo(_surahSearchScore(left, normalizedQuery)),
+    );
+    return results;
+  }
+
+  List<QuranJuzNavigationEntry> _searchJuzsLocal(String query) {
+    final normalizedQuery = _normalizeSearchQuery(query);
+    if (normalizedQuery.isEmpty) {
+      return juzs;
+    }
+
+    final results = juzs
+        .where(
+          (juz) => _matchesSearchQuery(<String>[
+            juz.number.toString(),
+            juz.name,
+            juz.nameArabic,
+          ], normalizedQuery),
+        )
+        .toList(growable: false);
+
+    results.sort(
+      (left, right) => _juzSearchScore(
+        right,
+        normalizedQuery,
+      ).compareTo(_juzSearchScore(left, normalizedQuery)),
+    );
+    return results;
+  }
+
+  List<QuranNavigationMarker> _searchMarkersLocal(
+    String query, {
+    required String category,
+    required bool preferImageMode,
+  }) {
+    final markers = markersForCategory(
+      category,
+      preferImageMode: preferImageMode,
+    );
+    final normalizedQuery = _normalizeSearchQuery(query);
+    if (normalizedQuery.isEmpty) {
+      return markers;
+    }
+
+    return markers
+        .where(
+          (marker) => _matchesSearchQuery(<String>[
+            marker.id.toString(),
+            marker.title,
+            marker.subtitle,
+            marker.pageNumber.toString(),
+          ], normalizedQuery),
+        )
+        .toList(growable: false);
+  }
+
+  int _surahSearchScore(
+    QuranSurahNavigationEntry surah,
+    String normalizedQuery,
+  ) {
+    return _searchScore(<String>[
+      surah.id.toString(),
+      surah.nameSimple,
+      surah.nameComplex,
+      surah.nameArabic,
+      surah.translatedName,
+    ], normalizedQuery);
+  }
+
+  int _juzSearchScore(
+    QuranJuzNavigationEntry juz,
+    String normalizedQuery,
+  ) {
+    return _searchScore(<String>[
+      juz.number.toString(),
+      juz.name,
+      juz.nameArabic,
+    ], normalizedQuery);
+  }
+
+  bool _matchesSearchQuery(
+    List<String> candidates,
+    String normalizedQuery,
+  ) {
+    for (final candidate in candidates) {
+      if (_normalizeSearchQuery(candidate).contains(normalizedQuery)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  int _searchScore(
+    List<String> candidates,
+    String normalizedQuery,
+  ) {
+    var bestScore = 0;
+    for (final candidate in candidates) {
+      final normalizedCandidate = _normalizeSearchQuery(candidate);
+      if (normalizedCandidate.isEmpty) {
+        continue;
+      }
+      if (normalizedCandidate == normalizedQuery) {
+        bestScore = bestScore < 400 ? 400 : bestScore;
+        continue;
+      }
+      if (normalizedCandidate.startsWith(normalizedQuery)) {
+        bestScore = bestScore < 300 ? 300 : bestScore;
+        continue;
+      }
+      if (normalizedCandidate.contains(normalizedQuery)) {
+        bestScore = bestScore < 200 ? 200 : bestScore;
+      }
+    }
+    return bestScore;
+  }
+
+  String _normalizeSearchQuery(String value) {
+    return value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   }
 }

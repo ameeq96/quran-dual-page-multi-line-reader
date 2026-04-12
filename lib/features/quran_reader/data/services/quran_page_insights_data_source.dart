@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../../domain/models/quran_chapter_summary.dart';
@@ -9,6 +10,8 @@ import '../../domain/models/reader_admin_config.dart';
 
 class QuranPageInsightsDataSource {
   static const Duration _requestTimeout = Duration(seconds: 8);
+  static const String _bundledPageInsightsAssetPath =
+      'assets/quran_pages/quran_page_insights.json';
 
   QuranPageInsightsDataSource({
     http.Client? client,
@@ -74,11 +77,10 @@ class QuranPageInsightsDataSource {
 
   Future<Map<String, dynamic>> _loadPayload(ReaderAdminConfig? adminConfig) async {
     final remoteDataset = adminConfig?.contentDataset('page_insights');
-    if (remoteDataset == null || remoteDataset.url.trim().isEmpty) {
-      throw StateError('Admin dataset "page_insights" is not configured.');
-    }
-
     try {
+      if (remoteDataset == null || remoteDataset.url.trim().isEmpty) {
+        throw StateError('Admin dataset "page_insights" is not configured.');
+      }
       final response = await _client.get(
         Uri.parse(remoteDataset.url),
         headers: const <String, String>{'Accept': 'application/json'},
@@ -89,13 +91,16 @@ class QuranPageInsightsDataSource {
       throw StateError(
         'Admin dataset "page_insights" request failed with status ${response.statusCode}.',
       );
-    } catch (error) {
-      if (error is StateError) {
-        rethrow;
+    } catch (_) {
+      try {
+        final payload =
+            await rootBundle.loadString(_bundledPageInsightsAssetPath);
+        return compute(_decodePageInsightsPayload, payload);
+      } catch (_) {
+        throw StateError(
+          'Unable to load page insights from API or local assets.',
+        );
       }
-      throw StateError(
-        'Unable to load admin dataset "page_insights" from API.',
-      );
     }
   }
 }

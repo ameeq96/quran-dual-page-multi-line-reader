@@ -320,6 +320,8 @@ class ReaderExperienceSettings {
 }
 
 enum OfflinePackState {
+  downloaded,
+  downloading,
   adminManaged,
   localOnly,
   planned,
@@ -327,6 +329,8 @@ enum OfflinePackState {
 
 extension OfflinePackStateX on OfflinePackState {
   String get label => switch (this) {
+        OfflinePackState.downloaded => 'Available offline',
+        OfflinePackState.downloading => 'Downloading',
         OfflinePackState.adminManaged => 'Admin-managed',
         OfflinePackState.localOnly => 'Local only',
         OfflinePackState.planned => 'Pack-ready',
@@ -345,6 +349,10 @@ class OfflineEditionPack {
   String get title => edition.label;
 
   String get subtitle => switch (state) {
+        OfflinePackState.downloaded =>
+          '${edition.bestUseLabel}. This edition pack is stored on this device for offline use.',
+        OfflinePackState.downloading =>
+          '${edition.bestUseLabel}. This edition pack is currently downloading to the device.',
         OfflinePackState.adminManaged =>
           '${edition.bestUseLabel}. This edition is currently controlled by the admin dashboard.',
         OfflinePackState.localOnly =>

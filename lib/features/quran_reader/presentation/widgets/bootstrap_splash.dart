@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../app/app_theme.dart';
+import 'reader_skeleton.dart';
 
 class BootstrapSplash extends StatefulWidget {
   const BootstrapSplash({
@@ -236,33 +237,23 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                                   : (compact ? 14 : 18),
                                             ),
                                             Row(
-                                              children: [
-                                                SizedBox(
+                                              children: const [
+                                                ReaderSkeletonBlock(
                                                   width: 18,
                                                   height: 18,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                    strokeWidth: 2.2,
-                                                    valueColor:
-                                                        AlwaysStoppedAnimation<Color>(
-                                                      theme.colorScheme.primary,
-                                                    ),
+                                                  borderRadius:
+                                                      BorderRadius.all(
+                                                    Radius.circular(6),
                                                   ),
                                                 ),
-                                                const SizedBox(width: 12),
+                                                SizedBox(width: 12),
                                                 Expanded(
-                                                  child: Text(
-                                                    'Loading pages, reader state, and current tools...',
-                                                    style: theme
-                                                        .textTheme
-                                                        .bodyMedium
-                                                        ?.copyWith(
-                                                          color: theme
-                                                              .colorScheme
-                                                              .onSurfaceVariant,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                        ),
+                                                  child: ReaderSkeletonBlock(
+                                                    height: 12,
+                                                    borderRadius:
+                                                        BorderRadius.all(
+                                                      Radius.circular(999),
+                                                    ),
                                                   ),
                                                 ),
                                               ],

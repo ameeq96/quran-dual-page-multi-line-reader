@@ -48,6 +48,7 @@ class ReaderPreferences {
   static const _hifzRevisionEntriesKey = 'reader.hifzRevisionEntries';
   static const _experienceSettingsKey = 'reader.experienceSettings';
   static const _adminPublicBaseUrlKey = 'reader.admin.publicBaseUrl';
+  static const _adminPublicConfigJsonKey = 'reader.admin.publicConfigJson';
   static const _syncClientIdKey = 'reader.sync.clientId';
   static const _aiOllamaEnabledKey = 'reader.ai.ollamaEnabled';
   static const _aiOllamaBaseUrlKey = 'reader.ai.ollamaBaseUrl';
@@ -456,6 +457,25 @@ class ReaderPreferences {
       return;
     }
     await prefs.setString(_adminPublicBaseUrlKey, normalized);
+  }
+
+  Future<String?> loadAdminPublicConfigJson() async {
+    final prefs = await _prefs;
+    final payload = prefs.getString(_adminPublicConfigJsonKey);
+    if (payload == null || payload.trim().isEmpty) {
+      return null;
+    }
+    return payload;
+  }
+
+  Future<void> saveAdminPublicConfigJson(String payload) async {
+    final prefs = await _prefs;
+    final normalized = payload.trim();
+    if (normalized.isEmpty) {
+      await prefs.remove(_adminPublicConfigJsonKey);
+      return;
+    }
+    await prefs.setString(_adminPublicConfigJsonKey, normalized);
   }
 
   Future<String> loadOrCreateSyncClientId() async {

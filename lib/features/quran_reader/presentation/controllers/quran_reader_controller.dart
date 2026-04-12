@@ -34,6 +34,7 @@ class QuranReaderController extends ChangeNotifier {
   static const String _defaultBookmarkFolder = 'General';
   static const int _audioPositionNotifyStepMillis = 750;
   static const Duration _pagePersistenceDebounce = Duration(milliseconds: 420);
+  static const Duration _pageUiRefreshDebounce = Duration(milliseconds: 80);
   static const Duration _notesPersistenceDebounce = Duration(milliseconds: 650);
   static const List<String> _bookmarkFolderPresets = <String>[
     _defaultBookmarkFolder,
@@ -70,8 +71,8 @@ class QuranReaderController extends ChangeNotifier {
       ValueNotifier<ReaderAiSettings>(const ReaderAiSettings.defaults());
   final ValueNotifier<ReaderExperienceSettings> _experienceNotifier =
       ValueNotifier<ReaderExperienceSettings>(
-        const ReaderExperienceSettings.defaults(),
-      );
+    const ReaderExperienceSettings.defaults(),
+  );
   final ValueNotifier<bool> _loadingNotifier = ValueNotifier<bool>(true);
   final ValueNotifier<int> _viewportNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> _contentNotifier = ValueNotifier<int>(0);
@@ -104,6 +105,7 @@ class QuranReaderController extends ChangeNotifier {
   int _savedAudioPositionMillis = 0;
   Timer? _controlsTimer;
   Timer? _pagePersistenceTimer;
+  Timer? _pageUiRefreshTimer;
   Timer? _notesPersistenceTimer;
   Timer? _cloudSyncTimer;
   Future<void>? _supplementalContentWarmFuture;
@@ -129,8 +131,7 @@ class QuranReaderController extends ChangeNotifier {
   List<String> _bookmarkFoldersCache = _bookmarkFolderPresets;
   Map<String, List<ReaderBookmark>> _bookmarksByFolderCache =
       const <String, List<ReaderBookmark>>{};
-  Map<int, ReaderBookmark> _bookmarkByPageCache =
-      const <int, ReaderBookmark>{};
+  Map<int, ReaderBookmark> _bookmarkByPageCache = const <int, ReaderBookmark>{};
   Set<int> _favoritePageSet = const <int>{};
   Map<String, int> _readingActivityCountsCache = const <String, int>{};
   Set<String> _recentActivityDateKeysCache = const <String>{};
@@ -142,6 +143,9 @@ class QuranReaderController extends ChangeNotifier {
   bool _smartHifzRevealed = false;
   bool _isDisposed = false;
   String _syncClientId = '';
+  Set<MushafEdition> _downloadedOfflineEditions = const <MushafEdition>{};
+  Map<MushafEdition, double> _offlinePackProgress =
+      const <MushafEdition, double>{};
 
   bool get isLoading => _isLoading;
   bool get controlsVisible => _controlsVisible;
@@ -185,13 +189,15 @@ class QuranReaderController extends ChangeNotifier {
       return editions;
     }
     final filtered = editions
-        .where((edition) => _adminConfig.editionConfig(edition)?.enabled ?? true)
+        .where(
+            (edition) => _adminConfig.editionConfig(edition)?.enabled ?? true)
         .toList(growable: false);
     if (filtered.isEmpty) {
       return editions;
     }
     return filtered;
   }
+
   List<MushafEdition> get compareEditions => _repository.compareEditions;
   List<ReaderAdminAnnouncement> get adminAnnouncements =>
       _adminConfig.announcements;
@@ -208,29 +214,26 @@ class QuranReaderController extends ChangeNotifier {
       _adminAiDepthOverride != null;
   bool get isAiLanguageManagedByAdmin => _adminAiLanguageOverride != null;
   bool get isAiDepthManagedByAdmin => _adminAiDepthOverride != null;
-  String get adminAiProviderLabel =>
-      switch (_normalizedAdminAiProvider) {
+  String get adminAiProviderLabel => switch (_normalizedAdminAiProvider) {
         'ollama' => 'Ollama',
         'openai' => 'ChatGPT',
         'custom' => 'Custom AI',
         _ => 'Local assistant',
       };
-  String get adminAiModelLabel =>
-      _normalizedAdminAiProvider == 'local'
-          ? 'Built-in local mode'
-          : (_adminAiModelSetting.isEmpty
-              ? 'Provider default model'
-              : _adminAiModelSetting);
+  String get adminAiModelLabel => _normalizedAdminAiProvider == 'local'
+      ? 'Built-in local mode'
+      : (_adminAiModelSetting.isEmpty
+          ? 'Provider default model'
+          : _adminAiModelSetting);
   String get adminAiEndpointLabel => _adminAiEndpointSetting;
-  String get adminAiStatusLabel =>
-      _adminAiStatusSetting.isEmpty
-          ? switch (_normalizedAdminAiProvider) {
-              'ollama' => 'Ollama is active from the admin dashboard.',
-              'openai' => 'ChatGPT is active from the admin dashboard.',
-              'custom' => 'Custom AI is active from the admin dashboard.',
-              _ => 'Local assistant is active in the app.',
-            }
-          : _adminAiStatusSetting;
+  String get adminAiStatusLabel => _adminAiStatusSetting.isEmpty
+      ? switch (_normalizedAdminAiProvider) {
+          'ollama' => 'Ollama is active from the admin dashboard.',
+          'openai' => 'ChatGPT is active from the admin dashboard.',
+          'custom' => 'Custom AI is active from the admin dashboard.',
+          _ => 'Local assistant is active in the app.',
+        }
+      : _adminAiStatusSetting;
   bool get isPlansPacksEnabled => _featureFlag(
         'feature_plans_packs',
         fallback: true,
@@ -287,6 +290,7 @@ class QuranReaderController extends ChangeNotifier {
     }
     return 'Choose what you want to open. All reader options are available here.';
   }
+
   String get adminSyncStatusLabel => switch (_adminConfig.source) {
         ReaderAdminConfigSource.live => 'Live admin dashboard connected',
         ReaderAdminConfigSource.cached => 'Stored admin config loaded',
@@ -327,7 +331,8 @@ class QuranReaderController extends ChangeNotifier {
       _adminConfig.setting('ai_status_label')?.trim() ?? '';
 
   AiResponseLanguage? get _adminAiLanguageOverride {
-    final value = _adminConfig.setting('ai_default_language')?.trim().toLowerCase();
+    final value =
+        _adminConfig.setting('ai_default_language')?.trim().toLowerCase();
     if (value == null || value.isEmpty) {
       return null;
     }
@@ -346,7 +351,8 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   AiResponseDepth? get _adminAiDepthOverride {
-    final value = _adminConfig.setting('ai_default_depth')?.trim().toLowerCase();
+    final value =
+        _adminConfig.setting('ai_default_depth')?.trim().toLowerCase();
     if (value == null || value.isEmpty) {
       return null;
     }
@@ -360,6 +366,7 @@ class QuranReaderController extends ChangeNotifier {
     }
     return null;
   }
+
   List<ReaderHistoryEntry> get readingHistory => _readingHistory;
   Map<int, String> get pageNotes => _pageNotes;
   List<int> get favoritePages => _favoritePages;
@@ -387,8 +394,7 @@ class QuranReaderController extends ChangeNotifier {
   List<QuranNavigationMarker> get rubMarkers => _rubMarkers;
 
   QuranSpread get currentSpread =>
-      _currentSpreadCache ??
-      spreadAt(currentSpreadIndex);
+      _currentSpreadCache ?? spreadAt(currentSpreadIndex);
   QuranPage get currentPage =>
       _currentPageCache ?? pageForNumber(_currentPageNumber);
   MushafEdition get primaryStudyEdition =>
@@ -456,7 +462,8 @@ class QuranReaderController extends ChangeNotifier {
     return (dailyProgressPages / _dailyTargetPages).clamp(0, 1);
   }
 
-  bool get isCurrentPageFavorite => _favoritePageSet.contains(_currentPageNumber);
+  bool get isCurrentPageFavorite =>
+      _favoritePageSet.contains(_currentPageNumber);
 
   bool get isCurrentPageBookmarked =>
       _bookmarkByPageCache.containsKey(_currentPageNumber);
@@ -466,7 +473,8 @@ class QuranReaderController extends ChangeNotifier {
   bool isBookmarkedPage(int pageNumber) =>
       _bookmarkByPageCache.containsKey(pageNumber);
 
-  ReaderBookmark? bookmarkForPage(int pageNumber) => _bookmarkByPageCache[pageNumber];
+  ReaderBookmark? bookmarkForPage(int pageNumber) =>
+      _bookmarkByPageCache[pageNumber];
 
   ReaderHifzReviewEntry? hifzReviewEntryForPage(int pageNumber) {
     for (final entry in _hifzReviewEntries) {
@@ -486,7 +494,8 @@ class QuranReaderController extends ChangeNotifier {
   List<ReaderHifzReviewEntry> get prioritizedHifzReviewEntries {
     final sorted = List<ReaderHifzReviewEntry>.from(_hifzReviewEntries);
     sorted.sort((a, b) {
-      final priorityDiff = b.strength.priorityWeight - a.strength.priorityWeight;
+      final priorityDiff =
+          b.strength.priorityWeight - a.strength.priorityWeight;
       if (priorityDiff != 0) {
         return priorityDiff;
       }
@@ -498,18 +507,38 @@ class QuranReaderController extends ChangeNotifier {
   List<OfflineEditionPack> get offlineEditionPacks {
     final available = availableImageEditions.toSet();
     return MushafEdition.values.map((edition) {
-      final state = remoteAssetPackForEdition(edition) != null
-          ? OfflinePackState.adminManaged
-          : available.contains(edition)
-              ? OfflinePackState.adminManaged
-              : edition == _settings.mushafEdition
-                  ? OfflinePackState.localOnly
-                  : OfflinePackState.planned;
+      final state = _offlinePackProgress.containsKey(edition)
+          ? OfflinePackState.downloading
+          : _downloadedOfflineEditions.contains(edition)
+              ? OfflinePackState.downloaded
+              : remoteAssetPackForEdition(edition) != null
+                  ? OfflinePackState.adminManaged
+                  : available.contains(edition)
+                      ? OfflinePackState.adminManaged
+                      : edition == _settings.mushafEdition
+                          ? OfflinePackState.localOnly
+                          : OfflinePackState.planned;
       return OfflineEditionPack(
         edition: edition,
         state: state,
       );
     }).toList(growable: false);
+  }
+
+  bool isOfflinePackDownloaded(MushafEdition edition) {
+    return _downloadedOfflineEditions.contains(edition);
+  }
+
+  bool isOfflinePackDownloading(MushafEdition edition) {
+    return _offlinePackProgress.containsKey(edition);
+  }
+
+  double offlinePackProgressForEdition(MushafEdition edition) {
+    return _offlinePackProgress[edition] ?? 0;
+  }
+
+  bool isBundledPackForEdition(MushafEdition edition) {
+    return _repository.hasBundledPackForEdition(edition);
   }
 
   Map<String, int> get readingActivityCounts => _readingActivityCountsCache;
@@ -552,7 +581,8 @@ class QuranReaderController extends ChangeNotifier {
     if (!hasSmartHifzChallenge) {
       return false;
     }
-    return standardPageForPageNumber(pageNumber) == _smartHifzStandardPageNumber;
+    return standardPageForPageNumber(pageNumber) ==
+        _smartHifzStandardPageNumber;
   }
 
   Set<int> smartHifzHiddenLinesForPage(int pageNumber) {
@@ -629,6 +659,7 @@ class QuranReaderController extends ChangeNotifier {
       _syncCurrentAiSettingsWithAdminConfig();
       _aiSettingsNotifier.value = _aiSettings;
       _repository.setMushafEdition(_settings.mushafEdition);
+      await _refreshOfflinePackAvailability();
       _currentPageNumber = launchState.initialPageNumber;
       _pageNotifier.value = _currentPageNumber;
       _controlsVisible = !_settings.fullscreenReading;
@@ -981,7 +1012,7 @@ class QuranReaderController extends ChangeNotifier {
     _currentPageNumber = normalizedPage;
     _refreshCurrentCaches();
     _publishCurrentPage();
-    notifyListeners();
+    _schedulePageUiRefresh();
     _scheduleControlsAutoHide();
     _schedulePagePersistence();
   }
@@ -1232,6 +1263,9 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> togglePreferImageMode(bool enabled) async {
+    if (!enabled) {
+      enabled = true;
+    }
     final standardPage = currentStandardPageNumber;
     _settings = _settings.copyWith(preferImageMode: enabled);
     _currentPageNumber = _repository.navigationPageForStandardPage(
@@ -1395,7 +1429,8 @@ class QuranReaderController extends ChangeNotifier {
       ..writeln('Khatam progress: ${(khatamProgress * 100).round()}%')
       ..writeln('Reading streak: $_readingStreakCount day(s)')
       ..writeln('Daily target: $_dailyTargetPages page(s)')
-      ..writeln('Reading plan: ${_readingPlan.preset.label} ($planPagesPerDay pages/day)')
+      ..writeln(
+          'Reading plan: ${_readingPlan.preset.label} ($planPagesPerDay pages/day)')
       ..writeln('Hifz tracked pages: ${_hifzReviewEntries.length}')
       ..writeln('Sync mode: ${_experienceSettings.syncMode.label}')
       ..writeln('Favorites: ${_favoritePages.length}')
@@ -1703,6 +1738,23 @@ class QuranReaderController extends ChangeNotifier {
     _pageNotifier.value = _currentPageNumber;
   }
 
+  void _schedulePageUiRefresh({bool immediate = false}) {
+    if (_isDisposed) {
+      return;
+    }
+    _pageUiRefreshTimer?.cancel();
+    if (immediate) {
+      notifyListeners();
+      return;
+    }
+    _pageUiRefreshTimer = Timer(_pageUiRefreshDebounce, () {
+      if (_isDisposed) {
+        return;
+      }
+      notifyListeners();
+    });
+  }
+
   void _publishControlsVisibility() {
     if (_isDisposed || _controlsNotifier.value == _controlsVisible) {
       return;
@@ -1866,8 +1918,7 @@ class QuranReaderController extends ChangeNotifier {
             _currentPageNumber &&
         _lastRecordedHistoryDateKey == todayKey &&
         _lastRecordedHistoryAt != null &&
-        now.difference(_lastRecordedHistoryAt!) <
-            const Duration(seconds: 18);
+        now.difference(_lastRecordedHistoryAt!) < const Duration(seconds: 18);
     if (shouldSkipHistoryInsert) {
       if (contentChanged) {
         _rebuildContentCaches();
@@ -2046,6 +2097,7 @@ class QuranReaderController extends ChangeNotifier {
     _isDisposed = true;
     _controlsTimer?.cancel();
     _pagePersistenceTimer?.cancel();
+    _pageUiRefreshTimer?.cancel();
     _cloudSyncTimer?.cancel();
     final shouldFlushNotes = _notesPersistenceTimer?.isActive ?? false;
     _notesPersistenceTimer?.cancel();
@@ -2130,8 +2182,7 @@ class QuranReaderController extends ChangeNotifier {
       activityDateKeys.add(key);
       activityCounts.update(key, (value) => value + 1, ifAbsent: () => 1);
     }
-    _readingActivityCountsCache =
-        Map<String, int>.unmodifiable(activityCounts);
+    _readingActivityCountsCache = Map<String, int>.unmodifiable(activityCounts);
     _recentActivityDateKeysCache = Set<String>.unmodifiable(activityDateKeys);
   }
 
@@ -2187,6 +2238,7 @@ class QuranReaderController extends ChangeNotifier {
     final nextConfig = await _repository.refreshAdminConfig();
     _adminConfig = nextConfig;
     _syncCurrentAiSettingsWithAdminConfig();
+    await _refreshOfflinePackAvailability();
     _applyAdminEditionVisibilityRules();
     if (!_settings.preferImageMode &&
         _repository.hasAssetsForEdition(_settings.mushafEdition)) {
@@ -2254,6 +2306,16 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   String adminPackStatusForEdition(MushafEdition edition) {
+    if (isBundledPackForEdition(edition)) {
+      return 'Built-in';
+    }
+    if (isOfflinePackDownloading(edition)) {
+      final progress = (offlinePackProgressForEdition(edition) * 100).round();
+      return 'Downloading $progress%';
+    }
+    if (isOfflinePackDownloaded(edition)) {
+      return 'Available offline';
+    }
     final remotePack = remoteAssetPackForEdition(edition);
     if (remotePack != null) {
       return 'Admin v${remotePack.version}';
@@ -2263,10 +2325,65 @@ class QuranReaderController extends ChangeNotifier {
 
   String adminPackSubtitleForEdition(MushafEdition edition) {
     final remotePack = remoteAssetPackForEdition(edition);
+    if (isBundledPackForEdition(edition)) {
+      return '${edition.bestUseLabel}. This edition is bundled with the app and always available offline.';
+    }
+    if (isOfflinePackDownloaded(edition) && remotePack != null) {
+      return '${edition.bestUseLabel}. Admin pack ${remotePack.version} is stored on this device and will keep working offline.';
+    }
+    if (isOfflinePackDownloading(edition) && remotePack != null) {
+      final progress = (offlinePackProgressForEdition(edition) * 100).round();
+      return '${edition.bestUseLabel}. Downloading admin pack ${remotePack.version} for offline use ($progress%).';
+    }
     if (remotePack != null) {
       return '${edition.bestUseLabel}. Admin pack ${remotePack.version} with ${remotePack.pageCount} imported pages is active.';
     }
     return '${edition.bestUseLabel}. No admin-managed pack is active yet.';
+  }
+
+  Future<void> downloadOfflineEditionPack(MushafEdition edition) async {
+    if (_offlinePackProgress.containsKey(edition)) {
+      return;
+    }
+
+    _offlinePackProgress = Map<MushafEdition, double>.from(_offlinePackProgress)
+      ..[edition] = 0;
+    notifyListeners();
+
+    try {
+      await _repository.downloadOfflinePack(
+        edition,
+        onProgress: (progress) {
+          if (_isDisposed) {
+            return;
+          }
+          _offlinePackProgress =
+              Map<MushafEdition, double>.from(_offlinePackProgress)
+                ..[edition] = progress.clamp(0, 1);
+          notifyListeners();
+        },
+      );
+    } finally {
+      _offlinePackProgress =
+          Map<MushafEdition, double>.from(_offlinePackProgress)
+            ..remove(edition);
+      await _refreshOfflinePackAvailability();
+      _refreshCurrentCaches();
+      _publishContentChange();
+      if (!_isDisposed) {
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> removeOfflineEditionPack(MushafEdition edition) async {
+    await _repository.removeOfflinePack(edition);
+    await _refreshOfflinePackAvailability();
+    _refreshCurrentCaches();
+    _publishContentChange();
+    if (!_isDisposed) {
+      notifyListeners();
+    }
   }
 
   bool _featureFlag(String key, {required bool fallback}) {
@@ -2424,7 +2541,8 @@ class QuranReaderController extends ChangeNotifier {
     final fallbackEdition = enabledEditions.isNotEmpty
         ? enabledEditions.first
         : _repository.resolveSupportedEdition(_settings.mushafEdition);
-    final nextPreferImageMode = _repository.hasAssetsForEdition(fallbackEdition);
+    final nextPreferImageMode =
+        _repository.hasAssetsForEdition(fallbackEdition);
 
     _settings = _settings.copyWith(
       mushafEdition: fallbackEdition,
@@ -2448,4 +2566,21 @@ class QuranReaderController extends ChangeNotifier {
     _scheduleCloudSyncPush();
   }
 
+  Future<void> _refreshOfflinePackAvailability() async {
+    const editions = MushafEdition.values;
+    final checks = await Future.wait(
+      editions.map((edition) async {
+        final hasOfflinePack =
+            await _repository.hasOfflinePackForEdition(edition);
+        return MapEntry(edition, hasOfflinePack);
+      }),
+    );
+
+    final bundledEditions =
+        editions.where(_repository.hasBundledPackForEdition).toSet();
+    _downloadedOfflineEditions = {
+      ...bundledEditions,
+      ...checks.where((entry) => entry.value).map((entry) => entry.key),
+    };
+  }
 }

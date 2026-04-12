@@ -83,3 +83,6 @@ app.*.map.json
 !/assets/quran_pages/17_line/.gitkeep
 /assets/quran_pages/kanzul_iman/*
 !/assets/quran_pages/kanzul_iman/.gitkeep
+
+# Local asset packs (large) kept outside git
+/assets/asset_packs/

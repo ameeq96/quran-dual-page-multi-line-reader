@@ -36,12 +36,10 @@ class QuranAdminConfigService {
       throw StateError('Admin API base URL is not configured.');
     }
 
-    StateError? lastStateError;
     for (final candidateBaseUrl in candidateBaseUrls) {
       final normalizedBaseUrl = _normalizeBaseUrl(candidateBaseUrl);
       final uri = Uri.tryParse('$normalizedBaseUrl/public/config');
       if (uri == null) {
-        lastStateError = StateError('Admin API base URL is invalid.');
         continue;
       }
 
@@ -60,30 +58,41 @@ class QuranAdminConfigService {
             source: ReaderAdminConfigSource.live,
           );
           if (parsedConfig == null) {
-            lastStateError = StateError(
-              'Admin public config returned invalid JSON.',
-            );
             continue;
           }
           _currentBaseUrl = normalizedBaseUrl;
           _currentConfig = parsedConfig;
+          await _preferences.saveAdminPublicConfigJson(response.body);
           return _currentConfig;
         }
-        lastStateError = StateError(
-          'Admin public config request failed with status ${response.statusCode}.',
-        );
       } catch (error) {
         if (error is StateError) {
-          lastStateError = error;
           continue;
         }
-        lastStateError =
-            StateError('Unable to load admin public config from API.');
       }
     }
 
-    throw lastStateError ??
-        StateError('Unable to load admin public config from API.');
+    final cachedPayload = await _preferences.loadAdminPublicConfigJson();
+    final cachedBaseUrl = _normalizeBaseUrl(
+      preferredBaseUrl.trim().isNotEmpty
+          ? preferredBaseUrl
+          : _productionAdminBaseUrl,
+    );
+    final cachedConfig = _configFromJsonString(
+      cachedPayload,
+      publicBaseUrl: cachedBaseUrl,
+      source: ReaderAdminConfigSource.cached,
+    );
+    if (cachedConfig != null) {
+      _currentBaseUrl = cachedBaseUrl;
+      _currentConfig = cachedConfig;
+      return _currentConfig;
+    }
+
+    _currentConfig = _currentConfig.isEmpty
+        ? const ReaderAdminConfig.empty()
+        : _currentConfig;
+    return _currentConfig;
   }
 
   List<String> _buildCandidateBaseUrls(String preferredBaseUrl) {
@@ -237,9 +246,13 @@ class QuranAdminConfigService {
                   title: (item['title'] as String? ?? '').trim(),
                   body: (item['body'] as String? ?? '').trim(),
                   publishAtIso: (item['publishAt'] as String? ?? '').trim(),
+                  active: item['active'] as bool? ?? true,
                 ),
               )
-              .where((item) => item.title.isNotEmpty || item.body.isNotEmpty)
+              .where(
+                (item) =>
+                    item.active && (item.title.isNotEmpty || item.body.isNotEmpty),
+              )
               .toList(growable: false);
 
       return ReaderAdminConfig(

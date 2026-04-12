@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../domain/models/quran_page.dart';
@@ -16,8 +19,10 @@ ImageProvider<Object> buildQuranPageImageProvider(
   }
 
   final ImageProvider<Object> baseProvider = page.usesRemoteImage
-      ? NetworkImage(imageSource)
-      : AssetImage(imageSource);
+      ? CachedNetworkImageProvider(imageSource)
+      : imageSource.startsWith('assets/')
+          ? AssetImage(imageSource)
+          : FileImage(File(imageSource));
 
   final provider = ResizeImage.resizeIfNeeded(
     cacheWidth,
