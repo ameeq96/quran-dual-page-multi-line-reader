@@ -1,16 +1,17 @@
-import 'package:flutter/services.dart';
-
 import '../../../../core/constants/quran_constants.dart';
+import '../../domain/models/reader_admin_config.dart';
 import '../../domain/models/reader_settings.dart';
 
 class MushafAssetProfile {
   const MushafAssetProfile({
     required this.folderName,
     required this.leadingPagesToSkip,
+    this.trailingPagesToTrim = 0,
   });
 
   final String folderName;
   final int leadingPagesToSkip;
+  final int trailingPagesToTrim;
 }
 
 class QuranAssetResolver {
@@ -23,18 +24,22 @@ class QuranAssetResolver {
         MushafEdition.lines13: MushafAssetProfile(
           folderName: '13_line',
           leadingPagesToSkip: 0,
+          trailingPagesToTrim: 1,
         ),
         MushafEdition.lines14: MushafAssetProfile(
           folderName: '14_line',
           leadingPagesToSkip: 0,
+          trailingPagesToTrim: 1,
         ),
         MushafEdition.lines15: MushafAssetProfile(
           folderName: '15_line',
           leadingPagesToSkip: 0,
+          trailingPagesToTrim: 1,
         ),
         MushafEdition.lines16: MushafAssetProfile(
           folderName: '16_line',
           leadingPagesToSkip: 1,
+          trailingPagesToTrim: 1,
         ),
         MushafEdition.lines17: MushafAssetProfile(
           folderName: '17_line',
@@ -46,46 +51,24 @@ class QuranAssetResolver {
         ),
       };
 
-  final Map<MushafEdition, Set<String>> _availableAssetsByEdition =
-      <MushafEdition, Set<String>>{};
-  final Map<MushafEdition, Set<int>> _availablePageNumbersByEdition =
-      <MushafEdition, Set<int>>{};
+  final Map<MushafEdition, ReaderRemoteAssetPack> _remotePacksByEdition =
+      <MushafEdition, ReaderRemoteAssetPack>{};
   MushafEdition _selectedEdition = MushafEdition.lines16;
-  bool _isInitialized = false;
+  String _remoteAssetsBaseUrl = '';
 
   Future<void> initialize() async {
-    if (_isInitialized) {
-      return;
-    }
-
-    try {
-      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-      final allAssets = manifest.listAssets().toSet();
-
-      for (final entry in _profiles.entries) {
-        final folderPrefix = 'assets/quran_pages/${entry.value.folderName}/';
-        final editionAssets = allAssets
-            .where(
-              (assetPath) =>
-                  assetPath.startsWith(folderPrefix) &&
-                  (assetPath.endsWith('.png') || assetPath.endsWith('.jpg')),
-            )
-            .toSet();
-
-        _availableAssetsByEdition[entry.key] = editionAssets;
-        _availablePageNumbersByEdition[entry.key] =
-            editionAssets.map(_pageNumberFromAsset).whereType<int>().toSet();
-      }
-    } catch (_) {
-      _availableAssetsByEdition.clear();
-      _availablePageNumbersByEdition.clear();
-    }
-
-    _isInitialized = true;
+    // Remote packs are applied from admin config; no local asset scan is needed.
   }
 
   void setSelectedEdition(MushafEdition edition) {
     _selectedEdition = edition;
+  }
+
+  void applyRemoteConfig(ReaderAdminConfig config) {
+    _remoteAssetsBaseUrl = config.assetsBaseUrl;
+    _remotePacksByEdition
+      ..clear()
+      ..addAll(config.assetPacks);
   }
 
   MushafEdition get selectedEdition => _selectedEdition;
@@ -105,29 +88,22 @@ class QuranAssetResolver {
     return edition;
   }
 
-  bool get hasBundledImageEdition {
+  bool get hasRemoteImageEdition {
     return MushafEdition.values.any(hasAssetsForEdition);
   }
-
-  MushafAssetProfile get _selectedProfile => _profiles[_selectedEdition]!;
 
   MushafAssetProfile profileForEdition(MushafEdition edition) {
     return _profiles[edition]!;
   }
 
-  Set<int> get _selectedPageNumbers =>
-      _availablePageNumbersByEdition[_selectedEdition] ?? const <int>{};
-
-  Set<String> _assetsForEdition(MushafEdition edition) =>
-      _availableAssetsByEdition[edition] ?? const <String>{};
-
-  Set<int> _pageNumbersForEdition(MushafEdition edition) =>
-      _availablePageNumbersByEdition[edition] ?? const <int>{};
-
-  bool get hasAnyPageAssets => _selectedPageNumbers.isNotEmpty;
+  bool get hasAnyPageAssets => hasAssetsForEdition(_selectedEdition);
 
   bool hasAssetsForEdition(MushafEdition edition) {
-    return _pageNumbersForEdition(edition).isNotEmpty;
+    final remotePack = _remotePacksByEdition[edition];
+    if (remotePack == null || _remoteAssetsBaseUrl.trim().isEmpty) {
+      return false;
+    }
+    return imagePageCountForEdition(edition) > 0;
   }
 
   List<MushafEdition> get availableImageEditions {
@@ -137,45 +113,44 @@ class QuranAssetResolver {
   }
 
   int get leadingPagesToSkip {
-    if (_selectedPageNumbers.length <= _selectedProfile.leadingPagesToSkip) {
-      return 0;
-    }
-    return _selectedProfile.leadingPagesToSkip;
+    return leadingPagesToSkipForEdition(_selectedEdition);
   }
 
   int leadingPagesToSkipForEdition(MushafEdition edition) {
-    final pageNumbers = _pageNumbersForEdition(edition);
+    final remotePack = _remotePacksByEdition[edition];
     final profile = profileForEdition(edition);
-    if (pageNumbers.length <= profile.leadingPagesToSkip) {
+    if (remotePack == null ||
+        remotePack.maxImportedPageNumber <= profile.leadingPagesToSkip) {
       return 0;
     }
     return profile.leadingPagesToSkip;
   }
 
-  int get imagePageCount {
-    if (_selectedPageNumbers.isEmpty) {
+  int trailingPagesToTrimForEdition(MushafEdition edition) {
+    final remotePack = _remotePacksByEdition[edition];
+    final profile = profileForEdition(edition);
+    if (remotePack == null) {
       return 0;
     }
-    final highestAvailablePage = _selectedPageNumbers.reduce(
-      (value, element) => value > element ? value : element,
-    );
-    final logicalPageCount = highestAvailablePage - leadingPagesToSkip;
-    if (logicalPageCount < 0) {
+    final reservedPages =
+        leadingPagesToSkipForEdition(edition) + profile.trailingPagesToTrim;
+    if (remotePack.maxImportedPageNumber <= reservedPages) {
       return 0;
     }
-    return logicalPageCount;
+    return profile.trailingPagesToTrim;
   }
 
+  int get imagePageCount => imagePageCountForEdition(_selectedEdition);
+
   int imagePageCountForEdition(MushafEdition edition) {
-    final pageNumbers = _pageNumbersForEdition(edition);
-    if (pageNumbers.isEmpty) {
+    final remotePack = _remotePacksByEdition[edition];
+    if (remotePack == null) {
       return 0;
     }
-    final highestAvailablePage = pageNumbers.reduce(
-      (value, element) => value > element ? value : element,
-    );
-    final logicalPageCount =
-        highestAvailablePage - leadingPagesToSkipForEdition(edition);
+
+    final logicalPageCount = remotePack.maxImportedPageNumber -
+        leadingPagesToSkipForEdition(edition) -
+        trailingPagesToTrimForEdition(edition);
     if (logicalPageCount < 0) {
       return 0;
     }
@@ -189,22 +164,11 @@ class QuranAssetResolver {
   }
 
   int get lastImportedPageNumber {
-    if (_selectedPageNumbers.isEmpty) {
-      return 0;
-    }
-    return _selectedPageNumbers.reduce(
-      (value, element) => value > element ? value : element,
-    );
+    return lastImportedPageNumberForEdition(_selectedEdition);
   }
 
   int lastImportedPageNumberForEdition(MushafEdition edition) {
-    final pageNumbers = _pageNumbersForEdition(edition);
-    if (pageNumbers.isEmpty) {
-      return 0;
-    }
-    return pageNumbers.reduce(
-      (value, element) => value > element ? value : element,
-    );
+    return _remotePacksByEdition[edition]?.maxImportedPageNumber ?? 0;
   }
 
   int logicalPageForImportedPage(int importedPageNumber) {
@@ -225,40 +189,26 @@ class QuranAssetResolver {
   }
 
   String? assetPathForEditionPage(MushafEdition edition, int pageNumber) {
-    final imagePageCount = imagePageCountForEdition(edition);
+    final remotePack = _remotePacksByEdition[edition];
+    if (remotePack == null || _remoteAssetsBaseUrl.trim().isEmpty) {
+      return null;
+    }
+
     final totalPages =
-        imagePageCount == 0 ? QuranConstants.defaultTotalPages : imagePageCount;
+        imagePageCountForEdition(edition) == 0 ? QuranConstants.defaultTotalPages : imagePageCountForEdition(edition);
     final normalized = QuranConstants.clampPage(
       pageNumber,
       totalPages: totalPages,
     );
     final importedPageNumber = normalized + leadingPagesToSkipForEdition(edition);
-    final folderPrefix =
-        'assets/quran_pages/${profileForEdition(edition).folderName}/';
-    final candidates = <String>[
-      '$folderPrefix${QuranConstants.paddedAssetName(importedPageNumber)}.png',
-      '$folderPrefix$importedPageNumber.png',
-      '$folderPrefix${QuranConstants.paddedAssetName(importedPageNumber)}.jpg',
-      '$folderPrefix$importedPageNumber.jpg',
-    ];
-    final assets = _assetsForEdition(edition);
 
-    for (final candidate in candidates) {
-      if (assets.contains(candidate)) {
-        return candidate;
-      }
-    }
-
-    return null;
-  }
-
-  int? _pageNumberFromAsset(String assetPath) {
-    final filename = assetPath.split('/').last;
-    final dotIndex = filename.lastIndexOf('.');
-    if (dotIndex <= 0) {
+    if (!remotePack.hasImportedPage(importedPageNumber)) {
       return null;
     }
 
-    return int.tryParse(filename.substring(0, dotIndex));
+    return remotePack.buildPageUrl(
+      _remoteAssetsBaseUrl,
+      importedPageNumber: importedPageNumber,
+    );
   }
 }
