@@ -46,9 +46,8 @@ class _ReaderHifzTrainerSheetState extends State<_ReaderHifzTrainerSheet> {
 
   int get _standardPage => widget.controller.currentStandardPageNumber;
 
-  QuranPage get _page => widget.controller.pageForStandardPageInEdition(
-        _standardPage,
-        edition: _edition,
+  QuranPage get _page => widget.controller.pageForCurrentReferenceInEdition(
+        _edition,
       );
 
   int get _lineCount => ReaderHifzLineMask.resolveLineCount(
@@ -341,8 +340,7 @@ class _ManualMaskEditor extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final topInset = constraints.maxHeight * geometry.topInsetFactor;
-        final bottomInset =
-            constraints.maxHeight * geometry.bottomInsetFactor;
+        final bottomInset = constraints.maxHeight * geometry.bottomInsetFactor;
         final usableHeight = math.max(
           0.0,
           constraints.maxHeight - topInset - bottomInset,
@@ -374,8 +372,7 @@ class _ManualMaskEditor extends StatelessWidget {
                   if (usableHeight <= 0) {
                     return;
                   }
-                  final nextAnchor =
-                      anchor + (details.delta.dy / usableHeight);
+                  final nextAnchor = anchor + (details.delta.dy / usableHeight);
                   onAnchorChanged(index, nextAnchor);
                 },
                 child: DecoratedBox(

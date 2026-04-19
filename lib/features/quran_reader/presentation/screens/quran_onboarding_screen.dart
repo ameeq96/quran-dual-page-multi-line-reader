@@ -165,8 +165,8 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
                       end: Alignment.bottomCenter,
                       colors: [
                         theme.scaffoldBackgroundColor,
-                        theme.colorScheme.surfaceContainerLowest
-                            .withOpacity(theme.brightness == Brightness.dark ? 0.92 : 1),
+                        theme.colorScheme.surfaceContainerLowest.withOpacity(
+                            theme.brightness == Brightness.dark ? 0.92 : 1),
                         theme.colorScheme.surface,
                       ],
                     ),
@@ -189,7 +189,9 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
                                 height: compact ? 48 : 56,
                                 decoration: BoxDecoration(
                                   color: theme.colorScheme.primary.withOpacity(
-                                    theme.brightness == Brightness.dark ? 0.18 : 0.12,
+                                    theme.brightness == Brightness.dark
+                                        ? 0.18
+                                        : 0.12,
                                   ),
                                   borderRadius: BorderRadius.circular(18),
                                 ),
@@ -204,16 +206,19 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Welcome to Quran Dual Page & Multi-Line Reader',
-                                      style: theme.textTheme.titleLarge?.copyWith(
+                                      'Welcome to Quran Pak Dual Page Reader',
+                                      style:
+                                          theme.textTheme.titleLarge?.copyWith(
                                         fontWeight: FontWeight.w900,
                                       ),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
                                       'A quick overview of what you can use in the app.',
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        color: theme.colorScheme.onSurfaceVariant,
+                                      style:
+                                          theme.textTheme.bodyMedium?.copyWith(
+                                        color:
+                                            theme.colorScheme.onSurfaceVariant,
                                       ),
                                     ),
                                   ],
@@ -252,13 +257,15 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
                               (index) => AnimatedContainer(
                                 duration: const Duration(milliseconds: 180),
                                 curve: Curves.easeOutCubic,
-                                margin: const EdgeInsets.symmetric(horizontal: 4),
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 4),
                                 width: index == _currentIndex ? 24 : 8,
                                 height: 8,
                                 decoration: BoxDecoration(
                                   color: index == _currentIndex
                                       ? theme.colorScheme.primary
-                                      : theme.colorScheme.surfaceContainerHighest,
+                                      : theme
+                                          .colorScheme.surfaceContainerHighest,
                                   borderRadius: BorderRadius.circular(999),
                                 ),
                               ),
@@ -337,16 +344,21 @@ class _OnboardingCard extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final shortCard = constraints.maxHeight < 420;
-            final padding = shortCard ? (compact ? 16.0 : 18.0) : (compact ? 18.0 : 24.0);
-            final titleStyle = (shortCard ? theme.textTheme.titleLarge : theme.textTheme.headlineSmall)
+            final padding =
+                shortCard ? (compact ? 16.0 : 18.0) : (compact ? 18.0 : 24.0);
+            final titleStyle = (shortCard
+                    ? theme.textTheme.titleLarge
+                    : theme.textTheme.headlineSmall)
                 ?.copyWith(
-                  fontWeight: FontWeight.w900,
-                );
-            final subtitleStyle = (shortCard ? theme.textTheme.bodyMedium : theme.textTheme.bodyLarge)
+              fontWeight: FontWeight.w900,
+            );
+            final subtitleStyle = (shortCard
+                    ? theme.textTheme.bodyMedium
+                    : theme.textTheme.bodyLarge)
                 ?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  height: shortCard ? 1.35 : 1.45,
-                );
+              color: theme.colorScheme.onSurfaceVariant,
+              height: shortCard ? 1.35 : 1.45,
+            );
             final content = Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -386,7 +398,8 @@ class _OnboardingCard extends StatelessWidget {
                             .withOpacity(
                           theme.brightness == Brightness.dark ? 0.72 : 1,
                         ),
-                        borderRadius: BorderRadius.circular(shortCard ? 16 : 20),
+                        borderRadius:
+                            BorderRadius.circular(shortCard ? 16 : 20),
                       ),
                       child: Padding(
                         padding: EdgeInsets.symmetric(
@@ -467,9 +480,12 @@ class _OnboardingCard extends StatelessWidget {
                                   padding: const EdgeInsets.only(bottom: 12),
                                   child: DecoratedBox(
                                     decoration: BoxDecoration(
-                                      color: theme.colorScheme.surfaceContainerLowest
+                                      color: theme
+                                          .colorScheme.surfaceContainerLowest
                                           .withOpacity(
-                                        theme.brightness == Brightness.dark ? 0.72 : 1,
+                                        theme.brightness == Brightness.dark
+                                            ? 0.72
+                                            : 1,
                                       ),
                                       borderRadius: BorderRadius.circular(20),
                                     ),
@@ -479,7 +495,8 @@ class _OnboardingCard extends StatelessWidget {
                                         vertical: 14,
                                       ),
                                       child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Icon(
                                             Icons.check_circle_rounded,
@@ -490,9 +507,11 @@ class _OnboardingCard extends StatelessWidget {
                                           Expanded(
                                             child: Text(
                                               highlight,
-                                              style: theme.textTheme.bodyMedium?.copyWith(
+                                              style: theme.textTheme.bodyMedium
+                                                  ?.copyWith(
                                                 fontWeight: FontWeight.w600,
-                                                color: theme.colorScheme.onSurface,
+                                                color:
+                                                    theme.colorScheme.onSurface,
                                               ),
                                             ),
                                           ),

@@ -1,36 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../../../app/app_theme.dart';
 import '../../../../core/constants/quran_constants.dart';
 import '../../domain/models/quran_page.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
 import 'mushaf_page_widget.dart';
-import 'reader_sheet_frame.dart';
 
-Future<void> showReaderCompareSheet(
-  BuildContext context, {
-  required QuranReaderController controller,
-}) {
-  return showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: false,
-    builder: (context) {
-      return FractionallySizedBox(
-        heightFactor: 0.95,
-        child: ReaderSheetFrame(
-          child: ReaderCompareContent(
-            controller: controller,
-            showHandle: true,
-          ),
-        ),
-      );
-    },
-  );
-}
-
-class QuranCompareScreen extends StatelessWidget {
+class QuranCompareScreen extends StatefulWidget {
   const QuranCompareScreen({
     super.key,
     required this.controller,
@@ -39,66 +15,40 @@ class QuranCompareScreen extends StatelessWidget {
   final QuranReaderController controller;
 
   @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<ReaderSettings>(
-      valueListenable: controller.settingsListenable,
-      builder: (context, settings, _) {
-        return Theme(
-          data: settings.nightMode ? AppTheme.dark() : AppTheme.light(),
-          child: Scaffold(
-            body: SafeArea(
-              child: ReaderCompareContent(
-                controller: controller,
-                showHandle: false,
-              ),
-            ),
-          ),
-        );
-      },
+  State<QuranCompareScreen> createState() => _QuranCompareScreenState();
+}
+
+class _QuranCompareScreenState extends State<QuranCompareScreen> {
+  Future<void> _useEdition(MushafEdition edition) async {
+    if (edition == widget.controller.settings.mushafEdition) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    await widget.controller.selectMushafEdition(edition);
+    if (!mounted) {
+      return;
+    }
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('${edition.label} is now active in the reader.'),
+      ),
     );
   }
-}
-
-class ReaderCompareContent extends StatefulWidget {
-  const ReaderCompareContent({
-    super.key,
-    required this.controller,
-    this.showHandle = true,
-  });
-
-  final QuranReaderController controller;
-  final bool showHandle;
-
-  @override
-  State<ReaderCompareContent> createState() => _ReaderCompareContentState();
-}
-
-class _ReaderCompareContentState extends State<ReaderCompareContent> {
-  late MushafEdition _morphEdition;
-
-  @override
-  void initState() {
-    super.initState();
-    final editions = widget.controller.compareEditions;
-    _morphEdition = editions.contains(widget.controller.primaryStudyEdition)
-        ? widget.controller.primaryStudyEdition
-        : editions.first;
-  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final size = MediaQuery.of(context).size;
-    final compact = size.width < 420 || size.height < 760;
-
     return AnimatedBuilder(
       animation: Listenable.merge(<Listenable>[
         widget.controller.pageListenable,
         widget.controller.settingsListenable,
       ]),
       builder: (context, _) {
-        final standardPage = widget.controller.currentStandardPageNumber;
-        final editions = widget.controller.compareEditions;
+        final theme = Theme.of(context);
+        final size = MediaQuery.of(context).size;
+        final compact = size.width < 420 || size.height < 760;
+        final activeEdition = widget.controller.settings.mushafEdition;
         final previewSettings = widget.controller.settings.copyWith(
           hifzFocusMode: false,
           pageReflectionEnabled: false,
@@ -107,291 +57,53 @@ class _ReaderCompareContentState extends State<ReaderCompareContent> {
           customBrightnessEnabled: false,
           lowMemoryMode: true,
         );
-        if (!editions.contains(_morphEdition)) {
-          _morphEdition = editions.first;
-        }
 
-        final morphIndex = editions.indexOf(_morphEdition).toDouble();
-        final selectedPage = widget.controller.pageForStandardPageInEdition(
-          standardPage,
-          edition: _morphEdition,
-        );
-        final mappedPage =
-            widget.controller.navigationPageForStandardPageInEdition(
-          standardPage,
-          edition: _morphEdition,
-        );
-
-        return SafeArea(
-          top: false,
-          child: ListView(
-            padding: EdgeInsets.fromLTRB(
-              compact ? 16 : 20,
-              18,
-              compact ? 16 : 20,
-              24,
-            ),
-            children: [
-              if (widget.showHandle) ...[
-                Center(
-                  child: Container(
-                    width: 54,
-                    height: 5,
-                    decoration: BoxDecoration(
-                      color: theme.dividerColor.withOpacity(0.8),
-                      borderRadius: BorderRadius.circular(999),
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Compare Editions'),
+          ),
+          body: SafeArea(
+            top: false,
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(
+                compact ? 12 : 16,
+                compact ? 10 : 14,
+                compact ? 12 : 16,
+                24,
+              ),
+              children: [
+                _CompareHeader(
+                  activeEdition: activeEdition,
+                  currentPageNumber: widget.controller.currentPageNumber,
+                ),
+                const SizedBox(height: 14),
+                ...widget.controller.compareEditions.map((edition) {
+                  final page =
+                      widget.controller.pageForCurrentReferenceInEdition(
+                    edition,
+                  );
+                  final navigationPage = widget.controller
+                      .navigationPageForCurrentReferenceInEdition(edition);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: _CompareEditionCard(
+                      edition: edition,
+                      page: page,
+                      navigationPage: navigationPage,
+                      settings: previewSettings,
+                      isActive: edition == activeEdition,
+                      onUseEdition: () => _useEdition(edition),
                     ),
+                  );
+                }),
+                Text(
+                  'Compare uses each edition\'s own navigation JSON, so surah and sipara mapping stays aligned with the selected scan.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                const SizedBox(height: 18),
               ],
-              _CompareCard(
-                compact: compact,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Multi-edition compare',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'See the same reference page across 13, 15, 16, 17 line scans and Kanzul Iman.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _MetaChip(
-                          icon: Icons.menu_book_rounded,
-                          label: 'Standard page $standardPage',
-                        ),
-                        _MetaChip(
-                          icon: Icons.auto_stories_outlined,
-                          label: widget.controller.currentChapterSummary
-                                  ?.nameSimple ??
-                              'Current Surah',
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              _CompareCard(
-                compact: compact,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Edition morph mode',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Slide through different print styles while staying on the same reference page.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: editions.map((edition) {
-                        return ChoiceChip(
-                          label: Text(edition.label),
-                          selected: edition == _morphEdition,
-                          onSelected: (_) {
-                            setState(() {
-                              _morphEdition = edition;
-                            });
-                          },
-                        );
-                      }).toList(growable: false),
-                    ),
-                    const SizedBox(height: 10),
-                    Slider(
-                      value: morphIndex,
-                      min: 0,
-                      max: (editions.length - 1).toDouble(),
-                      divisions: editions.length - 1,
-                      label: _morphEdition.label,
-                      onChanged: (value) {
-                        setState(() {
-                          _morphEdition = editions[value.round()];
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _morphEdition.historySummary,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        height: 1.45,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    FilledButton.tonal(
-                      onPressed: () async {
-                        final messenger = ScaffoldMessenger.of(context);
-                        await widget.controller
-                            .selectMushafEdition(_morphEdition);
-                        if (!mounted) {
-                          return;
-                        }
-                        messenger.showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Reader switched to ${_morphEdition.label}.',
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Text('Use this edition'),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      height: compact ? 320 : 380,
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 260),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        child: _EditionPreviewCard(
-                          key: ValueKey<MushafEdition>(_morphEdition),
-                          title: _morphEdition.label,
-                          subtitle:
-                              '${_morphEdition.companyLabel} - Page $mappedPage',
-                          page: selectedPage,
-                          settings: previewSettings,
-                          compact: compact,
-                          footer: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _MetaChip(
-                                icon: Icons.location_on_outlined,
-                                label: _morphEdition.commonRegionLabel,
-                              ),
-                              _MetaChip(
-                                icon: Icons.tips_and_updates_outlined,
-                                label: _morphEdition.bestUseLabel,
-                              ),
-                              _MetaChip(
-                                icon: Icons.view_agenda_outlined,
-                                label: _morphEdition.lineCount == null
-                                    ? 'Study edition'
-                                    : '${_morphEdition.lineCount} lines',
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              _CompareCard(
-                compact: compact,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Same page across editions',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Useful for huffaz, teachers, and researchers comparing print density and study editions.',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      height: compact ? 360 : 420,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: editions.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 12),
-                        itemBuilder: (context, index) {
-                          final edition = editions[index];
-                          final page =
-                              widget.controller.pageForStandardPageInEdition(
-                            standardPage,
-                            edition: edition,
-                          );
-                          final pageNumber = widget.controller
-                              .navigationPageForStandardPageInEdition(
-                            standardPage,
-                            edition: edition,
-                          );
-                          return SizedBox(
-                            width: compact ? 248 : 286,
-                            child: _EditionPreviewCard(
-                              title: edition.label,
-                              subtitle:
-                                  '${edition.companyLabel} - Page $pageNumber',
-                              page: page,
-                              settings: previewSettings,
-                              compact: compact,
-                              footer: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    edition.historySummary,
-                                    maxLines: compact ? 3 : 4,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                      height: 1.4,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  FilledButton.tonalIcon(
-                                    onPressed: () async {
-                                      final messenger =
-                                          ScaffoldMessenger.of(context);
-                                      await widget.controller
-                                          .selectMushafEdition(edition);
-                                      if (!mounted) {
-                                        return;
-                                      }
-                                      messenger.showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            '${edition.label} is now active in the reader.',
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                    icon: const Icon(
-                                      Icons.compare_arrows_rounded,
-                                    ),
-                                    label: const Text('Switch reader'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
         );
       },
@@ -399,103 +111,209 @@ class _ReaderCompareContentState extends State<ReaderCompareContent> {
   }
 }
 
-class _CompareCard extends StatelessWidget {
-  const _CompareCard({
-    required this.child,
-    required this.compact,
+class _CompareHeader extends StatelessWidget {
+  const _CompareHeader({
+    required this.activeEdition,
+    required this.currentPageNumber,
   });
 
-  final Widget child;
-  final bool compact;
+  final MushafEdition activeEdition;
+  final int currentPageNumber;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withOpacity(0.94),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.36)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Same reference across all editions',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Current reader page $currentPageNumber in ${activeEdition.label}. Switch edition directly from any card below.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CompareEditionCard extends StatelessWidget {
+  const _CompareEditionCard({
+    required this.edition,
+    required this.page,
+    required this.navigationPage,
+    required this.settings,
+    required this.isActive,
+    required this.onUseEdition,
+  });
+
+  final MushafEdition edition;
+  final QuranPage page;
+  final int navigationPage;
+  final ReaderSettings settings;
+  final bool isActive;
+  final VoidCallback onUseEdition;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final size = MediaQuery.of(context).size;
+    final compact = size.width < 420 || size.height < 760;
+    final pageAspectRatio = QuranConstants.pageAspectRatio(
+      usesImage: page.usesImage,
+      assetPath: page.assetPath,
+    );
+    final previewWidth = compact ? 210.0 : 250.0;
+    final previewHeight = previewWidth / pageAspectRatio;
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            theme.colorScheme.surface.withOpacity(0.97),
-            theme.colorScheme.surfaceContainer.withOpacity(0.9),
-          ],
+        color: theme.colorScheme.surface.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: isActive
+              ? theme.colorScheme.primary.withOpacity(0.38)
+              : theme.dividerColor.withOpacity(0.34),
         ),
-        borderRadius: BorderRadius.circular(compact ? 24 : 28),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.42)),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.shadow.withOpacity(0.06),
-            blurRadius: compact ? 18 : 24,
+            color: theme.colorScheme.shadow.withOpacity(0.05),
+            blurRadius: 20,
             offset: const Offset(0, 10),
           ),
         ],
       ),
       child: Padding(
-        padding: EdgeInsets.all(compact ? 14 : 18),
-        child: child,
-      ),
-    );
-  }
-}
-
-class _EditionPreviewCard extends StatelessWidget {
-  const _EditionPreviewCard({
-    super.key,
-    required this.title,
-    required this.subtitle,
-    required this.page,
-    required this.settings,
-    required this.compact,
-    required this.footer,
-  });
-
-  final String title;
-  final String subtitle;
-  final QuranPage page;
-  final ReaderSettings settings;
-  final bool compact;
-  final Widget footer;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(compact ? 20 : 24),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.42)),
-      ),
-      child: Padding(
-        padding: EdgeInsets.all(compact ? 12 : 14),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        edition.label,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${edition.companyLabel} - Reader page $navigationPage',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? theme.colorScheme.primary.withOpacity(0.14)
+                        : theme.colorScheme.surfaceContainerHighest
+                            .withOpacity(0.72),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      isActive ? 'Active' : 'Available',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: isActive
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Center(
+                child: RepaintBoundary(
+                  child: SizedBox(
+                    width: previewWidth,
+                    height: previewHeight,
+                    child: MushafPageWidget(
+                      page: page,
+                      settings: settings,
+                      showPageNumbers: false,
+                    ),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _CompareChip(
+                  icon: Icons.menu_book_rounded,
+                  label: 'Page ${page.number}',
+                ),
+                _CompareChip(
+                  icon: Icons.layers_outlined,
+                  label: edition.bestUseLabel,
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
             Text(
-              subtitle,
-              style: theme.textTheme.bodySmall?.copyWith(
+              edition.historySummary,
+              style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
+                height: 1.5,
               ),
             ),
-            SizedBox(height: compact ? 10 : 12),
-            Expanded(
-              child: _PreviewCanvas(
-                page: page,
-                settings: settings,
-                compact: compact,
-              ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: isActive
+                  ? OutlinedButton.icon(
+                      onPressed: onUseEdition,
+                      icon: const Icon(Icons.check_circle_outline_rounded),
+                      label: const Text('Back to reader'),
+                    )
+                  : FilledButton.icon(
+                      onPressed: onUseEdition,
+                      icon: const Icon(Icons.swap_horiz_rounded),
+                      label: Text('Use ${edition.label}'),
+                    ),
             ),
-            const SizedBox(height: 12),
-            footer,
           ],
         ),
       ),
@@ -503,52 +321,8 @@ class _EditionPreviewCard extends StatelessWidget {
   }
 }
 
-class _PreviewCanvas extends StatelessWidget {
-  const _PreviewCanvas({
-    required this.page,
-    required this.settings,
-    required this.compact,
-  });
-
-  final QuranPage page;
-  final ReaderSettings settings;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    final aspectRatio = QuranConstants.pageAspectRatio(
-      usesImage: page.usesImage,
-      assetPath: page.assetPath,
-    );
-    final previewWidth = compact ? 220.0 : 260.0;
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Center(
-        child: RepaintBoundary(
-          child: FittedBox(
-            fit: BoxFit.contain,
-            child: SizedBox(
-              width: previewWidth,
-              height: previewWidth / aspectRatio,
-              child: MushafPageWidget(
-                page: page,
-                settings: settings,
-                showPageNumbers: false,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  const _MetaChip({
+class _CompareChip extends StatelessWidget {
+  const _CompareChip({
     required this.icon,
     required this.label,
   });
@@ -559,32 +333,23 @@ class _MetaChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.82),
+        color: theme.colorScheme.surfaceContainerLow.withOpacity(0.8),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.38)),
+        border: Border.all(color: theme.dividerColor.withOpacity(0.28)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 16,
-              color: theme.colorScheme.primary,
-            ),
+            Icon(icon, size: 16, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 180),
-              child: Text(
-                label,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
+            Text(
+              label,
+              style: theme.textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],

@@ -23,6 +23,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
   late final TextEditingController _inputController;
   QuranAiTool _selectedTool = QuranAiTool.explainer;
   QuranAiToolResult? _result;
+  List<_AiOutputBlock> _formattedResultBlocks = const <_AiOutputBlock>[];
   bool _isRunning = false;
 
   @override
@@ -38,19 +39,31 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
   }
 
   Future<void> _runTool() async {
+    if (_isRunning) {
+      return;
+    }
+
+    QuranAiToolResult? nextResult;
+    List<_AiOutputBlock> nextFormattedResultBlocks = const <_AiOutputBlock>[];
     setState(() => _isRunning = true);
     try {
-      final result = await widget.controller.runAiTool(
+      nextResult = await widget.controller.runAiTool(
         _selectedTool,
         userInput: _inputController.text,
       );
+      nextFormattedResultBlocks = _AiOutputFormatter.parse(nextResult.output);
       if (!mounted) {
         return;
       }
-      setState(() => _result = result);
     } finally {
       if (mounted) {
-        setState(() => _isRunning = false);
+        setState(() {
+          _isRunning = false;
+          if (nextResult != null) {
+            _result = nextResult;
+            _formattedResultBlocks = nextFormattedResultBlocks;
+          }
+        });
       }
     }
   }
@@ -102,7 +115,6 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
         widget.controller.aiSettingsListenable,
         widget.controller.settingsListenable,
         widget.controller.experienceListenable,
-        widget.controller.pageListenable,
       ]),
       builder: (context, _) {
         final readerSettings = widget.controller.settings;
@@ -128,17 +140,21 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
             body: ListView(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
               children: [
-                _OverviewCard(
-                  pageReference: widget.controller.buildCurrentPageReference(),
-                  editionLabel: _editionLabel(
-                    widget.controller.settings.mushafEdition,
-                  ),
-                  languageLabel: aiSettings.responseLanguage.label,
-                  depthLabel: aiSettings.responseDepth.label,
-                  providerLabel: widget.controller.adminAiProviderLabel,
-                  modelLabel: widget.controller.adminAiModelLabel,
-                  statusLabel: widget.controller.adminAiStatusLabel,
-                  endpointLabel: widget.controller.adminAiEndpointLabel,
+                ValueListenableBuilder<int>(
+                  valueListenable: widget.controller.pageListenable,
+                  builder: (context, _, __) {
+                    return _OverviewCard(
+                      pageReference:
+                          widget.controller.buildCurrentPageReference(),
+                      editionLabel: _editionLabel(readerSettings.mushafEdition),
+                      languageLabel: aiSettings.responseLanguage.label,
+                      depthLabel: aiSettings.responseDepth.label,
+                      providerLabel: widget.controller.adminAiProviderLabel,
+                      modelLabel: widget.controller.adminAiModelLabel,
+                      statusLabel: widget.controller.adminAiStatusLabel,
+                      endpointLabel: widget.controller.adminAiEndpointLabel,
+                    );
+                  },
                 ),
                 const SizedBox(height: 14),
                 _ToolPicker(
@@ -154,6 +170,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
                     setState(() {
                       _selectedTool = tool;
                       _result = null;
+                      _formattedResultBlocks = const <_AiOutputBlock>[];
                     });
                   },
                 ),
@@ -166,17 +183,12 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
                 SizedBox(
                   height: 54,
                   child: FilledButton.icon(
-                    onPressed: _isRunning
-                        ? null
-                        : () {
-                            _runTool();
-                          },
+                    onPressed: _isRunning ? null : _runTool,
                     icon: _isRunning
                         ? const ReaderSkeletonBlock(
                             width: 18,
                             height: 18,
-                            borderRadius:
-                                BorderRadius.all(Radius.circular(6)),
+                            borderRadius: BorderRadius.all(Radius.circular(6)),
                           )
                         : Icon(_toolIcon(_selectedTool)),
                     label: Text(_selectedTool.actionLabel),
@@ -186,12 +198,18 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
                 if (_isRunning) ...[
                   const _AiStudioSkeletonCard(),
                 ] else if (_result != null) ...[
-                  _ResultCard(
-                    result: _result!,
-                    pageReference:
-                        widget.controller.buildCurrentPageReference(),
-                    currentPageNumber: widget.controller.currentPageNumber,
-                    onOpenCurrentPage: _openCurrentPageInReader,
+                  ValueListenableBuilder<int>(
+                    valueListenable: widget.controller.pageListenable,
+                    builder: (context, _, __) {
+                      return _ResultCard(
+                        result: _result!,
+                        blocks: _formattedResultBlocks,
+                        pageReference:
+                            widget.controller.buildCurrentPageReference(),
+                        currentPageNumber: widget.controller.currentPageNumber,
+                        onOpenCurrentPage: _openCurrentPageInReader,
+                      );
+                    },
                   ),
                   if (_result!.hasMatchedLine) ...[
                     const SizedBox(height: 12),
@@ -447,7 +465,7 @@ class _ToolPicker extends StatelessWidget {
                 onSelected: languageLocked
                     ? null
                     : (_) {
-                  onSelectLanguage(language);
+                        onSelectLanguage(language);
                       },
               );
             }).toList(growable: false),
@@ -463,7 +481,7 @@ class _ToolPicker extends StatelessWidget {
                 onSelected: depthLocked
                     ? null
                     : (_) {
-                  onSelectDepth(depth);
+                        onSelectDepth(depth);
                       },
               );
             }).toList(growable: false),
@@ -531,12 +549,14 @@ class _InputCard extends StatelessWidget {
 class _ResultCard extends StatelessWidget {
   const _ResultCard({
     required this.result,
+    required this.blocks,
     required this.pageReference,
     required this.currentPageNumber,
     required this.onOpenCurrentPage,
   });
 
   final QuranAiToolResult result;
+  final List<_AiOutputBlock> blocks;
   final String pageReference;
   final int currentPageNumber;
   final Future<void> Function() onOpenCurrentPage;
@@ -544,7 +564,6 @@ class _ResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final content = _AiOutputFormatter.parse(result.output);
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -666,7 +685,7 @@ class _ResultCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final block in content) ...[
+                for (final block in blocks) ...[
                   block.build(context),
                   const SizedBox(height: 10),
                 ],

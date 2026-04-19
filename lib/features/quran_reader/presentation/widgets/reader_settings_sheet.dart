@@ -322,7 +322,7 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'These appearance controls affect the live Mushaf instantly. Search remains the fastest way to jump by Surah, Sipara, or page.',
+                        'These appearance controls affect the live Mushaf instantly. Search remains the fastest way to jump by Surah or Sipara.',
                         style: theme.textTheme.bodyMedium,
                       ),
                     ),

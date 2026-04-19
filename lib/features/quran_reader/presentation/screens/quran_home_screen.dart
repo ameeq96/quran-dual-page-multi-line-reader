@@ -5,6 +5,7 @@ import '../../domain/models/reader_admin_config.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
 import '../widgets/kanzul_iman_study_sheet.dart';
+import '../widgets/jump_to_page_dialog.dart';
 import '../widgets/reader_audio_sheet.dart';
 import '../widgets/reader_compare_sheet.dart';
 import '../widgets/reader_dashboard_sheet.dart';
@@ -55,19 +56,10 @@ class QuranHomeScreen extends StatelessWidget {
           showTabs: false,
           surahs: controller.surahEntries,
           juzs: controller.juzEntries,
-          rukuMarkers: controller.rukuMarkers,
-          hizbMarkers: controller.hizbMarkers,
-          manzilMarkers: controller.manzilMarkers,
-          rubMarkers: controller.rubMarkers,
-          currentPage: controller.currentPageNumber,
-          maxPage: controller.totalPages,
           surahPageResolver: controller.navigationPageForSurahEntry,
           juzPageResolver: controller.navigationPageForJuzEntry,
           surahSearch: controller.searchSurahs,
           juzSearch: controller.searchJuzs,
-          markerSearch: controller.searchMarkers,
-          ayahSearch: controller.searchAyahs,
-          textSearch: controller.searchPages,
         ),
       ),
     );
@@ -195,6 +187,21 @@ class QuranHomeScreen extends StatelessWidget {
       buildReaderPageRoute<int>(
         builder: (context) => QuranAiStudioScreen(controller: controller),
       ),
+    );
+    if (page == null) {
+      return;
+    }
+    await controller.jumpToPage(page);
+    if (context.mounted) {
+      await _openReader(context);
+    }
+  }
+
+  Future<void> _openPageJumpDialog(BuildContext context) async {
+    final page = await showJumpToPageDialog(
+      context,
+      currentPage: controller.currentPageNumber,
+      maxPage: controller.totalPages,
     );
     if (page == null) {
       return;
@@ -401,11 +408,7 @@ class QuranHomeScreen extends StatelessWidget {
                                 icon: Icons.pin_outlined,
                                 title: 'Go to page',
                                 subtitle: 'Open a page directly by number',
-                                onTap: () => _openSearchPage(
-                                  context,
-                                  title: 'Go to page',
-                                  initialTab: 4,
-                                ),
+                                onTap: () => _openPageJumpDialog(context),
                               ),
                               const _TileDivider(),
                               _HomeMenuTile(

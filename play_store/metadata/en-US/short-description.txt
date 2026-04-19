@@ -1,0 +1,1 @@
+Offline dual-page Quran reader with multi-line editions, search, and audio mode.

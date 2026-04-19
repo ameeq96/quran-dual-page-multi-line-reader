@@ -1,4 +1,4 @@
-package com.qurandualpage.multilinereader
+package com.opplexify.quranpakdualpagereader
 
 import com.ryanheise.audioservice.AudioServiceActivity
 

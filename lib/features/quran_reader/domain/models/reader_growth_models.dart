@@ -266,7 +266,7 @@ class ReaderExperienceSettings {
         reducedMotion = false,
         tajweedMode = false,
         recitationSyncEnabled = true,
-        syncMode = ReaderSyncMode.localOnly;
+        syncMode = ReaderSyncMode.cloudReady;
 
   final bool largerTextMode;
   final bool highContrastMode;
@@ -293,6 +293,30 @@ class ReaderExperienceSettings {
       syncMode: syncMode ?? this.syncMode,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is ReaderExperienceSettings &&
+        other.largerTextMode == largerTextMode &&
+        other.highContrastMode == highContrastMode &&
+        other.reducedMotion == reducedMotion &&
+        other.tajweedMode == tajweedMode &&
+        other.recitationSyncEnabled == recitationSyncEnabled &&
+        other.syncMode == syncMode;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        largerTextMode,
+        highContrastMode,
+        reducedMotion,
+        tajweedMode,
+        recitationSyncEnabled,
+        syncMode,
+      );
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{

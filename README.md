@@ -1,4 +1,4 @@
-# Quran Dual Page & Multi-Line Reader
+# Quran Pak Dual Page Reader
 
 A polished Flutter Quran reader built around a landscape dual-page Mushaf spread with switchable 10-line, 13-line, 14-line, 15-line, 16-line, 17-line, and Kanzul Iman scan editions.
 

@@ -18,7 +18,6 @@ class SinglePageReader extends StatelessWidget {
     this.smartHifzRevealed = false,
     this.smartHifzEdition,
     this.smartHifzLineCount,
-    this.pageOffset = 0,
   });
 
   final QuranPage page;
@@ -30,7 +29,6 @@ class SinglePageReader extends StatelessWidget {
   final bool smartHifzRevealed;
   final MushafEdition? smartHifzEdition;
   final int? smartHifzLineCount;
-  final double pageOffset;
 
   @override
   Widget build(BuildContext context) {
@@ -41,12 +39,10 @@ class SinglePageReader extends StatelessWidget {
           assetPath: page.assetPath,
         );
         final fullscreen = settings.fullscreenReading;
-        final horizontalPadding = fullscreen
-            ? 0.0
-            : math.max(2.0, constraints.maxWidth * 0.0045);
-        final verticalPadding = fullscreen
-            ? 0.0
-            : math.max(2.0, constraints.maxHeight * 0.003);
+        final horizontalPadding =
+            fullscreen ? 0.0 : math.max(2.0, constraints.maxWidth * 0.0045);
+        final verticalPadding =
+            fullscreen ? 0.0 : math.max(2.0, constraints.maxHeight * 0.003);
         final availableWidth = math.max(
           0.0,
           constraints.maxWidth - (horizontalPadding * 2),

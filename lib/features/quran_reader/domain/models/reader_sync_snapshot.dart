@@ -5,6 +5,73 @@ import 'reader_growth_models.dart';
 import 'reader_history_entry.dart';
 import 'reader_settings.dart';
 
+class ReaderSyncStreakState {
+  const ReaderSyncStreakState({
+    required this.count,
+    required this.lastDateKey,
+  });
+
+  final int count;
+  final String? lastDateKey;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'count': count,
+      'lastDateKey': lastDateKey,
+    };
+  }
+
+  static ReaderSyncStreakState fromJson(Map<String, dynamic> json) {
+    final rawLastDateKey = (json['lastDateKey'] as String? ?? '').trim();
+    return ReaderSyncStreakState(
+      count: (json['count'] as num? ?? 0).toInt(),
+      lastDateKey: rawLastDateKey.isEmpty ? null : rawLastDateKey,
+    );
+  }
+}
+
+class ReaderSyncAudioState {
+  const ReaderSyncAudioState({
+    required this.chapterId,
+    required this.chapterName,
+    required this.reciterId,
+    required this.reciterName,
+    required this.positionMillis,
+    required this.repeatEnabled,
+  });
+
+  final int? chapterId;
+  final String? chapterName;
+  final int? reciterId;
+  final String? reciterName;
+  final int positionMillis;
+  final bool repeatEnabled;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'chapterId': chapterId,
+      'chapterName': chapterName,
+      'reciterId': reciterId,
+      'reciterName': reciterName,
+      'positionMillis': positionMillis,
+      'repeatEnabled': repeatEnabled,
+    };
+  }
+
+  static ReaderSyncAudioState fromJson(Map<String, dynamic> json) {
+    final rawChapterName = (json['chapterName'] as String? ?? '').trim();
+    final rawReciterName = (json['reciterName'] as String? ?? '').trim();
+    return ReaderSyncAudioState(
+      chapterId: (json['chapterId'] as num?)?.toInt(),
+      chapterName: rawChapterName.isEmpty ? null : rawChapterName,
+      reciterId: (json['reciterId'] as num?)?.toInt(),
+      reciterName: rawReciterName.isEmpty ? null : rawReciterName,
+      positionMillis: (json['positionMillis'] as num? ?? 0).toInt(),
+      repeatEnabled: json['repeatEnabled'] as bool? ?? false,
+    );
+  }
+}
+
 class ReaderSyncSnapshot {
   const ReaderSyncSnapshot({
     required this.deviceId,
@@ -20,6 +87,8 @@ class ReaderSyncSnapshot {
     required this.favoritePages,
     required this.bookmarks,
     required this.hifzReviewEntries,
+    required this.streakState,
+    required this.audioState,
     required this.updatedAtIso,
   });
 
@@ -36,6 +105,8 @@ class ReaderSyncSnapshot {
   final List<int> favoritePages;
   final List<ReaderBookmark> bookmarks;
   final List<ReaderHifzReviewEntry> hifzReviewEntries;
+  final ReaderSyncStreakState streakState;
+  final ReaderSyncAudioState audioState;
   final String updatedAtIso;
 
   Map<String, dynamic> toJson() {
@@ -74,7 +145,10 @@ class ReaderSyncSnapshot {
       'pageNotes': pageNotes.map((key, value) => MapEntry('$key', value)),
       'favoritePages': favoritePages,
       'bookmarks': bookmarks.map((entry) => entry.toJson()).toList(),
-      'hifzReviewEntries': hifzReviewEntries.map((entry) => entry.toJson()).toList(),
+      'hifzReviewEntries':
+          hifzReviewEntries.map((entry) => entry.toJson()).toList(),
+      'readingStreak': streakState.toJson(),
+      'audio': audioState.toJson(),
       'updatedAtIso': updatedAtIso,
     };
   }
@@ -89,6 +163,9 @@ class ReaderSyncSnapshot {
     final aiJson = json['aiSettings'] as Map<String, dynamic>? ?? const {};
     final dailyProgressJson =
         json['dailyProgressState'] as Map<String, dynamic>? ?? const {};
+    final streakJson =
+        json['readingStreak'] as Map<String, dynamic>? ?? const {};
+    final audioJson = json['audio'] as Map<String, dynamic>? ?? const {};
 
     final rawNotes = json['pageNotes'] as Map<String, dynamic>? ?? const {};
     final pageNotes = <int, String>{};
@@ -104,8 +181,8 @@ class ReaderSyncSnapshot {
       deviceId: deviceId,
       lastPageNumber: (json['lastPageNumber'] as num? ?? 1).toInt(),
       settings: ReaderSettings(
-        mushafEdition:
-            MushafEditionX.fromStorageValue(settingsJson['mushafEdition'] as String?),
+        mushafEdition: MushafEditionX.fromStorageValue(
+            settingsJson['mushafEdition'] as String?),
         fullscreenReading: settingsJson['fullscreenReading'] as bool? ?? false,
         showPageNumbers: settingsJson['showPageNumbers'] as bool? ?? true,
         preferImageMode: settingsJson['preferImageMode'] as bool? ?? true,
@@ -115,8 +192,10 @@ class ReaderSyncSnapshot {
             (settingsJson['pageBrightness'] as num? ?? 1.0).toDouble(),
         nightMode: settingsJson['nightMode'] as bool? ?? false,
         pagePresetEnabled: settingsJson['pagePresetEnabled'] as bool? ?? false,
-        pagePreset: PagePresetX.fromStorageValue(settingsJson['pagePreset'] as String?),
-        pageOverlayEnabled: settingsJson['pageOverlayEnabled'] as bool? ?? false,
+        pagePreset:
+            PagePresetX.fromStorageValue(settingsJson['pagePreset'] as String?),
+        pageOverlayEnabled:
+            settingsJson['pageOverlayEnabled'] as bool? ?? false,
         pageReflectionEnabled:
             settingsJson['pageReflectionEnabled'] as bool? ?? true,
         lowMemoryMode: settingsJson['lowMemoryMode'] as bool? ?? false,
@@ -126,10 +205,10 @@ class ReaderSyncSnapshot {
         hifzRevealOnHold: settingsJson['hifzRevealOnHold'] as bool? ?? true,
       ),
       aiSettings: ReaderAiSettings(
-        responseLanguage:
-            AiResponseLanguageX.fromStorageValue(aiJson['responseLanguage'] as String?),
-        responseDepth:
-            AiResponseDepthX.fromStorageValue(aiJson['responseDepth'] as String?),
+        responseLanguage: AiResponseLanguageX.fromStorageValue(
+            aiJson['responseLanguage'] as String?),
+        responseDepth: AiResponseDepthX.fromStorageValue(
+            aiJson['responseDepth'] as String?),
       ),
       readingPlan: ReaderReadingPlan.fromJson(
         json['readingPlan'] as Map<String, dynamic>? ?? const {},
@@ -159,6 +238,8 @@ class ReaderSyncSnapshot {
               .whereType<Map<String, dynamic>>()
               .map(ReaderHifzReviewEntry.fromJson)
               .toList(growable: false),
+      streakState: ReaderSyncStreakState.fromJson(streakJson),
+      audioState: ReaderSyncAudioState.fromJson(audioJson),
       updatedAtIso: json['updatedAtIso'] as String? ?? '',
     );
   }

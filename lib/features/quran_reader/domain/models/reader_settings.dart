@@ -224,4 +224,46 @@ class ReaderSettings {
       hifzRevealOnHold: hifzRevealOnHold ?? this.hifzRevealOnHold,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is ReaderSettings &&
+        other.mushafEdition == mushafEdition &&
+        other.fullscreenReading == fullscreenReading &&
+        other.showPageNumbers == showPageNumbers &&
+        other.preferImageMode == preferImageMode &&
+        other.customBrightnessEnabled == customBrightnessEnabled &&
+        other.pageBrightness == pageBrightness &&
+        other.nightMode == nightMode &&
+        other.pagePresetEnabled == pagePresetEnabled &&
+        other.pagePreset == pagePreset &&
+        other.pageOverlayEnabled == pageOverlayEnabled &&
+        other.pageReflectionEnabled == pageReflectionEnabled &&
+        other.lowMemoryMode == lowMemoryMode &&
+        other.hifzFocusMode == hifzFocusMode &&
+        other.hifzMaskHeightFactor == hifzMaskHeightFactor &&
+        other.hifzRevealOnHold == hifzRevealOnHold;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        mushafEdition,
+        fullscreenReading,
+        showPageNumbers,
+        preferImageMode,
+        customBrightnessEnabled,
+        pageBrightness,
+        nightMode,
+        pagePresetEnabled,
+        pagePreset,
+        pageOverlayEnabled,
+        pageReflectionEnabled,
+        lowMemoryMode,
+        hifzFocusMode,
+        hifzMaskHeightFactor,
+        hifzRevealOnHold,
+      );
 }

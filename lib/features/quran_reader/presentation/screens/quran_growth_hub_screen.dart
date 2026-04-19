@@ -5,7 +5,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../app/app_theme.dart';
-import '../../domain/models/quran_ai_models.dart';
 import '../../domain/models/reader_growth_models.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
@@ -36,7 +35,7 @@ class QuranGrowthHubScreen extends StatelessWidget {
     await file.writeAsString(controller.buildStateBackupJson(), flush: true);
     await Share.shareXFiles(
       <XFile>[XFile(file.path)],
-      subject: 'Quran Dual Page & Multi-Line Reader backup',
+      subject: 'Quran Pak Dual Page Reader backup',
       text:
           'Reader backup export with bookmarks, notes, plan, and hifz tracking.',
     );
@@ -99,7 +98,6 @@ class QuranGrowthHubScreen extends StatelessWidget {
       builder: (context, _) {
         final settings = controller.settings;
         final experience = controller.experienceSettings;
-        final aiSettings = controller.aiSettings;
         final themeData = settings.nightMode
             ? AppTheme.dark(
                 highContrast: experience.highContrastMode,
@@ -747,39 +745,6 @@ class _StatusChip extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _BulletLine extends StatelessWidget {
-  const _BulletLine({
-    required this.text,
-  });
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 7,
-          height: 7,
-          margin: const EdgeInsets.only(top: 7),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ),
-      ],
     );
   }
 }

@@ -1,4 +1,4 @@
-# Quran Dual Page Growth Roadmap
+# Quran Pak Dual Page Reader Growth Roadmap
 
 ## Phase 1: Already Wired in App
 

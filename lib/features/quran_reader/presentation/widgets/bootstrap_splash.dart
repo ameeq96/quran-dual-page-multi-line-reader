@@ -42,8 +42,7 @@ class _BootstrapSplashState extends State<BootstrapSplash>
     final compact = size.width < 420 || size.height < 760;
     final shortHeight = size.height < 700;
     final ultraCompact = size.height < 620;
-    final useDark =
-        widget.nightMode ??
+    final useDark = widget.nightMode ??
         (MediaQuery.platformBrightnessOf(context) == Brightness.dark);
     final effectiveTheme = useDark ? AppTheme.dark() : AppTheme.light();
 
@@ -96,18 +95,14 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                       SafeArea(
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            final outerPadding = ultraCompact
-                                ? 14.0
-                                : (compact ? 18.0 : 24.0);
-                            final innerHorizontal = ultraCompact
-                                ? 18.0
-                                : (compact ? 22.0 : 28.0);
-                            final innerTop = ultraCompact
-                                ? 18.0
-                                : (compact ? 24.0 : 30.0);
-                            final innerBottom = ultraCompact
-                                ? 16.0
-                                : (compact ? 22.0 : 26.0);
+                            final outerPadding =
+                                ultraCompact ? 14.0 : (compact ? 18.0 : 24.0);
+                            final innerHorizontal =
+                                ultraCompact ? 18.0 : (compact ? 22.0 : 28.0);
+                            final innerTop =
+                                ultraCompact ? 18.0 : (compact ? 24.0 : 30.0);
+                            final innerBottom =
+                                ultraCompact ? 16.0 : (compact ? 22.0 : 26.0);
 
                             return SingleChildScrollView(
                               padding: EdgeInsets.all(outerPadding),
@@ -129,7 +124,8 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                           begin: Alignment.topLeft,
                                           end: Alignment.bottomRight,
                                           colors: [
-                                            theme.colorScheme.surface.withOpacity(
+                                            theme.colorScheme.surface
+                                                .withOpacity(
                                               0.96,
                                             ),
                                             theme.colorScheme.surfaceContainer
@@ -143,8 +139,7 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                           BoxShadow(
                                             color: theme.colorScheme.shadow
                                                 .withOpacity(0.12),
-                                            blurRadius:
-                                                compact ? 26 : 36,
+                                            blurRadius: compact ? 26 : 36,
                                             offset: const Offset(0, 18),
                                           ),
                                         ],
@@ -169,16 +164,17 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                                   : (compact ? 18 : 24),
                                             ),
                                             Text(
-                                              'Quran Dual Page & Multi-Line Reader',
+                                              'Quran Pak Dual Page Reader',
                                               textAlign: TextAlign.center,
                                               style: (ultraCompact
-                                                      ? theme.textTheme.titleLarge
+                                                      ? theme
+                                                          .textTheme.titleLarge
                                                       : theme.textTheme
                                                           .headlineSmall)
                                                   ?.copyWith(
-                                                    fontWeight: FontWeight.w900,
-                                                    letterSpacing: -0.7,
-                                                  ),
+                                                fontWeight: FontWeight.w900,
+                                                letterSpacing: -0.7,
+                                              ),
                                             ),
                                             SizedBox(
                                               height: ultraCompact ? 8 : 10,
@@ -187,15 +183,16 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                               'Preparing your Quran library, reading tools, and recitation workspace.',
                                               textAlign: TextAlign.center,
                                               style: (ultraCompact
-                                                      ? theme.textTheme.bodyMedium
-                                                      : theme.textTheme.bodyLarge)
+                                                      ? theme
+                                                          .textTheme.bodyMedium
+                                                      : theme
+                                                          .textTheme.bodyLarge)
                                                   ?.copyWith(
-                                                    color: theme.colorScheme
-                                                        .onSurfaceVariant,
-                                                    height: shortHeight
-                                                        ? 1.35
-                                                        : 1.45,
-                                                  ),
+                                                color: theme.colorScheme
+                                                    .onSurfaceVariant,
+                                                height:
+                                                    shortHeight ? 1.35 : 1.45,
+                                              ),
                                             ),
                                             SizedBox(
                                               height: ultraCompact
@@ -208,8 +205,8 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                               runSpacing: 8,
                                               children: [
                                                 _SplashFeatureChip(
-                                                  icon:
-                                                      Icons.auto_stories_rounded,
+                                                  icon: Icons
+                                                      .auto_stories_rounded,
                                                   label: 'Mushaf editions',
                                                 ),
                                                 _SplashFeatureChip(
@@ -236,8 +233,8 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                                   ? 12
                                                   : (compact ? 14 : 18),
                                             ),
-                                            Row(
-                                              children: const [
+                                            const Row(
+                                              children: [
                                                 ReaderSkeletonBlock(
                                                   width: 18,
                                                   height: 18,
@@ -265,13 +262,12 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                               Container(
                                                 padding:
                                                     const EdgeInsets.symmetric(
-                                                      horizontal: 14,
-                                                      vertical: 10,
-                                                    ),
+                                                  horizontal: 14,
+                                                  vertical: 10,
+                                                ),
                                                 decoration: BoxDecoration(
                                                   color: theme
-                                                      .colorScheme
-                                                      .surface
+                                                      .colorScheme.surface
                                                       .withOpacity(0.6),
                                                   borderRadius:
                                                       BorderRadius.circular(18),

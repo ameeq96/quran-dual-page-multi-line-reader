@@ -5,9 +5,10 @@ import 'package:my_flutter_app/features/quran_reader/domain/models/quran_page.da
 import 'package:my_flutter_app/features/quran_reader/domain/models/quran_spread.dart';
 import 'package:my_flutter_app/features/quran_reader/domain/models/reader_settings.dart';
 import 'package:my_flutter_app/features/quran_reader/presentation/widgets/dual_page_spread.dart';
+import 'package:my_flutter_app/features/quran_reader/presentation/widgets/reader_skeleton.dart';
 
 void main() {
-  testWidgets('renders a dual-page Mushaf spread with placeholders',
+  testWidgets('renders skeleton placeholders for a dual-page Mushaf spread',
       (WidgetTester tester) async {
     const spread = QuranSpread(
       index: 0,
@@ -34,8 +35,6 @@ void main() {
       ),
     );
 
-    expect(find.text('Placeholder'), findsNWidgets(2));
-    expect(find.text('1'), findsOneWidget);
-    expect(find.text('2'), findsOneWidget);
+    expect(find.byType(ReaderSkeletonPage), findsNWidgets(2));
   });
 }

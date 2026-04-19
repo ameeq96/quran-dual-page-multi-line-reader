@@ -7,6 +7,7 @@ import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
 import '../widgets/bootstrap_splash.dart';
 import '../widgets/dual_page_spread.dart';
+import '../widgets/jump_to_page_dialog.dart';
 import '../widgets/kanzul_iman_study_sheet.dart';
 import '../widgets/reader_audio_sheet.dart';
 import '../widgets/reader_app_bar.dart';
@@ -16,6 +17,7 @@ import '../widgets/reader_dashboard_sheet.dart';
 import '../widgets/reader_insights_sheet.dart';
 import '../widgets/reader_motion.dart';
 import '../widgets/reader_page_strip_sheet.dart';
+import '../widgets/reader_zoom_viewport.dart';
 import '../widgets/quran_page_image_provider.dart';
 import '../widgets/single_page_reader.dart';
 import 'quran_ai_studio_screen.dart';
@@ -64,6 +66,8 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
   bool? _lastPrefetchedLowMemoryMode;
   bool? _lastPrefetchedPreferImageMode;
   bool _initialActionHandled = false;
+  final ValueNotifier<bool> _portraitZoomNotifier = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _landscapeZoomNotifier = ValueNotifier<bool>(false);
 
   @override
   void initState() {
@@ -163,9 +167,25 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     widget.controller.pageListenable.removeListener(_syncViewControllers);
     widget.controller.settingsListenable.removeListener(_syncViewControllers);
     _prefetchTimer?.cancel();
+    _portraitZoomNotifier.dispose();
+    _landscapeZoomNotifier.dispose();
     _spreadController.dispose();
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _setPortraitZoomActive(bool active) {
+    if (_portraitZoomNotifier.value == active) {
+      return;
+    }
+    _portraitZoomNotifier.value = active;
+  }
+
+  void _setLandscapeZoomActive(bool active) {
+    if (_landscapeZoomNotifier.value == active) {
+      return;
+    }
+    _landscapeZoomNotifier.value = active;
   }
 
   Future<void> _runInitialActionIfNeeded() async {
@@ -185,7 +205,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
         await _openSearchSheet(initialTab: 1);
         return;
       case QuranReaderInitialAction.openPageJump:
-        await _openSearchSheet(initialTab: 4);
+        await _openPageJumpDialog();
         return;
       case QuranReaderInitialAction.openBookmarks:
         await _openBookmarksSheet();
@@ -228,37 +248,38 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
   }
 
   Future<void> _openSearchSheet({int initialTab = 0}) async {
+    final normalizedInitialTab =
+        initialTab < 0 ? 0 : (initialTab > 1 ? 1 : initialTab);
     final titles = <int, String>{
       0: 'Surah Index',
       1: 'Juz Index',
-      2: 'Index',
-      3: 'Ayah Search',
-      4: 'Go to page',
-      5: 'Text Search',
     };
     final page = await Navigator.of(context).push<int>(
       buildReaderPageRoute<int>(
         builder: (context) => QuranSearchScreen(
-          title: titles[initialTab] ?? 'Search',
-          initialTab: initialTab,
+          title: titles[normalizedInitialTab] ?? 'Search',
+          initialTab: normalizedInitialTab,
           nightMode: widget.controller.settings.nightMode,
           surahs: widget.controller.surahEntries,
           juzs: widget.controller.juzEntries,
-          rukuMarkers: widget.controller.rukuMarkers,
-          hizbMarkers: widget.controller.hizbMarkers,
-          manzilMarkers: widget.controller.manzilMarkers,
-          rubMarkers: widget.controller.rubMarkers,
-          currentPage: widget.controller.currentPageNumber,
-          maxPage: widget.controller.totalPages,
           surahPageResolver: widget.controller.navigationPageForSurahEntry,
           juzPageResolver: widget.controller.navigationPageForJuzEntry,
           surahSearch: widget.controller.searchSurahs,
           juzSearch: widget.controller.searchJuzs,
-          markerSearch: widget.controller.searchMarkers,
-          ayahSearch: widget.controller.searchAyahs,
-          textSearch: widget.controller.searchPages,
         ),
       ),
+    );
+    if (!mounted || page == null) {
+      return;
+    }
+    await widget.controller.jumpToPage(page);
+  }
+
+  Future<void> _openPageJumpDialog() async {
+    final page = await showJumpToPageDialog(
+      context,
+      currentPage: widget.controller.currentPageNumber,
+      maxPage: widget.controller.totalPages,
     );
     if (!mounted || page == null) {
       return;
@@ -431,6 +452,12 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     final currentPageNumber = widget.controller.currentPageNumber;
     final lowMemoryMode = widget.controller.settings.lowMemoryMode;
     final preferImageMode = widget.controller.settings.preferImageMode;
+    if (!preferImageMode || !widget.controller.hasImageAssets) {
+      _lastPrefetchedPageNumber = null;
+      _lastPrefetchedLowMemoryMode = null;
+      _lastPrefetchedPreferImageMode = preferImageMode;
+      return;
+    }
     final mediaQuery = MediaQuery.maybeOf(context);
     final viewportWidth = mediaQuery?.size.width ?? 1080;
     final devicePixelRatio = mediaQuery?.devicePixelRatio ?? 1.0;
@@ -517,171 +544,175 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                   child: Builder(
                     builder: (context) {
                       final theme = Theme.of(context);
-
-                      return AnimatedBuilder(
-                        animation: widget.controller.controlsListenable,
+                      final zoomNotifier = isPortrait
+                          ? _portraitZoomNotifier
+                          : _landscapeZoomNotifier;
+                      final readerViewport = AnimatedBuilder(
+                        animation: widget.controller.viewportListenable,
                         builder: (context, _) {
-                          final showControls =
-                              widget.controller.controlsVisible;
-                          final fullscreenReading =
-                              widget.controller.settings.fullscreenReading;
-                          final showAppBar = showControls ||
-                              (isPortrait && !fullscreenReading);
-                          final showBottomDock =
-                              isPortrait && !showControls && !fullscreenReading;
-                          final bodyTopPadding = showAppBar
-                              ? (isPortrait
-                                  ? (compactPortrait ? 2.0 : 4.0)
-                                  : 2.0)
-                              : 0.0;
-                          final bodyBottomPadding = showBottomDock
-                              ? (compactPortrait ? 74.0 : 84.0)
-                              : (fullscreenReading ? 0.0 : 6.0);
+                          return isPortrait
+                              ? _PortraitPageReader(
+                                  controller: _pageController,
+                                  readerController: widget.controller,
+                                  onZoomChanged: _setPortraitZoomActive,
+                                  onPageChanged: (index) {
+                                    _lastKnownPageViewIndex = index;
+                                    widget.controller.setCurrentPageNumber(
+                                      index + 1,
+                                    );
+                                  },
+                                )
+                              : _LandscapeSpreadReader(
+                                  controller: _spreadController,
+                                  readerController: widget.controller,
+                                  onZoomChanged: _setLandscapeZoomActive,
+                                  onPageChanged: (index) {
+                                    _lastKnownSpreadIndex = index;
+                                    widget.controller.setCurrentSpreadIndex(
+                                      index,
+                                    );
+                                  },
+                                );
+                        },
+                      );
 
-                          return Scaffold(
-                            extendBodyBehindAppBar: false,
-                            appBar: showAppBar
-                                ? ReaderAppBar(
-                                    controller: widget.controller,
-                                    portraitMode: isPortrait,
-                                    onOpenSearch: _openSearchSheet,
-                                    onOpenDashboard: _openDashboardSheet,
-                                    onOpenGrowthHub: _openGrowthHub,
-                                    onOpenInsights: _openInsightsSheet,
-                                    onOpenAudio: _openAudioSheet,
-                                    onOpenAiStudio: _openAiStudio,
-                                    onOpenPageStrip: _openPageStripSheet,
-                                    onOpenCompare: _openCompareSheet,
-                                    onOpenKanzulStudy: _openKanzulStudySheet,
-                                    onOpenSettings: _openSettingsSheet,
-                                  )
-                                : null,
-                            body: DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    theme.scaffoldBackgroundColor,
-                                    theme.colorScheme.surface.withOpacity(0.98),
-                                    theme.colorScheme.surface,
-                                  ],
-                                ),
-                              ),
-                              child: Stack(
-                                children: [
-                                  Positioned.fill(
-                                    child: _ReaderBackdrop(
-                                      lowMemoryMode: settings.lowMemoryMode,
-                                    ),
-                                  ),
-                                  SafeArea(
-                                    top: !showAppBar,
-                                    bottom: false,
-                                    child: Stack(
-                                      children: [
-                                        AnimatedPadding(
-                                          duration:
-                                              const Duration(milliseconds: 220),
-                                          curve: Curves.easeOutCubic,
-                                          padding: EdgeInsets.fromLTRB(
-                                            0,
-                                            bodyTopPadding,
-                                            0,
-                                            bodyBottomPadding,
-                                          ),
-                                          child: AnimatedBuilder(
-                                            animation: Listenable.merge(
-                                              <Listenable>[
-                                                widget
-                                                    .controller.pageListenable,
-                                                widget.controller
-                                                    .viewportListenable,
-                                              ],
-                                            ),
-                                            builder: (context, _) {
-                                              return isPortrait
-                                                  ? _PortraitPageReader(
-                                                      controller:
-                                                          _pageController,
-                                                      readerController:
-                                                          widget.controller,
-                                                      lastKnownPageViewIndex:
-                                                          _lastKnownPageViewIndex,
-                                                      onPageChanged: (index) {
-                                                        _lastKnownPageViewIndex =
-                                                            index;
-                                                        widget.controller
-                                                            .setCurrentPageNumber(
-                                                          index + 1,
-                                                        );
-                                                      },
-                                                    )
-                                                  : _LandscapeSpreadReader(
-                                                      controller:
-                                                          _spreadController,
-                                                      readerController:
-                                                          widget.controller,
-                                                      lastKnownSpreadIndex:
-                                                          _lastKnownSpreadIndex,
-                                                      onPageChanged: (index) {
-                                                        _lastKnownSpreadIndex =
-                                                            index;
-                                                        widget.controller
-                                                            .setCurrentSpreadIndex(
-                                                          index,
-                                                        );
-                                                      },
-                                                    );
-                                            },
-                                          ),
-                                        ),
-                                        Positioned.fill(
-                                          child: IgnorePointer(
-                                            ignoring: widget.controller.settings
-                                                .hifzFocusMode,
-                                            child: GestureDetector(
-                                              behavior:
-                                                  HitTestBehavior.translucent,
-                                              onTap: widget.controller
-                                                  .toggleControlsVisibility,
-                                            ),
-                                          ),
-                                        ),
-                                        Positioned(
-                                          left: 0,
-                                          right: 0,
-                                          bottom: 0,
-                                          child: IgnorePointer(
-                                            ignoring: !showBottomDock,
-                                            child: AnimatedSlide(
-                                              duration: const Duration(
-                                                  milliseconds: 220),
-                                              curve: Curves.easeOutCubic,
-                                              offset: showBottomDock
-                                                  ? Offset.zero
-                                                  : const Offset(0, 0.2),
-                                              child: AnimatedOpacity(
-                                                duration: const Duration(
-                                                    milliseconds: 180),
-                                                opacity: showBottomDock ? 1 : 0,
-                                                child: ReaderBottomDock(
-                                                  controller: widget.controller,
-                                                  onOpenAudio: _openAudioSheet,
-                                                  onOpenInsights:
-                                                      _openInsightsSheet,
-                                                  compact: compactPortrait,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
+                      return ValueListenableBuilder<bool>(
+                        valueListenable: zoomNotifier,
+                        child: readerViewport,
+                        builder: (context, zoomActive, readerViewport) {
+                          return AnimatedBuilder(
+                            animation: widget.controller.controlsListenable,
+                            child: readerViewport,
+                            builder: (context, readerViewport) {
+                              final showControls =
+                                  widget.controller.controlsVisible;
+                              final fullscreenReading =
+                                  widget.controller.settings.fullscreenReading;
+                              final showAppBar = showControls ||
+                                  (isPortrait && !fullscreenReading);
+                              final showBottomDock = isPortrait &&
+                                  !showControls &&
+                                  !fullscreenReading &&
+                                  !zoomActive;
+                              final bodyTopPadding = showAppBar
+                                  ? (isPortrait
+                                      ? (compactPortrait ? 2.0 : 4.0)
+                                      : 2.0)
+                                  : 0.0;
+                              final bodyBottomPadding = showBottomDock
+                                  ? (compactPortrait ? 74.0 : 84.0)
+                                  : (fullscreenReading ? 0.0 : 6.0);
+
+                              return Scaffold(
+                                extendBodyBehindAppBar: false,
+                                appBar: showAppBar
+                                    ? ReaderAppBar(
+                                        controller: widget.controller,
+                                        portraitMode: isPortrait,
+                                        onOpenSearch: _openSearchSheet,
+                                        onOpenDashboard: _openDashboardSheet,
+                                        onOpenGrowthHub: _openGrowthHub,
+                                        onOpenInsights: _openInsightsSheet,
+                                        onOpenAudio: _openAudioSheet,
+                                        onOpenAiStudio: _openAiStudio,
+                                        onOpenPageStrip: _openPageStripSheet,
+                                        onOpenCompare: _openCompareSheet,
+                                        onOpenKanzulStudy:
+                                            _openKanzulStudySheet,
+                                        onOpenSettings: _openSettingsSheet,
+                                      )
+                                    : null,
+                                body: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                      colors: [
+                                        theme.scaffoldBackgroundColor,
+                                        theme.colorScheme.surface
+                                            .withOpacity(0.98),
+                                        theme.colorScheme.surface,
                                       ],
                                     ),
                                   ),
-                                ],
-                              ),
-                            ),
+                                  child: Stack(
+                                    children: [
+                                      Positioned.fill(
+                                        child: _ReaderBackdrop(
+                                          lowMemoryMode: settings.lowMemoryMode,
+                                        ),
+                                      ),
+                                      SafeArea(
+                                        top: !showAppBar,
+                                        bottom: false,
+                                        child: Stack(
+                                          children: [
+                                            AnimatedPadding(
+                                              duration: const Duration(
+                                                  milliseconds: 220),
+                                              curve: Curves.easeOutCubic,
+                                              padding: EdgeInsets.fromLTRB(
+                                                0,
+                                                bodyTopPadding,
+                                                0,
+                                                bodyBottomPadding,
+                                              ),
+                                              child: readerViewport,
+                                            ),
+                                            Positioned.fill(
+                                              child: IgnorePointer(
+                                                ignoring: widget
+                                                        .controller
+                                                        .settings
+                                                        .hifzFocusMode ||
+                                                    zoomActive,
+                                                child: GestureDetector(
+                                                  behavior: HitTestBehavior
+                                                      .translucent,
+                                                  onTap: widget.controller
+                                                      .toggleControlsVisibility,
+                                                ),
+                                              ),
+                                            ),
+                                            Positioned(
+                                              left: 0,
+                                              right: 0,
+                                              bottom: 0,
+                                              child: IgnorePointer(
+                                                ignoring: !showBottomDock,
+                                                child: AnimatedSlide(
+                                                  duration: const Duration(
+                                                      milliseconds: 220),
+                                                  curve: Curves.easeOutCubic,
+                                                  offset: showBottomDock
+                                                      ? Offset.zero
+                                                      : const Offset(0, 0.2),
+                                                  child: AnimatedOpacity(
+                                                    duration: const Duration(
+                                                        milliseconds: 180),
+                                                    opacity:
+                                                        showBottomDock ? 1 : 0,
+                                                    child: ReaderBottomDock(
+                                                      controller:
+                                                          widget.controller,
+                                                      onOpenAudio:
+                                                          _openAudioSheet,
+                                                      onOpenInsights:
+                                                          _openInsightsSheet,
+                                                      compact: compactPortrait,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
                           );
                         },
                       );
@@ -701,18 +732,17 @@ class _LandscapeSpreadReader extends StatelessWidget {
   const _LandscapeSpreadReader({
     required this.controller,
     required this.readerController,
-    required this.lastKnownSpreadIndex,
+    required this.onZoomChanged,
     required this.onPageChanged,
   });
 
   final PageController controller;
   final QuranReaderController readerController;
-  final int lastKnownSpreadIndex;
+  final ValueChanged<bool> onZoomChanged;
   final ValueChanged<int> onPageChanged;
 
   @override
   Widget build(BuildContext context) {
-    final viewportWidth = MediaQuery.of(context).size.width;
     return RepaintBoundary(
       child: PageView.builder(
         controller: controller,
@@ -723,52 +753,57 @@ class _LandscapeSpreadReader extends StatelessWidget {
         onPageChanged: onPageChanged,
         itemBuilder: (context, index) {
           final spread = readerController.spreadAt(index);
-          return DualPageSpread(
-            spread: spread,
-            settings: readerController.settings,
-            leftSmartHifzHiddenLines:
-                readerController.smartHifzHiddenLinesForPage(
-              spread.leftPage.number,
+          return ReaderZoomViewport(
+            key: ValueKey('spread-$index'),
+            onZoomChanged: onZoomChanged,
+            child: DualPageSpread(
+              spread: spread,
+              settings: readerController.settings,
+              leftSmartHifzHiddenLines:
+                  readerController.smartHifzHiddenLinesForPage(
+                spread.leftPage.number,
+              ),
+              rightSmartHifzHiddenLines:
+                  readerController.smartHifzHiddenLinesForPage(
+                spread.rightPage.number,
+              ),
+              leftSmartHifzManualMaskAnchors:
+                  readerController.smartHifzManualMaskAnchorsForPage(
+                spread.leftPage.number,
+              ),
+              rightSmartHifzManualMaskAnchors:
+                  readerController.smartHifzManualMaskAnchorsForPage(
+                spread.rightPage.number,
+              ),
+              onLeftSmartHifzManualMaskAnchorChanged: readerController
+                      .smartHifzAppliesToPage(spread.leftPage.number)
+                  ? readerController.updateSmartHifzManualMaskAnchor
+                  : null,
+              onRightSmartHifzManualMaskAnchorChanged: readerController
+                      .smartHifzAppliesToPage(spread.rightPage.number)
+                  ? readerController.updateSmartHifzManualMaskAnchor
+                  : null,
+              leftSmartHifzRevealed: readerController.smartHifzRevealedForPage(
+                spread.leftPage.number,
+              ),
+              rightSmartHifzRevealed: readerController.smartHifzRevealedForPage(
+                spread.rightPage.number,
+              ),
+              leftSmartHifzEdition: readerController.smartHifzEditionForPage(
+                spread.leftPage.number,
+              ),
+              rightSmartHifzEdition: readerController.smartHifzEditionForPage(
+                spread.rightPage.number,
+              ),
+              leftSmartHifzLineCount:
+                  readerController.smartHifzLineCountForPage(
+                spread.leftPage.number,
+              ),
+              rightSmartHifzLineCount:
+                  readerController.smartHifzLineCountForPage(
+                spread.rightPage.number,
+              ),
             ),
-            rightSmartHifzHiddenLines:
-                readerController.smartHifzHiddenLinesForPage(
-              spread.rightPage.number,
-            ),
-            leftSmartHifzManualMaskAnchors:
-                readerController.smartHifzManualMaskAnchorsForPage(
-              spread.leftPage.number,
-            ),
-            rightSmartHifzManualMaskAnchors:
-                readerController.smartHifzManualMaskAnchorsForPage(
-              spread.rightPage.number,
-            ),
-            onLeftSmartHifzManualMaskAnchorChanged:
-                readerController.smartHifzAppliesToPage(spread.leftPage.number)
-                    ? readerController.updateSmartHifzManualMaskAnchor
-                    : null,
-            onRightSmartHifzManualMaskAnchorChanged:
-                readerController.smartHifzAppliesToPage(spread.rightPage.number)
-                    ? readerController.updateSmartHifzManualMaskAnchor
-                    : null,
-            leftSmartHifzRevealed: readerController.smartHifzRevealedForPage(
-              spread.leftPage.number,
-            ),
-            rightSmartHifzRevealed: readerController.smartHifzRevealedForPage(
-              spread.rightPage.number,
-            ),
-            leftSmartHifzEdition: readerController.smartHifzEditionForPage(
-              spread.leftPage.number,
-            ),
-            rightSmartHifzEdition: readerController.smartHifzEditionForPage(
-              spread.rightPage.number,
-            ),
-            leftSmartHifzLineCount: readerController.smartHifzLineCountForPage(
-              spread.leftPage.number,
-            ),
-            rightSmartHifzLineCount: readerController.smartHifzLineCountForPage(
-              spread.rightPage.number,
-            ),
-            spreadOffset: index - lastKnownSpreadIndex.toDouble(),
           );
         },
       ),
@@ -780,18 +815,17 @@ class _PortraitPageReader extends StatelessWidget {
   const _PortraitPageReader({
     required this.controller,
     required this.readerController,
-    required this.lastKnownPageViewIndex,
+    required this.onZoomChanged,
     required this.onPageChanged,
   });
 
   final PageController controller;
   final QuranReaderController readerController;
-  final int lastKnownPageViewIndex;
+  final ValueChanged<bool> onZoomChanged;
   final ValueChanged<int> onPageChanged;
 
   @override
   Widget build(BuildContext context) {
-    final viewportWidth = MediaQuery.of(context).size.width;
     return RepaintBoundary(
       child: PageView.builder(
         controller: controller,
@@ -805,24 +839,27 @@ class _PortraitPageReader extends StatelessWidget {
             index + 1,
             isLeftPage: false,
           );
-          return SinglePageReader(
-            page: page,
-            settings: readerController.settings,
-            smartHifzHiddenLines:
-                readerController.smartHifzHiddenLinesForPage(page.number),
-            smartHifzManualMaskAnchors:
-                readerController.smartHifzManualMaskAnchorsForPage(page.number),
-            onSmartHifzManualMaskAnchorChanged:
-                readerController.smartHifzAppliesToPage(page.number)
-                    ? readerController.updateSmartHifzManualMaskAnchor
-                    : null,
-            smartHifzRevealed:
-                readerController.smartHifzRevealedForPage(page.number),
-            smartHifzEdition:
-                readerController.smartHifzEditionForPage(page.number),
-            smartHifzLineCount:
-                readerController.smartHifzLineCountForPage(page.number),
-            pageOffset: index - lastKnownPageViewIndex.toDouble(),
+          return ReaderZoomViewport(
+            key: ValueKey('page-$index'),
+            onZoomChanged: onZoomChanged,
+            child: SinglePageReader(
+              page: page,
+              settings: readerController.settings,
+              smartHifzHiddenLines:
+                  readerController.smartHifzHiddenLinesForPage(page.number),
+              smartHifzManualMaskAnchors: readerController
+                  .smartHifzManualMaskAnchorsForPage(page.number),
+              onSmartHifzManualMaskAnchorChanged:
+                  readerController.smartHifzAppliesToPage(page.number)
+                      ? readerController.updateSmartHifzManualMaskAnchor
+                      : null,
+              smartHifzRevealed:
+                  readerController.smartHifzRevealedForPage(page.number),
+              smartHifzEdition:
+                  readerController.smartHifzEditionForPage(page.number),
+              smartHifzLineCount:
+                  readerController.smartHifzLineCountForPage(page.number),
+            ),
           );
         },
       ),

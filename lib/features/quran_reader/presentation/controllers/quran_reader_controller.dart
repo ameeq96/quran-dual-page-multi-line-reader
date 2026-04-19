@@ -265,7 +265,7 @@ class QuranReaderController extends ChangeNotifier {
   String get appDisplayTitle =>
       _adminConfig.setting('app_title')?.trim().isNotEmpty == true
           ? _adminConfig.setting('app_title')!.trim()
-          : 'Quran Dual Page & Multi-Line Reader';
+          : 'Quran Pak Dual Page Reader';
   String get homeHeroTitle =>
       _adminConfig.setting('home_hero_title')?.trim().isNotEmpty == true
           ? _adminConfig.setting('home_hero_title')!.trim()
@@ -643,13 +643,6 @@ class QuranReaderController extends ChangeNotifier {
       final favoritePagesFuture = _repository.loadFavoritePages();
       final bookmarksFuture = _repository.loadBookmarks();
       final hifzRevisionEntriesFuture = _repository.loadHifzRevisionEntries();
-      final preferredReciterIdFuture = _repository.loadPreferredReciterId();
-      final audioChapterIdFuture = _repository.loadAudioChapterId();
-      final audioPositionMillisFuture = _repository.loadAudioPositionMillis();
-      final audioRepeatEnabledFuture = _repository.loadAudioRepeatEnabled();
-      final readingStreakCountFuture = _repository.loadReadingStreakCount();
-      final readingStreakLastDateFuture =
-          _repository.loadReadingStreakLastDate();
 
       _syncClientId = await syncClientIdFuture;
       _settings = launchState.settings;
@@ -658,7 +651,7 @@ class QuranReaderController extends ChangeNotifier {
       _aiSettings = await aiSettingsFuture;
       _syncCurrentAiSettingsWithAdminConfig();
       _aiSettingsNotifier.value = _aiSettings;
-      _repository.setMushafEdition(_settings.mushafEdition);
+      await _repository.setMushafEdition(_settings.mushafEdition);
       await _refreshOfflinePackAvailability();
       _currentPageNumber = launchState.initialPageNumber;
       _pageNotifier.value = _currentPageNumber;
@@ -669,6 +662,13 @@ class QuranReaderController extends ChangeNotifier {
       _dailyProgressState = await dailyProgressStateFuture;
       _readingPlan = await readingPlanFuture;
       _experienceSettings = await experienceSettingsFuture;
+      if (_experienceSettings.syncMode == ReaderSyncMode.localOnly &&
+          adminSyncBaseUrl.trim().isNotEmpty) {
+        _experienceSettings = _experienceSettings.copyWith(
+          syncMode: ReaderSyncMode.cloudReady,
+        );
+        await _repository.saveExperienceSettings(_experienceSettings);
+      }
       _experienceNotifier.value = _experienceSettings;
       _readingHistory = await readingHistoryFuture;
       _pageNotes = await pageNotesFuture;
@@ -677,13 +677,13 @@ class QuranReaderController extends ChangeNotifier {
       _hifzReviewEntries = await hifzRevisionEntriesFuture;
       _rebuildContentCaches();
       await _hydrateFromCloudIfNeeded();
-      preferredReciterId = await preferredReciterIdFuture;
-      final audioChapterId = await audioChapterIdFuture;
-      _savedAudioPositionMillis = await audioPositionMillisFuture;
-      final repeatEnabled = await audioRepeatEnabledFuture;
-      _readingStreakCount = await readingStreakCountFuture;
-      _readingStreakLastDate = await readingStreakLastDateFuture;
-      _applyAdminEditionVisibilityRules();
+      preferredReciterId = await _repository.loadPreferredReciterId();
+      final audioChapterId = await _repository.loadAudioChapterId();
+      _savedAudioPositionMillis = await _repository.loadAudioPositionMillis();
+      final repeatEnabled = await _repository.loadAudioRepeatEnabled();
+      _readingStreakCount = await _repository.loadReadingStreakCount();
+      _readingStreakLastDate = await _repository.loadReadingStreakLastDate();
+      await _applyAdminEditionVisibilityRules();
       _reciters = _audioService.fallbackReciters;
       final selectedReciter = _resolveSelectedReciter(preferredReciterId);
       _audioState = _audioState.copyWith(
@@ -704,6 +704,7 @@ class QuranReaderController extends ChangeNotifier {
       } catch (_) {}
       await SystemUiService.setFullscreen(_settings.fullscreenReading);
       unawaited(_recordCurrentPage());
+      _scheduleCloudSyncPush();
     } finally {
       _isLoading = false;
       _loadingNotifier.value = false;
@@ -746,6 +747,19 @@ class QuranReaderController extends ChangeNotifier {
     );
   }
 
+  QuranPage pageForCurrentReferenceInEdition(
+    MushafEdition edition, {
+    bool isLeftPage = false,
+  }) {
+    return _repository.pageForCurrentReferenceInEdition(
+      _currentPageNumber,
+      sourceEdition: _settings.mushafEdition,
+      targetEdition: edition,
+      preferImageMode: _settings.preferImageMode,
+      isLeftPage: isLeftPage,
+    );
+  }
+
   int navigationPageForStandardPageInEdition(
     int standardPage, {
     required MushafEdition edition,
@@ -753,6 +767,15 @@ class QuranReaderController extends ChangeNotifier {
     return _repository.navigationPageForStandardPageInEdition(
       standardPage,
       edition: edition,
+    );
+  }
+
+  int navigationPageForCurrentReferenceInEdition(MushafEdition edition) {
+    return _repository.navigationPageForCurrentReferenceInEdition(
+      _currentPageNumber,
+      sourceEdition: _settings.mushafEdition,
+      targetEdition: edition,
+      preferImageMode: _settings.preferImageMode,
     );
   }
 
@@ -807,18 +830,24 @@ class QuranReaderController extends ChangeNotifier {
     if (isAiLanguageManagedByAdmin) {
       return;
     }
-    _aiSettings = _aiSettings.copyWith(responseLanguage: language);
-    _publishAiSettings();
-    await _preferences.saveAiSettings(_aiSettings);
+    if (_aiSettings.responseLanguage == language) {
+      return;
+    }
+    await _commitAiSettingsUpdate(
+      _aiSettings.copyWith(responseLanguage: language),
+    );
   }
 
   Future<void> setAiResponseDepth(AiResponseDepth depth) async {
     if (isAiDepthManagedByAdmin) {
       return;
     }
-    _aiSettings = _aiSettings.copyWith(responseDepth: depth);
-    _publishAiSettings();
-    await _preferences.saveAiSettings(_aiSettings);
+    if (_aiSettings.responseDepth == depth) {
+      return;
+    }
+    await _commitAiSettingsUpdate(
+      _aiSettings.copyWith(responseDepth: depth),
+    );
   }
 
   Future<void> setReadingPlanPreset(ReadingGoalPreset preset) async {
@@ -902,42 +931,57 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> setLargerTextMode(bool enabled) async {
-    _experienceSettings = _experienceSettings.copyWith(largerTextMode: enabled);
-    _publishExperienceSettings();
-    await _repository.saveExperienceSettings(_experienceSettings);
+    if (_experienceSettings.largerTextMode == enabled) {
+      return;
+    }
+    await _commitExperienceSettingsUpdate(
+      _experienceSettings.copyWith(largerTextMode: enabled),
+    );
   }
 
   Future<void> setHighContrastMode(bool enabled) async {
-    _experienceSettings =
-        _experienceSettings.copyWith(highContrastMode: enabled);
-    _publishExperienceSettings();
-    await _repository.saveExperienceSettings(_experienceSettings);
+    if (_experienceSettings.highContrastMode == enabled) {
+      return;
+    }
+    await _commitExperienceSettingsUpdate(
+      _experienceSettings.copyWith(highContrastMode: enabled),
+    );
   }
 
   Future<void> setReducedMotion(bool enabled) async {
-    _experienceSettings = _experienceSettings.copyWith(reducedMotion: enabled);
-    _publishExperienceSettings();
-    await _repository.saveExperienceSettings(_experienceSettings);
+    if (_experienceSettings.reducedMotion == enabled) {
+      return;
+    }
+    await _commitExperienceSettingsUpdate(
+      _experienceSettings.copyWith(reducedMotion: enabled),
+    );
   }
 
   Future<void> setTajweedMode(bool enabled) async {
-    _experienceSettings = _experienceSettings.copyWith(tajweedMode: enabled);
-    _publishExperienceSettings();
-    await _repository.saveExperienceSettings(_experienceSettings);
+    if (_experienceSettings.tajweedMode == enabled) {
+      return;
+    }
+    await _commitExperienceSettingsUpdate(
+      _experienceSettings.copyWith(tajweedMode: enabled),
+    );
   }
 
   Future<void> setRecitationSyncEnabled(bool enabled) async {
-    _experienceSettings = _experienceSettings.copyWith(
-      recitationSyncEnabled: enabled,
+    if (_experienceSettings.recitationSyncEnabled == enabled) {
+      return;
+    }
+    await _commitExperienceSettingsUpdate(
+      _experienceSettings.copyWith(recitationSyncEnabled: enabled),
     );
-    _publishExperienceSettings();
-    await _repository.saveExperienceSettings(_experienceSettings);
   }
 
   Future<void> setSyncMode(ReaderSyncMode mode) async {
-    _experienceSettings = _experienceSettings.copyWith(syncMode: mode);
-    _publishExperienceSettings();
-    await _repository.saveExperienceSettings(_experienceSettings);
+    if (_experienceSettings.syncMode == mode) {
+      return;
+    }
+    await _commitExperienceSettingsUpdate(
+      _experienceSettings.copyWith(syncMode: mode),
+    );
     if (mode == ReaderSyncMode.cloudReady) {
       await _hydrateFromCloudIfNeeded();
       _scheduleCloudSyncPush();
@@ -1064,98 +1108,125 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> toggleFullscreen(bool enabled) async {
-    _settings = _settings.copyWith(fullscreenReading: enabled);
+    if (_settings.fullscreenReading == enabled) {
+      _scheduleControlsAutoHide();
+      return;
+    }
     _controlsVisible = !enabled || _controlsVisible;
-    _publishSettings();
-    _publishControlsVisibility();
-    notifyListeners();
-    await _persistSettings();
+    await _commitSettingsUpdate(
+      _settings.copyWith(fullscreenReading: enabled),
+      publishControlsVisibility: true,
+    );
     await SystemUiService.setFullscreen(enabled);
     _scheduleControlsAutoHide();
   }
 
   Future<void> togglePageNumbers(bool enabled) async {
-    _settings = _settings.copyWith(showPageNumbers: enabled);
-    _publishSettings();
-    notifyListeners();
-    await _persistSettings();
+    if (_settings.showPageNumbers == enabled) {
+      return;
+    }
+    await _commitSettingsUpdate(
+      _settings.copyWith(showPageNumbers: enabled),
+    );
   }
 
   Future<void> toggleCustomBrightness(bool enabled) async {
-    _settings = _settings.copyWith(customBrightnessEnabled: enabled);
-    _publishSettings();
-    notifyListeners();
-    await _persistSettings();
+    if (_settings.customBrightnessEnabled == enabled) {
+      return;
+    }
+    await _commitSettingsUpdate(
+      _settings.copyWith(customBrightnessEnabled: enabled),
+    );
   }
 
   Future<void> setPageBrightness(double value) async {
-    _settings = _settings.copyWith(pageBrightness: value);
-    _publishSettings();
-    notifyListeners();
-    await _persistSettings();
+    if ((_settings.pageBrightness - value).abs() < 0.0005) {
+      return;
+    }
+    await _commitSettingsUpdate(
+      _settings.copyWith(pageBrightness: value),
+    );
   }
 
   Future<void> toggleNightMode(bool enabled) async {
-    _settings = _settings.copyWith(nightMode: enabled);
-    _publishSettings();
-    notifyListeners();
-    await _persistSettings();
+    if (_settings.nightMode == enabled) {
+      return;
+    }
+    await _commitSettingsUpdate(
+      _settings.copyWith(nightMode: enabled),
+    );
   }
 
   Future<void> togglePagePreset(bool enabled) async {
-    _settings = _settings.copyWith(pagePresetEnabled: enabled);
-    _publishSettings();
-    notifyListeners();
-    await _persistSettings();
+    if (_settings.pagePresetEnabled == enabled) {
+      return;
+    }
+    await _commitSettingsUpdate(
+      _settings.copyWith(pagePresetEnabled: enabled),
+    );
   }
 
   Future<void> setPagePreset(PagePreset preset) async {
-    _settings = _settings.copyWith(pagePreset: preset, pagePresetEnabled: true);
-    _publishSettings();
-    notifyListeners();
-    await _persistSettings();
+    if (_settings.pagePreset == preset && _settings.pagePresetEnabled) {
+      return;
+    }
+    await _commitSettingsUpdate(
+      _settings.copyWith(pagePreset: preset, pagePresetEnabled: true),
+    );
   }
 
   Future<void> togglePageOverlay(bool enabled) async {
-    _settings = _settings.copyWith(pageOverlayEnabled: enabled);
-    _publishSettings();
-    notifyListeners();
-    await _persistSettings();
+    if (_settings.pageOverlayEnabled == enabled) {
+      return;
+    }
+    await _commitSettingsUpdate(
+      _settings.copyWith(pageOverlayEnabled: enabled),
+    );
   }
 
   Future<void> togglePageReflection(bool enabled) async {
-    _settings = _settings.copyWith(pageReflectionEnabled: enabled);
-    _publishSettings();
-    notifyListeners();
-    await _persistSettings();
+    if (_settings.pageReflectionEnabled == enabled) {
+      return;
+    }
+    await _commitSettingsUpdate(
+      _settings.copyWith(pageReflectionEnabled: enabled),
+    );
   }
 
   Future<void> toggleLowMemoryMode(bool enabled) async {
-    _settings = _settings.copyWith(lowMemoryMode: enabled);
-    _publishSettings();
-    notifyListeners();
-    await _persistSettings();
+    if (_settings.lowMemoryMode == enabled) {
+      return;
+    }
+    await _commitSettingsUpdate(
+      _settings.copyWith(lowMemoryMode: enabled),
+    );
   }
 
   Future<void> toggleHifzFocusMode(bool enabled) async {
-    _settings = _settings.copyWith(hifzFocusMode: enabled);
-    _publishSettings();
-    notifyListeners();
-    await _persistSettings();
+    if (_settings.hifzFocusMode == enabled) {
+      return;
+    }
+    await _commitSettingsUpdate(
+      _settings.copyWith(hifzFocusMode: enabled),
+    );
   }
 
   Future<void> setHifzMaskHeightFactor(double value) async {
-    _settings = _settings.copyWith(hifzMaskHeightFactor: value);
-    _publishSettings();
-    notifyListeners();
-    await _persistSettings();
+    if ((_settings.hifzMaskHeightFactor - value).abs() < 0.0005) {
+      return;
+    }
+    await _commitSettingsUpdate(
+      _settings.copyWith(hifzMaskHeightFactor: value),
+    );
   }
 
   Future<void> toggleHifzRevealOnHold(bool enabled) async {
-    _settings = _settings.copyWith(hifzRevealOnHold: enabled);
-    _publishSettings();
-    notifyListeners();
-    await _persistSettings();
+    if (_settings.hifzRevealOnHold == enabled) {
+      return;
+    }
+    await _commitSettingsUpdate(
+      _settings.copyWith(hifzRevealOnHold: enabled),
+    );
   }
 
   void applySmartHifzChallenge({
@@ -1240,14 +1311,19 @@ class QuranReaderController extends ChangeNotifier {
       return;
     }
 
-    final standardPage = currentStandardPageNumber;
+    final targetPage = _repository.navigationPageForCurrentReferenceInEdition(
+      _currentPageNumber,
+      sourceEdition: _settings.mushafEdition,
+      targetEdition: edition,
+      preferImageMode: _settings.preferImageMode,
+    );
     _settings = _settings.copyWith(
       mushafEdition: edition,
       preferImageMode: nextPreferImageMode,
     );
-    _repository.setMushafEdition(edition);
-    _currentPageNumber = _repository.navigationPageForStandardPage(
-      standardPage,
+    await _repository.setMushafEdition(edition);
+    _currentPageNumber = _repository.clampPage(
+      targetPage,
       preferImageMode: _settings.preferImageMode,
     );
     _rebuildNavigationCaches();
@@ -1265,6 +1341,9 @@ class QuranReaderController extends ChangeNotifier {
   Future<void> togglePreferImageMode(bool enabled) async {
     if (!enabled) {
       enabled = true;
+    }
+    if (_settings.preferImageMode == enabled) {
+      return;
     }
     final standardPage = currentStandardPageNumber;
     _settings = _settings.copyWith(preferImageMode: enabled);
@@ -1424,7 +1503,7 @@ class QuranReaderController extends ChangeNotifier {
       fallbackDailyTarget: _dailyTargetPages,
     );
     final buffer = StringBuffer()
-      ..writeln('Quran Dual Page & Multi-Line Reader Summary')
+      ..writeln('Quran Pak Dual Page Reader Summary')
       ..writeln('Current page: $_currentPageNumber / $totalPages')
       ..writeln('Khatam progress: ${(khatamProgress * 100).round()}%')
       ..writeln('Reading streak: $_readingStreakCount day(s)')
@@ -1497,6 +1576,7 @@ class QuranReaderController extends ChangeNotifier {
   Future<void> selectReciter(QuranReciter reciter) async {
     _setAudioState(_audioState.copyWith(selectedReciter: reciter));
     await _repository.savePreferredReciterId(reciter.id);
+    _scheduleCloudSyncPush();
     if (_audioState.isPlaying && selectedAudioChapter != null) {
       await playSelectedSurah(forceReload: true);
     }
@@ -1527,6 +1607,7 @@ class QuranReaderController extends ChangeNotifier {
     );
     await _repository.saveAudioChapterId(chapter.id);
     await _repository.saveAudioPositionMillis(0);
+    _scheduleCloudSyncPush();
   }
 
   Future<void> playSelectedSurah({bool forceReload = false}) async {
@@ -1584,6 +1665,7 @@ class QuranReaderController extends ChangeNotifier {
         ),
       );
       await _repository.saveAudioChapterId(chapter.id);
+      _scheduleCloudSyncPush();
     } catch (error) {
       _setAudioState(
         _audioState.copyWith(
@@ -1642,6 +1724,7 @@ class QuranReaderController extends ChangeNotifier {
     await _audioService.stop();
     _savedAudioPositionMillis = 0;
     await _repository.saveAudioPositionMillis(0);
+    _scheduleCloudSyncPush();
     _setAudioState(
       _audioState.copyWith(
         isPlaying: false,
@@ -1666,6 +1749,7 @@ class QuranReaderController extends ChangeNotifier {
     await _audioService.setRepeatEnabled(enabled);
     _setAudioState(_audioState.copyWith(repeatEnabled: enabled));
     await _repository.saveAudioRepeatEnabled(enabled);
+    _scheduleCloudSyncPush();
   }
 
   Future<void> downloadSelectedAudio() async {
@@ -1763,7 +1847,7 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   void _publishSettings() {
-    if (_isDisposed || identical(_settingsNotifier.value, _settings)) {
+    if (_isDisposed || _settingsNotifier.value == _settings) {
       return;
     }
     _settingsNotifier.value = _settings;
@@ -1787,6 +1871,33 @@ class QuranReaderController extends ChangeNotifier {
 
   Future<void> _persistSettings() {
     return _repository.saveSettings(_settings);
+  }
+
+  Future<void> _commitSettingsUpdate(
+    ReaderSettings nextSettings, {
+    bool publishControlsVisibility = false,
+  }) async {
+    _settings = nextSettings;
+    _publishSettings();
+    if (publishControlsVisibility) {
+      _publishControlsVisibility();
+    }
+    notifyListeners();
+    await _persistSettings();
+  }
+
+  Future<void> _commitAiSettingsUpdate(ReaderAiSettings nextSettings) async {
+    _aiSettings = nextSettings;
+    _publishAiSettings();
+    await _preferences.saveAiSettings(_aiSettings);
+  }
+
+  Future<void> _commitExperienceSettingsUpdate(
+    ReaderExperienceSettings nextSettings,
+  ) async {
+    _experienceSettings = nextSettings;
+    _publishExperienceSettings();
+    await _repository.saveExperienceSettings(_experienceSettings);
   }
 
   void _schedulePagePersistence() {
@@ -1973,6 +2084,7 @@ class QuranReaderController extends ChangeNotifier {
     await _repository.saveAudioChapterId(_audioState.currentChapterId);
     await _repository.saveAudioPositionMillis(_savedAudioPositionMillis);
     await _repository.saveAudioRepeatEnabled(_audioState.repeatEnabled);
+    _scheduleCloudSyncPush();
   }
 
   String? _chapterNameForId(int? chapterId) {
@@ -2227,7 +2339,7 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   void _publishAiSettings() {
-    if (_isDisposed) {
+    if (_isDisposed || _aiSettingsNotifier.value == _aiSettings) {
       return;
     }
     _aiSettingsNotifier.value = _aiSettings;
@@ -2239,7 +2351,7 @@ class QuranReaderController extends ChangeNotifier {
     _adminConfig = nextConfig;
     _syncCurrentAiSettingsWithAdminConfig();
     await _refreshOfflinePackAvailability();
-    _applyAdminEditionVisibilityRules();
+    await _applyAdminEditionVisibilityRules();
     if (!_settings.preferImageMode &&
         _repository.hasAssetsForEdition(_settings.mushafEdition)) {
       _settings = _settings.copyWith(preferImageMode: true);
@@ -2281,6 +2393,7 @@ class QuranReaderController extends ChangeNotifier {
     _publishSettings();
     _publishAiSettings();
     _publishExperienceSettings();
+    _publishAudioState();
     _publishCurrentPage();
     _publishContentChange();
     notifyListeners();
@@ -2406,11 +2519,6 @@ class QuranReaderController extends ChangeNotifier {
         adminSyncBaseUrl.trim().isEmpty) {
       return;
     }
-    final hasLocalState = _bookmarks.isNotEmpty ||
-        _favoritePages.isNotEmpty ||
-        _pageNotes.isNotEmpty ||
-        _readingHistory.isNotEmpty ||
-        _hifzReviewEntries.isNotEmpty;
     final snapshot = await _readerSyncService.pullSnapshot(
       baseUrl: adminSyncBaseUrl,
       deviceId: _syncClientId,
@@ -2420,13 +2528,11 @@ class QuranReaderController extends ChangeNotifier {
       return;
     }
 
-    if (hasLocalState) {
-      await _readerSyncService.pushSnapshot(
-        baseUrl: adminSyncBaseUrl,
-        deviceId: _syncClientId,
-        snapshot: _buildSyncSnapshot(),
-      );
-    }
+    await _readerSyncService.pushSnapshot(
+      baseUrl: adminSyncBaseUrl,
+      deviceId: _syncClientId,
+      snapshot: _buildSyncSnapshot(),
+    );
   }
 
   ReaderSyncSnapshot _buildSyncSnapshot() {
@@ -2444,6 +2550,18 @@ class QuranReaderController extends ChangeNotifier {
       favoritePages: _favoritePages,
       bookmarks: _bookmarks,
       hifzReviewEntries: _hifzReviewEntries,
+      streakState: ReaderSyncStreakState(
+        count: _readingStreakCount,
+        lastDateKey: _readingStreakLastDate,
+      ),
+      audioState: ReaderSyncAudioState(
+        chapterId: _audioState.currentChapterId,
+        chapterName: _audioState.currentSurahName,
+        reciterId: _audioState.selectedReciter?.id,
+        reciterName: _audioState.selectedReciter?.displayName,
+        positionMillis: _savedAudioPositionMillis,
+        repeatEnabled: _audioState.repeatEnabled,
+      ),
       updatedAtIso: DateTime.now().toUtc().toIso8601String(),
     );
   }
@@ -2461,8 +2579,22 @@ class QuranReaderController extends ChangeNotifier {
     _favoritePages = snapshot.favoritePages;
     _bookmarks = snapshot.bookmarks;
     _hifzReviewEntries = snapshot.hifzReviewEntries;
+    _readingStreakCount = snapshot.streakState.count;
+    _readingStreakLastDate = snapshot.streakState.lastDateKey;
+    _savedAudioPositionMillis = snapshot.audioState.positionMillis;
+    QuranReciter? syncedReciter = _audioState.selectedReciter;
+    if (snapshot.audioState.reciterId != null) {
+      syncedReciter = _resolveSelectedReciter(snapshot.audioState.reciterId);
+    }
+    _audioState = _audioState.copyWith(
+      selectedReciter: syncedReciter,
+      currentChapterId: snapshot.audioState.chapterId,
+      currentSurahName: snapshot.audioState.chapterName,
+      positionMillis: snapshot.audioState.positionMillis,
+      repeatEnabled: snapshot.audioState.repeatEnabled,
+    );
 
-    _repository.setMushafEdition(_settings.mushafEdition);
+    await _repository.setMushafEdition(_settings.mushafEdition);
     _currentPageNumber = _repository.clampPage(
       snapshot.lastPageNumber,
       preferImageMode: _settings.preferImageMode,
@@ -2471,7 +2603,7 @@ class QuranReaderController extends ChangeNotifier {
     _rebuildNavigationCaches();
     _refreshCurrentCaches();
 
-    await Future.wait([
+    final persistenceTasks = <Future<void>>[
       _repository.saveSettings(_settings),
       _preferences.saveAiSettings(_aiSettings),
       _repository.saveReadingPlan(_readingPlan),
@@ -2483,11 +2615,22 @@ class QuranReaderController extends ChangeNotifier {
       _repository.saveFavoritePages(_favoritePages),
       _repository.saveBookmarks(_bookmarks),
       _repository.saveHifzRevisionEntries(_hifzReviewEntries),
+      _repository.saveAudioChapterId(snapshot.audioState.chapterId),
+      _repository.saveAudioPositionMillis(snapshot.audioState.positionMillis),
+      _repository.saveAudioRepeatEnabled(snapshot.audioState.repeatEnabled),
+      _repository.saveReadingStreakCount(_readingStreakCount),
+      _repository.saveReadingStreakLastDate(_readingStreakLastDate),
       _repository.saveLastPageNumber(
         _currentPageNumber,
         preferImageMode: _settings.preferImageMode,
       ),
-    ]);
+    ];
+    if (snapshot.audioState.reciterId != null) {
+      persistenceTasks.add(
+        _repository.savePreferredReciterId(snapshot.audioState.reciterId!),
+      );
+    }
+    await Future.wait(persistenceTasks);
   }
 
   void _scheduleCloudSyncPush() {
@@ -2527,7 +2670,7 @@ class QuranReaderController extends ChangeNotifier {
     });
   }
 
-  void _applyAdminEditionVisibilityRules() {
+  Future<void> _applyAdminEditionVisibilityRules() async {
     if (!_adminConfig.hasEditionControls) {
       return;
     }
@@ -2537,20 +2680,25 @@ class QuranReaderController extends ChangeNotifier {
       return;
     }
 
-    final standardPage = currentStandardPageNumber;
     final fallbackEdition = enabledEditions.isNotEmpty
         ? enabledEditions.first
         : _repository.resolveSupportedEdition(_settings.mushafEdition);
     final nextPreferImageMode =
         _repository.hasAssetsForEdition(fallbackEdition);
+    final targetPage = _repository.navigationPageForCurrentReferenceInEdition(
+      _currentPageNumber,
+      sourceEdition: _settings.mushafEdition,
+      targetEdition: fallbackEdition,
+      preferImageMode: _settings.preferImageMode,
+    );
 
     _settings = _settings.copyWith(
       mushafEdition: fallbackEdition,
       preferImageMode: nextPreferImageMode,
     );
-    _repository.setMushafEdition(fallbackEdition);
-    _currentPageNumber = _repository.navigationPageForStandardPage(
-      standardPage,
+    await _repository.setMushafEdition(fallbackEdition);
+    _currentPageNumber = _repository.clampPage(
+      targetPage,
       preferImageMode: _settings.preferImageMode,
     );
     _publishSettings();
@@ -2559,7 +2707,7 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   void _publishExperienceSettings() {
-    if (_isDisposed) {
+    if (_isDisposed || _experienceNotifier.value == _experienceSettings) {
       return;
     }
     _experienceNotifier.value = _experienceSettings;

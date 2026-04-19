@@ -80,8 +80,7 @@ class KanzulImanStudyContent extends StatefulWidget {
   final bool showHandle;
 
   @override
-  State<KanzulImanStudyContent> createState() =>
-      _KanzulImanStudyContentState();
+  State<KanzulImanStudyContent> createState() => _KanzulImanStudyContentState();
 }
 
 class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
@@ -106,14 +105,11 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
         widget.controller.settingsListenable,
       ]),
       builder: (context, _) {
-        final standardPage = widget.controller.currentStandardPageNumber;
-        final quranPage = widget.controller.pageForStandardPageInEdition(
-          standardPage,
-          edition: _studyEdition,
+        final quranPage = widget.controller.pageForCurrentReferenceInEdition(
+          _studyEdition,
         );
-        final kanzulPage = widget.controller.pageForStandardPageInEdition(
-          standardPage,
-          edition: MushafEdition.kanzulIman,
+        final kanzulPage = widget.controller.pageForCurrentReferenceInEdition(
+          MushafEdition.kanzulIman,
         );
         final currentInsight = widget.controller.currentPageInsight;
         final dualWide = size.width > 780;
@@ -195,9 +191,8 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                           children: [
                             ...widget.controller.compareEditions
                                 .where(
-                                  (edition) =>
-                                      edition != MushafEdition.kanzulIman,
-                                )
+                              (edition) => edition != MushafEdition.kanzulIman,
+                            )
                                 .map((edition) {
                               return ChoiceChip(
                                 label: Text(edition.label),
@@ -213,8 +208,7 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                               avatar: const Icon(Icons.compare_arrows_rounded),
                               label: const Text('Use in reader'),
                               onPressed: () async {
-                                final messenger =
-                                    ScaffoldMessenger.of(context);
+                                final messenger = ScaffoldMessenger.of(context);
                                 await widget.controller
                                     .selectMushafEdition(_studyEdition);
                                 if (!mounted) {
@@ -244,19 +238,18 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                           child: _StudyPagePanel(
                             title: _studyEdition.label,
                             subtitle:
-                                '${_studyEdition.companyLabel} • Page ${quranPage.number}',
+                                '${_studyEdition.companyLabel} - Page ${quranPage.number}',
                             page: quranPage,
                             settings: readerSettings,
                           ),
                         ),
-                      if (showQuran && showKanzul)
-                        const SizedBox(width: 14),
+                      if (showQuran && showKanzul) const SizedBox(width: 14),
                       if (showKanzul)
                         Expanded(
                           child: _StudyPagePanel(
                             title: 'Kanzul Iman',
                             subtitle:
-                                'Translation and tafsir • Page ${kanzulPage.number}',
+                                'Translation and tafsir - Page ${kanzulPage.number}',
                             page: kanzulPage,
                             settings: readerSettings,
                           ),
@@ -268,17 +261,16 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                     _StudyPagePanel(
                       title: _studyEdition.label,
                       subtitle:
-                          '${_studyEdition.companyLabel} • Page ${quranPage.number}',
+                          '${_studyEdition.companyLabel} - Page ${quranPage.number}',
                       page: quranPage,
                       settings: readerSettings,
                     ),
-                  if (showQuran && showKanzul)
-                    const SizedBox(height: 14),
+                  if (showQuran && showKanzul) const SizedBox(height: 14),
                   if (showKanzul)
                     _StudyPagePanel(
                       title: 'Kanzul Iman',
                       subtitle:
-                          'Translation and tafsir • Page ${kanzulPage.number}',
+                          'Translation and tafsir - Page ${kanzulPage.number}',
                       page: kanzulPage,
                       settings: readerSettings,
                     ),

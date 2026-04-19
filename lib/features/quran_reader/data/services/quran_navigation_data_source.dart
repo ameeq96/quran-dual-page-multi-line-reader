@@ -2,27 +2,37 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 
-import '../../domain/models/reader_admin_config.dart';
-import '../../domain/models/reader_settings.dart';
 import '../../domain/models/quran_juz_navigation_entry.dart';
 import '../../domain/models/quran_surah_navigation_entry.dart';
+import '../../domain/models/reader_admin_config.dart';
+import '../../domain/models/reader_settings.dart';
 
 class QuranNavigationDataSource {
-  static const Duration _requestTimeout = Duration(seconds: 4);
-  static const String _bundledNavigationAssetPath =
+  static const String _legacyNavigationAssetPath =
       'assets/quran_pages/quran_navigation_index.json';
-  static const String _bundledOverrideAssetPath =
-      'assets/quran_pages/taj_navigation_overrides.json';
-
-  QuranNavigationDataSource({
-    http.Client? client,
-  }) : _client = client ?? http.Client();
+  static const String _fallbackNavigationAssetPath =
+      'assets/quran_pages/quran_navigation_index_16_line.json';
+  static final Map<String, Map<String, dynamic>> _decodedPayloadCache =
+      <String, Map<String, dynamic>>{};
 
   final List<QuranSurahNavigationEntry> _surahs = <QuranSurahNavigationEntry>[];
   final List<QuranJuzNavigationEntry> _juzs = <QuranJuzNavigationEntry>[];
-  final http.Client _client;
+  final Map<MushafEdition, List<QuranSurahNavigationEntry>> _surahsByEdition =
+      <MushafEdition, List<QuranSurahNavigationEntry>>{};
+  final Map<MushafEdition, List<QuranJuzNavigationEntry>> _juzsByEdition =
+      <MushafEdition, List<QuranJuzNavigationEntry>>{};
+  final List<QuranSurahNavigationEntry> _standardSurahs =
+      <QuranSurahNavigationEntry>[];
+  final List<QuranJuzNavigationEntry> _standardJuzs =
+      <QuranJuzNavigationEntry>[];
+  List<QuranSurahNavigationEntry> _surahsView =
+      const <QuranSurahNavigationEntry>[];
+  List<QuranJuzNavigationEntry> _juzsView = const <QuranJuzNavigationEntry>[];
+  List<QuranSurahNavigationEntry> _standardSurahsView =
+      const <QuranSurahNavigationEntry>[];
+  List<QuranJuzNavigationEntry> _standardJuzsView =
+      const <QuranJuzNavigationEntry>[];
   bool _isInitialized = false;
   MushafEdition? _activeEdition;
 
@@ -31,178 +41,333 @@ class QuranNavigationDataSource {
     MushafEdition? edition,
     bool forceRefresh = false,
   }) async {
-    final normalizedEdition = edition;
+    final normalizedEdition = edition ?? MushafEdition.lines16;
     if (_isInitialized &&
         !forceRefresh &&
-        _activeEdition == normalizedEdition) {
+        _activeEdition == normalizedEdition &&
+        _standardSurahs.isNotEmpty &&
+        _standardJuzs.isNotEmpty &&
+        _surahsByEdition.containsKey(normalizedEdition) &&
+        _juzsByEdition.containsKey(normalizedEdition)) {
       return;
     }
-    if (_isInitialized) {
-      if (!forceRefresh) {
-        return;
-      }
-      _isInitialized = false;
-    }
+
     _activeEdition = normalizedEdition;
+    final previousSurahs = List<QuranSurahNavigationEntry>.from(_surahs);
+    final previousJuzs = List<QuranJuzNavigationEntry>.from(_juzs);
 
-    try {
-      final payloadFuture = _loadPrimaryPayload(adminConfig);
-      final overridePayloadFuture = _loadOptionalOverridePayload(adminConfig);
-      final payload = await payloadFuture;
-      final overridePayload = await overridePayloadFuture;
-      final surahOverrides = _parseOverrideMap(
-        overridePayload['surahStartPages'],
+    await _initializeStandardPayload(forceRefresh: forceRefresh);
+
+    final bundledPayload = await _tryLoadBundledPayload(
+      _bundledNavigationAssetPathForEdition(normalizedEdition),
+      forceRefresh: forceRefresh,
+    );
+    if (bundledPayload != null) {
+      _cacheEditionPayload(normalizedEdition, bundledPayload);
+      _activateEdition(normalizedEdition);
+    } else {
+      final fallbackPayload = await _loadBestAvailablePayload(
+        normalizedEdition,
+        forceRefresh: forceRefresh,
       );
-      final juzOverrides = _parseOverrideMap(
-        overridePayload['siparaStartPages'],
-      );
-
-      final surahJson = payload['surahs'] as List<dynamic>? ?? const [];
-      final juzJson = payload['siparas'] as List<dynamic>? ?? const [];
-
-      _surahs
-        ..clear()
-        ..addAll(
-          surahJson.map((entry) {
-            final item = entry as Map<String, dynamic>;
-            return QuranSurahNavigationEntry(
-              id: item['id'] as int,
-              nameSimple: item['nameSimple'] as String,
-              nameComplex: item['nameComplex'] as String,
-              nameArabic: item['nameArabic'] as String,
-              translatedName: item['translatedName'] as String,
-              standardStartPage: item['standardStartPage'] as int,
-              tajScanStartPage: surahOverrides[item['id'] as int] ??
-                  item['tajScanStartPage'] as int,
-            );
-          }),
+      if (fallbackPayload != null) {
+        _setActiveEntries(
+          _surahEntriesFromPayload(fallbackPayload),
+          _juzEntriesFromPayload(fallbackPayload),
         );
+      } else if (previousSurahs.isNotEmpty || previousJuzs.isNotEmpty) {
+        _setActiveEntries(previousSurahs, previousJuzs);
+      } else {
+        _setActiveEntries(const [], const []);
+      }
+    }
 
-      _juzs
-        ..clear()
-        ..addAll(
-          juzJson.map((entry) {
-            final item = entry as Map<String, dynamic>;
-            return QuranJuzNavigationEntry(
-              number: item['number'] as int,
-              name: item['name'] as String,
-              nameArabic: item['nameArabic'] as String,
-              standardStartPage: item['standardStartPage'] as int,
-              tajScanStartPage: juzOverrides[item['number'] as int] ??
-                  item['tajScanStartPage'] as int,
-            );
-          }),
-        );
-    } catch (_) {
-      _surahs.clear();
-      _juzs.clear();
-      rethrow;
+    await _warmEditionCaches(
+      forceRefresh: forceRefresh,
+      excludeEdition: normalizedEdition,
+    );
+    if (_surahsByEdition.containsKey(normalizedEdition) &&
+        _juzsByEdition.containsKey(normalizedEdition)) {
+      _activateEdition(normalizedEdition);
+    } else if (previousSurahs.isNotEmpty || previousJuzs.isNotEmpty) {
+      _setActiveEntries(previousSurahs, previousJuzs);
     }
 
     _isInitialized = true;
   }
 
-  List<QuranSurahNavigationEntry> get surahs =>
-      List<QuranSurahNavigationEntry>.unmodifiable(_surahs);
+  List<QuranSurahNavigationEntry> get surahs => _surahsView;
 
-  List<QuranJuzNavigationEntry> get juzs =>
-      List<QuranJuzNavigationEntry>.unmodifiable(_juzs);
+  List<QuranJuzNavigationEntry> get juzs => _juzsView;
 
-  Future<Map<String, dynamic>> _loadPrimaryPayload(
-    ReaderAdminConfig? adminConfig,
-  ) async {
-    try {
-      return await _loadRemotePayload(
-        adminConfig?.contentDataset('navigation_index'),
-        datasetKey: 'navigation_index',
-      );
-    } catch (_) {
-      return _loadBundledPayload(
-        _bundledNavigationAssetPathForEdition(
-          _activeEdition ?? MushafEdition.lines16,
-        ),
-        datasetKey: 'navigation_index',
-      );
+  List<QuranSurahNavigationEntry> get standardSurahs => _standardSurahsView;
+
+  List<QuranJuzNavigationEntry> get standardJuzs => _standardJuzsView;
+
+  List<QuranSurahNavigationEntry> surahsForEdition(MushafEdition edition) {
+    final entries = _surahsByEdition[edition];
+    if (entries != null) {
+      return entries;
     }
+    if (_activeEdition == edition) {
+      return _surahsView;
+    }
+    return const <QuranSurahNavigationEntry>[];
   }
 
-  Future<Map<String, dynamic>> _loadOptionalOverridePayload(
-    ReaderAdminConfig? adminConfig,
-  ) async {
-    final dataset = adminConfig?.contentDataset('taj_navigation_overrides');
-    try {
-      if (dataset != null && dataset.url.trim().isNotEmpty) {
-        return await _loadRemotePayload(
-          dataset,
-          datasetKey: 'taj_navigation_overrides',
-        );
+  List<QuranJuzNavigationEntry> juzsForEdition(MushafEdition edition) {
+    final entries = _juzsByEdition[edition];
+    if (entries != null) {
+      return entries;
+    }
+    if (_activeEdition == edition) {
+      return _juzsView;
+    }
+    return const <QuranJuzNavigationEntry>[];
+  }
+
+  void _setActiveEntries(
+    List<QuranSurahNavigationEntry> surahs,
+    List<QuranJuzNavigationEntry> juzs,
+  ) {
+    _surahs
+      ..clear()
+      ..addAll(surahs);
+    _surahsView = List<QuranSurahNavigationEntry>.unmodifiable(_surahs);
+
+    _juzs
+      ..clear()
+      ..addAll(juzs);
+    _juzsView = List<QuranJuzNavigationEntry>.unmodifiable(_juzs);
+  }
+
+  void _cacheEditionPayload(
+    MushafEdition edition,
+    Map<String, dynamic> payload,
+  ) {
+    _surahsByEdition[edition] = List<QuranSurahNavigationEntry>.unmodifiable(
+      _surahEntriesFromPayload(payload),
+    );
+    _juzsByEdition[edition] = List<QuranJuzNavigationEntry>.unmodifiable(
+      _juzEntriesFromPayload(payload),
+    );
+  }
+
+  void _activateEdition(MushafEdition edition) {
+    final editionSurahs = _surahsByEdition[edition];
+    final editionJuzs = _juzsByEdition[edition];
+    if (editionSurahs == null || editionJuzs == null) {
+      return;
+    }
+    _setActiveEntries(editionSurahs, editionJuzs);
+  }
+
+  void _hydrateStandardPayload(Map<String, dynamic> payload) {
+    _standardSurahs
+      ..clear()
+      ..addAll(_surahEntriesFromPayload(payload));
+    _standardSurahsView =
+        List<QuranSurahNavigationEntry>.unmodifiable(_standardSurahs);
+    _standardJuzs
+      ..clear()
+      ..addAll(_juzEntriesFromPayload(payload));
+    _standardJuzsView = List<QuranJuzNavigationEntry>.unmodifiable(
+      _standardJuzs,
+    );
+  }
+
+  List<QuranSurahNavigationEntry> _surahEntriesFromPayload(
+    Map<String, dynamic> payload,
+  ) {
+    final surahJson = payload['surahs'] as List<dynamic>? ?? const [];
+    return surahJson
+        .map((entry) => _parseSurahEntry(entry))
+        .whereType<QuranSurahNavigationEntry>()
+        .toList(growable: false);
+  }
+
+  List<QuranJuzNavigationEntry> _juzEntriesFromPayload(
+    Map<String, dynamic> payload,
+  ) {
+    final juzJson = payload['siparas'] as List<dynamic>? ?? const [];
+    return juzJson
+        .map((entry) => _parseJuzEntry(entry))
+        .whereType<QuranJuzNavigationEntry>()
+        .toList(growable: false);
+  }
+
+  QuranSurahNavigationEntry? _parseSurahEntry(dynamic entry) {
+    if (entry is! Map) {
+      return null;
+    }
+
+    final id = _readInt(entry['id']);
+    final standardStartPage = _readInt(entry['standardStartPage']);
+    final tajScanStartPage =
+        _readInt(entry['tajScanStartPage']) ?? standardStartPage;
+    if (id == null || standardStartPage == null || tajScanStartPage == null) {
+      return null;
+    }
+
+    return QuranSurahNavigationEntry(
+      id: id,
+      nameSimple: _readString(entry['nameSimple']),
+      nameComplex: _readString(entry['nameComplex']),
+      nameArabic: _readString(entry['nameArabic']),
+      translatedName: _readString(entry['translatedName']),
+      standardStartPage: standardStartPage,
+      tajScanStartPage: tajScanStartPage,
+    );
+  }
+
+  QuranJuzNavigationEntry? _parseJuzEntry(dynamic entry) {
+    if (entry is! Map) {
+      return null;
+    }
+
+    final number = _readInt(entry['number']);
+    final standardStartPage = _readInt(entry['standardStartPage']);
+    final tajScanStartPage =
+        _readInt(entry['tajScanStartPage']) ?? standardStartPage;
+    if (number == null ||
+        standardStartPage == null ||
+        tajScanStartPage == null) {
+      return null;
+    }
+
+    return QuranJuzNavigationEntry(
+      number: number,
+      name: _readString(entry['name']),
+      nameArabic: _readString(entry['nameArabic']),
+      standardStartPage: standardStartPage,
+      tajScanStartPage: tajScanStartPage,
+    );
+  }
+
+  int? _readInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        return null;
       }
-      return await _loadBundledPayload(
-        _bundledOverrideAssetPath,
-        datasetKey: 'taj_navigation_overrides',
-      );
-    } catch (_) {
-      return const <String, dynamic>{};
-    }
-  }
-
-  Future<Map<String, dynamic>> _loadRemotePayload(
-    ReaderRemoteContentDataset? dataset,
-    {
-    required String datasetKey,
-  }
-  ) async {
-    if (dataset == null || dataset.url.trim().isEmpty) {
-      throw StateError('Admin dataset "$datasetKey" is not configured.');
-    }
-
-    try {
-      final response = await _client.get(
-        Uri.parse(dataset.url),
-        headers: const <String, String>{'Accept': 'application/json'},
-      ).timeout(_requestTimeout);
-      if (response.statusCode == 200) {
-        return compute(_decodeNavigationPayload, response.body);
+      final direct = int.tryParse(trimmed);
+      if (direct != null) {
+        return direct;
       }
-      throw StateError(
-        'Admin dataset "$datasetKey" request failed with status ${response.statusCode}.',
-      );
-    } catch (error) {
-      if (error is StateError) {
-        rethrow;
+      final match = RegExp(r'\d+').firstMatch(trimmed);
+      if (match == null) {
+        return null;
       }
-      throw StateError('Unable to load admin dataset "$datasetKey" from API.');
+      return int.tryParse(match.group(0)!);
     }
+    return null;
   }
 
-  Future<Map<String, dynamic>> _loadBundledPayload(
-    String assetPath, {
-    required String datasetKey,
+  String _readString(dynamic value) {
+    if (value == null) {
+      return '';
+    }
+    return value.toString();
+  }
+
+  Future<Map<String, dynamic>?> _loadBestAvailablePayload(
+    MushafEdition edition, {
+    required bool forceRefresh,
   }) async {
+    final candidatePaths = <String>[
+      _bundledNavigationAssetPathForEdition(edition),
+      _fallbackNavigationAssetPath,
+      'assets/quran_pages/quran_navigation_index_10_line.json',
+      'assets/quran_pages/quran_navigation_index_13_line.json',
+      'assets/quran_pages/quran_navigation_index_14_line.json',
+      'assets/quran_pages/quran_navigation_index_15_line.json',
+      'assets/quran_pages/quran_navigation_index_16_line.json',
+      'assets/quran_pages/quran_navigation_index_17_line.json',
+      'assets/quran_pages/quran_navigation_index_kanzul_iman.json',
+      'assets/quran_pages/quran_navigation_index.json',
+    ];
+
+    final seenPaths = <String>{};
+    for (final assetPath in candidatePaths) {
+      if (!seenPaths.add(assetPath)) {
+        continue;
+      }
+      final payload = await _tryLoadBundledPayload(
+        assetPath,
+        forceRefresh: forceRefresh,
+      );
+      if (payload != null) {
+        return payload;
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> _initializeStandardPayload({
+    required bool forceRefresh,
+  }) async {
+    if (!forceRefresh &&
+        _standardSurahs.isNotEmpty &&
+        _standardJuzs.isNotEmpty) {
+      return;
+    }
+    final payload = await _tryLoadBundledPayload(
+      _legacyNavigationAssetPath,
+      forceRefresh: forceRefresh,
+    );
+    if (payload == null) {
+      return;
+    }
+    _hydrateStandardPayload(payload);
+  }
+
+  Future<void> _warmEditionCaches({
+    required bool forceRefresh,
+    required MushafEdition excludeEdition,
+  }) async {
+    for (final edition in MushafEdition.values) {
+      if (!forceRefresh &&
+          _surahsByEdition.containsKey(edition) &&
+          _juzsByEdition.containsKey(edition)) {
+        continue;
+      }
+      final payload = await _tryLoadBundledPayload(
+        _bundledNavigationAssetPathForEdition(edition),
+        forceRefresh: forceRefresh,
+      );
+      if (payload == null) {
+        continue;
+      }
+      _cacheEditionPayload(edition, payload);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _tryLoadBundledPayload(
+    String assetPath, {
+    required bool forceRefresh,
+  }) async {
+    if (!forceRefresh) {
+      final cached = _decodedPayloadCache[assetPath];
+      if (cached != null) {
+        return cached;
+      }
+    }
+
     try {
       final payload = await rootBundle.loadString(assetPath);
-      return compute(_decodeNavigationPayload, payload);
+      final decoded = await compute(_decodeNavigationPayload, payload);
+      _decodedPayloadCache[assetPath] = decoded;
+      return decoded;
     } catch (_) {
-      throw StateError(
-        'Unable to load bundled dataset "$datasetKey" from assets.',
-      );
+      return null;
     }
-  }
-
-  Map<int, int> _parseOverrideMap(dynamic rawValue) {
-    if (rawValue is! Map) {
-      return const {};
-    }
-
-    final parsed = <int, int>{};
-    for (final entry in rawValue.entries) {
-      final key = int.tryParse(entry.key.toString());
-      final value = int.tryParse(entry.value.toString());
-      if (key != null && value != null && value > 0) {
-        parsed[key] = value;
-      }
-    }
-    return parsed;
   }
 
   String _bundledNavigationAssetPathForEdition(MushafEdition edition) {

@@ -77,7 +77,7 @@ class QuranAudioService {
         : Uri.file(localFilePath);
     final mediaItem = MediaItem(
       id: 'quran-$reciterId-$chapterId',
-      album: 'Quran Dual Page & Multi-Line Reader',
+      album: 'Quran Pak Dual Page Reader',
       title: chapterName,
       artist: reciterName,
       extras: <String, dynamic>{

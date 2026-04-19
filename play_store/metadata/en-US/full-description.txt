@@ -1,0 +1,14 @@
+Read the Quran with a focused Mushaf-style experience built for smooth daily use.
+
+Quran Pak Dual Page Reader brings together dual-page reading, offline edition packs, surah and sipara navigation, and audio-friendly study tools in one app.
+
+Key features:
+- Offline Quran reading with bundled page packs
+- Dual-page and single-page Mushaf experience
+- Multiple multi-line editions with edition-aware navigation
+- Surah and sipara search
+- Audio playback support for recitation study
+- Bookmarks, notes, favorites, and reading progress
+- Smooth page browsing and optimized image loading
+
+Designed for clarity, speed, and reliable offline access.

@@ -178,28 +178,23 @@ extension QuranAiToolX on QuranAiTool {
   String get inputHint => switch (this) {
         QuranAiTool.explainer =>
           'Example: explain the faith theme on this page',
-        QuranAiTool.smartSearch =>
-          'Example: patience, prayer, Musa',
+        QuranAiTool.smartSearch => 'Example: patience, prayer, Musa',
         QuranAiTool.hifzCoach =>
           'Example: اِنَّ الَّذِيۡنَ كَفَرُوۡا سَوَآءٌ عَلَيۡهِمۡ',
         QuranAiTool.tafsirAssistant =>
           'Example: what is the context of this page?',
-        QuranAiTool.studyNotes =>
-          'Example: class notes for students',
+        QuranAiTool.studyNotes => 'Example: class notes for students',
         QuranAiTool.translationSimplifier =>
           'Example: simple student-friendly wording',
         QuranAiTool.askCurrentPage =>
           'Example: which ayahs are important here?',
         QuranAiTool.tajweedTutor =>
           'Example: identify madd and ghunna in this line',
-        QuranAiTool.dailyLesson =>
-          'Example: a short reflection for today',
+        QuranAiTool.dailyLesson => 'Example: a short reflection for today',
         QuranAiTool.bookmarkAssistant =>
           'Example: memorization review or dua folder',
-        QuranAiTool.voiceQna =>
-          'Example: what guidance is in this ayah?',
-        QuranAiTool.recitationFollow =>
-          'Example: والذين يؤمنون بما انزل اليك',
+        QuranAiTool.voiceQna => 'Example: what guidance is in this ayah?',
+        QuranAiTool.recitationFollow => 'Example: والذين يؤمنون بما انزل اليك',
       };
 }
 
@@ -225,6 +220,19 @@ class ReaderAiSettings {
       responseDepth: responseDepth ?? this.responseDepth,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) {
+      return true;
+    }
+    return other is ReaderAiSettings &&
+        other.responseLanguage == responseLanguage &&
+        other.responseDepth == responseDepth;
+  }
+
+  @override
+  int get hashCode => Object.hash(responseLanguage, responseDepth);
 }
 
 class QuranAiArabicLine {
@@ -382,5 +390,6 @@ class QuranAiToolResult {
   bool get hasSearchResults => searchResults.isNotEmpty;
   bool get hasBookmarkSuggestion => bookmarkSuggestion != null;
   bool get hasMatchedLine =>
-      matchedLineNumber != null && (matchedLineText?.trim().isNotEmpty ?? false);
+      matchedLineNumber != null &&
+      (matchedLineText?.trim().isNotEmpty ?? false);
 }

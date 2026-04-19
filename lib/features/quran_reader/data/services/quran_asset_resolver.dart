@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -20,6 +21,8 @@ class MushafAssetProfile {
 }
 
 class QuranAssetResolver {
+  static const int _maxResolvedAssetPathCacheEntries = 1200;
+
   static const Map<MushafEdition, MushafAssetProfile> _profiles =
       <MushafEdition, MushafAssetProfile>{
     MushafEdition.lines10: MushafAssetProfile(
@@ -60,11 +63,16 @@ class QuranAssetResolver {
       <MushafEdition, ReaderRemoteAssetPack>{};
   final Map<MushafEdition, ReaderRemoteAssetPack> _localPacksByEdition =
       <MushafEdition, ReaderRemoteAssetPack>{};
+  final LinkedHashMap<String, String?> _resolvedAssetPathCache =
+      LinkedHashMap<String, String?>();
+  final Map<MushafEdition, _EditionAssetMetrics> _editionMetrics =
+      <MushafEdition, _EditionAssetMetrics>{};
   final QuranOfflinePackService _offlinePackService = QuranOfflinePackService();
   MushafEdition _selectedEdition = MushafEdition.lines16;
   String _remoteAssetsBaseUrl = '';
   bool _localPacksLoaded = false;
   Set<MushafEdition>? _enabledEditionFilter;
+  List<MushafEdition> _availableImageEditionsCache = const <MushafEdition>[];
 
   Future<void> initialize() async {
     await _offlinePackService.initialize();
@@ -73,6 +81,9 @@ class QuranAssetResolver {
   }
 
   void setSelectedEdition(MushafEdition edition) {
+    if (_selectedEdition == edition) {
+      return;
+    }
     _selectedEdition = edition;
   }
 
@@ -117,10 +128,6 @@ class QuranAssetResolver {
   bool get hasAnyPageAssets => hasAssetsForEdition(_selectedEdition);
 
   bool hasAssetsForEdition(MushafEdition edition) {
-    final pack = _remotePacksByEdition[edition];
-    if (pack == null) {
-      return false;
-    }
     return imagePageCountForEdition(edition) > 0;
   }
 
@@ -129,9 +136,7 @@ class QuranAssetResolver {
   }
 
   List<MushafEdition> get availableImageEditions {
-    return MushafEdition.values
-        .where(hasAssetsForEdition)
-        .toList(growable: false);
+    return _availableImageEditionsCache;
   }
 
   int get leadingPagesToSkip {
@@ -139,44 +144,17 @@ class QuranAssetResolver {
   }
 
   int leadingPagesToSkipForEdition(MushafEdition edition) {
-    final remotePack = _remotePacksByEdition[edition];
-    final profile = profileForEdition(edition);
-    if (remotePack == null ||
-        remotePack.maxImportedPageNumber <= profile.leadingPagesToSkip) {
-      return 0;
-    }
-    return profile.leadingPagesToSkip;
+    return _editionMetrics[edition]?.leadingPagesToSkip ?? 0;
   }
 
   int trailingPagesToTrimForEdition(MushafEdition edition) {
-    final remotePack = _remotePacksByEdition[edition];
-    final profile = profileForEdition(edition);
-    if (remotePack == null) {
-      return 0;
-    }
-    final reservedPages =
-        leadingPagesToSkipForEdition(edition) + profile.trailingPagesToTrim;
-    if (remotePack.maxImportedPageNumber <= reservedPages) {
-      return 0;
-    }
-    return profile.trailingPagesToTrim;
+    return _editionMetrics[edition]?.trailingPagesToTrim ?? 0;
   }
 
   int get imagePageCount => imagePageCountForEdition(_selectedEdition);
 
   int imagePageCountForEdition(MushafEdition edition) {
-    final pack = _remotePacksByEdition[edition];
-    if (pack == null) {
-      return 0;
-    }
-
-    final logicalPageCount = pack.maxImportedPageNumber -
-        leadingPagesToSkipForEdition(edition) -
-        trailingPagesToTrimForEdition(edition);
-    if (logicalPageCount < 0) {
-      return 0;
-    }
-    return logicalPageCount;
+    return _editionMetrics[edition]?.logicalPageCount ?? 0;
   }
 
   int get firstQuranImportedPage => leadingPagesToSkip + 1;
@@ -224,10 +202,16 @@ class QuranAssetResolver {
       pageNumber,
       totalPages: totalPages,
     );
+    final cacheKey = '${edition.storageValue}|$normalized';
+    final cached = _readResolvedAssetPath(cacheKey);
+    if (cached != null || _resolvedAssetPathCache.containsKey(cacheKey)) {
+      return cached;
+    }
     final importedPageNumber =
         normalized + leadingPagesToSkipForEdition(edition);
 
     if (!pack.hasImportedPage(importedPageNumber)) {
+      _rememberResolvedAssetPath(cacheKey, null);
       return null;
     }
 
@@ -237,25 +221,31 @@ class QuranAssetResolver {
       importedPageNumber: importedPageNumber,
     );
     if (localFilePath != null && localFilePath.trim().isNotEmpty) {
+      _rememberResolvedAssetPath(cacheKey, localFilePath);
       return localFilePath;
     }
 
     final localPack = _localPacksByEdition[edition];
     if (localPack != null) {
-      return _buildLocalAssetPath(
+      final localAssetPath = _buildLocalAssetPath(
         localPack,
         importedPageNumber,
       );
+      _rememberResolvedAssetPath(cacheKey, localAssetPath);
+      return localAssetPath;
     }
 
     if (_remoteAssetsBaseUrl.trim().isEmpty) {
+      _rememberResolvedAssetPath(cacheKey, null);
       return null;
     }
 
-    return pack.buildPageUrl(
+    final remoteUrl = pack.buildPageUrl(
       _remoteAssetsBaseUrl,
       importedPageNumber: importedPageNumber,
     );
+    _rememberResolvedAssetPath(cacheKey, remoteUrl);
+    return remoteUrl;
   }
 
   Future<bool> hasOfflinePackForEdition(MushafEdition edition) async {
@@ -284,6 +274,7 @@ class QuranAssetResolver {
       assetsBaseUrl: _remoteAssetsBaseUrl,
       onProgress: onProgress,
     );
+    _clearResolvedAssetPathCache();
   }
 
   Future<void> removeOfflinePack(MushafEdition edition) async {
@@ -295,6 +286,7 @@ class QuranAssetResolver {
       edition: edition,
       pack: remotePack,
     );
+    _clearResolvedAssetPathCache();
   }
 
   Future<void> _loadLocalPacks() async {
@@ -395,6 +387,8 @@ class QuranAssetResolver {
           return _enabledEditionFilter!.contains(entry.key);
         }),
       );
+    _rebuildEditionMetrics();
+    _clearResolvedAssetPathCache();
   }
 
   String _buildLocalAssetPath(
@@ -424,6 +418,68 @@ class QuranAssetResolver {
     }
   }
 
+  void _clearResolvedAssetPathCache() {
+    _resolvedAssetPathCache.clear();
+  }
+
+  String? _readResolvedAssetPath(String cacheKey) {
+    final cached = _resolvedAssetPathCache.remove(cacheKey);
+    if (cached != null) {
+      _resolvedAssetPathCache[cacheKey] = cached;
+    }
+    return cached;
+  }
+
+  void _rememberResolvedAssetPath(String cacheKey, String? value) {
+    _resolvedAssetPathCache.remove(cacheKey);
+    _resolvedAssetPathCache[cacheKey] = value;
+    while (_resolvedAssetPathCache.length > _maxResolvedAssetPathCacheEntries) {
+      _resolvedAssetPathCache.remove(_resolvedAssetPathCache.keys.first);
+    }
+  }
+
+  void _rebuildEditionMetrics() {
+    _editionMetrics
+      ..clear()
+      ..addEntries(
+        MushafEdition.values.map(
+          (edition) => MapEntry(
+            edition,
+            _computeEditionMetrics(edition),
+          ),
+        ),
+      );
+    _availableImageEditionsCache = MushafEdition.values
+        .where((edition) => imagePageCountForEdition(edition) > 0)
+        .toList(growable: false);
+  }
+
+  _EditionAssetMetrics _computeEditionMetrics(MushafEdition edition) {
+    final pack = _remotePacksByEdition[edition];
+    if (pack == null) {
+      return const _EditionAssetMetrics.empty();
+    }
+
+    final profile = profileForEdition(edition);
+    final maxImportedPageNumber = pack.maxImportedPageNumber;
+    final leadingPagesToSkip =
+        maxImportedPageNumber <= profile.leadingPagesToSkip
+            ? 0
+            : profile.leadingPagesToSkip;
+    final reservedPages = leadingPagesToSkip + profile.trailingPagesToTrim;
+    final trailingPagesToTrim = maxImportedPageNumber <= reservedPages
+        ? 0
+        : profile.trailingPagesToTrim;
+    final logicalPageCount =
+        maxImportedPageNumber - leadingPagesToSkip - trailingPagesToTrim;
+
+    return _EditionAssetMetrics(
+      leadingPagesToSkip: leadingPagesToSkip,
+      trailingPagesToTrim: trailingPagesToTrim,
+      logicalPageCount: logicalPageCount < 0 ? 0 : logicalPageCount,
+    );
+  }
+
   void dispose() {
     _offlinePackService.dispose();
   }
@@ -440,4 +496,21 @@ class _LocalPackBuilder {
   final String version;
   final String extension;
   final List<int> importedPages = <int>[];
+}
+
+class _EditionAssetMetrics {
+  const _EditionAssetMetrics({
+    required this.leadingPagesToSkip,
+    required this.trailingPagesToTrim,
+    required this.logicalPageCount,
+  });
+
+  const _EditionAssetMetrics.empty()
+      : leadingPagesToSkip = 0,
+        trailingPagesToTrim = 0,
+        logicalPageCount = 0;
+
+  final int leadingPagesToSkip;
+  final int trailingPagesToTrim;
+  final int logicalPageCount;
 }

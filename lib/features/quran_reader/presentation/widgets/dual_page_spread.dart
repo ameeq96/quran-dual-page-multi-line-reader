@@ -25,7 +25,6 @@ class DualPageSpread extends StatelessWidget {
     this.rightSmartHifzEdition,
     this.leftSmartHifzLineCount,
     this.rightSmartHifzLineCount,
-    this.spreadOffset = 0,
   });
 
   final QuranSpread spread;
@@ -44,15 +43,13 @@ class DualPageSpread extends StatelessWidget {
   final MushafEdition? rightSmartHifzEdition;
   final int? leftSmartHifzLineCount;
   final int? rightSmartHifzLineCount;
-  final double spreadOffset;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final referencePage = spread.rightPage.usesImage
-            ? spread.rightPage
-            : spread.leftPage;
+        final referencePage =
+            spread.rightPage.usesImage ? spread.rightPage : spread.leftPage;
         final pageAspectRatio = QuranConstants.pageAspectRatio(
           usesImage: referencePage.usesImage,
           assetPath: referencePage.assetPath,

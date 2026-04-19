@@ -75,13 +75,14 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
             boxShadow: [
               BoxShadow(
-                color: theme.colorScheme.shadow.withOpacity(isDark ? 0.18 : 0.06),
+                color:
+                    theme.colorScheme.shadow.withOpacity(isDark ? 0.18 : 0.06),
                 blurRadius: isDark ? 24 : 20,
                 offset: const Offset(0, 10),
               ),
             ],
           ),
-              child: Padding(
+          child: Padding(
             padding: EdgeInsets.fromLTRB(
               compact ? 12 : 16,
               compact ? 10 : 12,
@@ -100,9 +101,7 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                       final secondaryLabel = portraitMode
                           ? controller.pageProgressLabel
                           : controller.spreadProgressLabel;
-                      final title = portraitMode
-                          ? 'Quran Dual Page'
-                          : 'Quran Dual Page & Multi-Line Reader';
+                      const title = 'Quran Pak Dual Page Reader';
 
                       return Column(
                         mainAxisAlignment: MainAxisAlignment.center,
