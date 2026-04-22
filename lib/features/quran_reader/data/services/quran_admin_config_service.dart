@@ -154,7 +154,7 @@ class QuranAdminConfigService {
           continue;
         }
         final normalizedExtension =
-            (item['fileExtension'] as String? ?? 'png').trim().toLowerCase();
+            (item['fileExtension'] as String? ?? 'webp').trim().toLowerCase();
         final folderName = (item['folderName'] as String? ?? rawEdition).trim();
         final availableImportedPages = (item['availableImportedPages']
                     as List<dynamic>? ??
@@ -176,7 +176,7 @@ class QuranAdminConfigService {
           version: (item['version'] as String? ?? '').trim(),
           pageCount: (item['pageCount'] as num? ?? 0).toInt(),
           fileExtension:
-              normalizedExtension.isEmpty ? 'png' : normalizedExtension,
+              normalizedExtension.isEmpty ? 'webp' : normalizedExtension,
           availableImportedPages:
               List<int>.unmodifiable(availableImportedPages),
           contiguousImportedPageStart: contiguousImportedPageStart,
@@ -237,23 +237,23 @@ class QuranAdminConfigService {
         flags[key] = item['enabled'] as bool? ?? false;
       }
 
-      final announcements =
-          (payload['announcements'] as List<dynamic>? ?? const [])
-              .whereType<Map<String, dynamic>>()
-              .map(
-                (item) => ReaderAdminAnnouncement(
-                  id: (item['id'] as num? ?? 0).toInt(),
-                  title: (item['title'] as String? ?? '').trim(),
-                  body: (item['body'] as String? ?? '').trim(),
-                  publishAtIso: (item['publishAt'] as String? ?? '').trim(),
-                  active: item['active'] as bool? ?? true,
-                ),
-              )
-              .where(
-                (item) =>
-                    item.active && (item.title.isNotEmpty || item.body.isNotEmpty),
-              )
-              .toList(growable: false);
+      final announcements = (payload['announcements'] as List<dynamic>? ??
+              const [])
+          .whereType<Map<String, dynamic>>()
+          .map(
+            (item) => ReaderAdminAnnouncement(
+              id: (item['id'] as num? ?? 0).toInt(),
+              title: (item['title'] as String? ?? '').trim(),
+              body: (item['body'] as String? ?? '').trim(),
+              publishAtIso: (item['publishAt'] as String? ?? '').trim(),
+              active: item['active'] as bool? ?? true,
+            ),
+          )
+          .where(
+            (item) =>
+                item.active && (item.title.isNotEmpty || item.body.isNotEmpty),
+          )
+          .toList(growable: false);
 
       return ReaderAdminConfig(
         source: source,

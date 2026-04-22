@@ -22,6 +22,12 @@ class MushafAssetProfile {
 
 class QuranAssetResolver {
   static const int _maxResolvedAssetPathCacheEntries = 1200;
+  static const Map<String, int> _extensionPriority = <String, int>{
+    'webp': 3,
+    'png': 2,
+    'jpg': 1,
+    'jpeg': 1,
+  };
 
   static const Map<MushafEdition, MushafAssetProfile> _profiles =
       <MushafEdition, MushafAssetProfile>{
@@ -61,6 +67,9 @@ class QuranAssetResolver {
 
   final Map<MushafEdition, ReaderRemoteAssetPack> _remotePacksByEdition =
       <MushafEdition, ReaderRemoteAssetPack>{};
+  final Map<MushafEdition, ReaderRemoteAssetPack>
+      _configuredRemotePacksByEdition =
+      <MushafEdition, ReaderRemoteAssetPack>{};
   final Map<MushafEdition, ReaderRemoteAssetPack> _localPacksByEdition =
       <MushafEdition, ReaderRemoteAssetPack>{};
   final LinkedHashMap<String, String?> _resolvedAssetPathCache =
@@ -88,14 +97,22 @@ class QuranAssetResolver {
   }
 
   void applyRemoteConfig(ReaderAdminConfig config) {
-    _remoteAssetsBaseUrl = '';
+    _remoteAssetsBaseUrl = config.assetsBaseUrl.trim();
+    _configuredRemotePacksByEdition
+      ..clear()
+      ..addAll(config.assetPacks);
     if (!config.hasEditionControls) {
       _enabledEditionFilter = null;
     } else {
-      _enabledEditionFilter = config.editions.entries
-          .where((entry) => entry.value.enabled)
+      final disabledEditions = config.editions.entries
+          .where((entry) => !entry.value.enabled)
           .map((entry) => entry.key)
           .toSet();
+      _enabledEditionFilter = disabledEditions.isEmpty
+          ? null
+          : MushafEdition.values
+              .where((edition) => !disabledEditions.contains(edition))
+              .toSet();
     }
     _rebuildActivePacks();
   }
@@ -301,7 +318,6 @@ class QuranAssetResolver {
         .where((key) => key.startsWith('assets/asset_packs/'))
         .toList(growable: false);
     if (assetKeys.isEmpty) {
-      _seedFallbackLocalPacks();
       return;
     }
 
@@ -353,8 +369,16 @@ class QuranAssetResolver {
 
     for (final entry in packsByEdition.entries) {
       final best = entry.value
-        ..sort(
-            (a, b) => b.importedPages.length.compareTo(a.importedPages.length));
+        ..sort((a, b) {
+          final pageCountDiff =
+              b.importedPages.length.compareTo(a.importedPages.length);
+          if (pageCountDiff != 0) {
+            return pageCountDiff;
+          }
+          return _extensionRank(b.extension).compareTo(
+            _extensionRank(a.extension),
+          );
+        });
       final selected = best.first;
       final importedPages = selected.importedPages.toList()..sort();
       final start = importedPages.isEmpty ? null : importedPages.first;
@@ -370,23 +394,25 @@ class QuranAssetResolver {
         contiguousImportedPageEnd: end,
       );
     }
-
-    if (_localPacksByEdition.isEmpty) {
-      _seedFallbackLocalPacks();
-    }
   }
 
   void _rebuildActivePacks() {
-    _remotePacksByEdition
-      ..clear()
-      ..addEntries(
-        _localPacksByEdition.entries.where((entry) {
-          if (_enabledEditionFilter == null) {
-            return true;
-          }
-          return _enabledEditionFilter!.contains(entry.key);
-        }),
-      );
+    _remotePacksByEdition.clear();
+    for (final edition in MushafEdition.values) {
+      if (_enabledEditionFilter != null &&
+          !_enabledEditionFilter!.contains(edition)) {
+        continue;
+      }
+      final configuredPack = _configuredRemotePacksByEdition[edition];
+      if (configuredPack != null) {
+        _remotePacksByEdition[edition] = configuredPack;
+        continue;
+      }
+      final localPack = _localPacksByEdition[edition];
+      if (localPack != null) {
+        _remotePacksByEdition[edition] = localPack;
+      }
+    }
     _rebuildEditionMetrics();
     _clearResolvedAssetPathCache();
   }
@@ -399,23 +425,8 @@ class QuranAssetResolver {
     return 'assets/asset_packs/${pack.folderName}/${pack.version}/$filename.${pack.fileExtension}';
   }
 
-  void _seedFallbackLocalPacks() {
-    for (final entry in _profiles.entries) {
-      final profile = entry.value;
-      final totalPages = QuranConstants.defaultTotalPages +
-          profile.leadingPagesToSkip +
-          profile.trailingPagesToTrim;
-      _localPacksByEdition[entry.key] = ReaderRemoteAssetPack(
-        edition: entry.key,
-        folderName: profile.folderName,
-        version: 'mobile-app-source',
-        pageCount: totalPages,
-        fileExtension: 'jpg',
-        availableImportedPages: const <int>[],
-        contiguousImportedPageStart: 1,
-        contiguousImportedPageEnd: totalPages,
-      );
-    }
+  int _extensionRank(String extension) {
+    return _extensionPriority[extension.trim().toLowerCase()] ?? 0;
   }
 
   void _clearResolvedAssetPathCache() {

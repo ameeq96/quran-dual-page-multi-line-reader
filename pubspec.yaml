@@ -66,21 +66,8 @@ flutter:
 
   assets:
     - assets/quran_pages/
-    - assets/asset_packs/
-    - assets/asset_packs/10_line/
-    - assets/asset_packs/10_line/mobile-app-source/
-    - assets/asset_packs/13_line/
-    - assets/asset_packs/13_line/mobile-app-source/
-    - assets/asset_packs/14_line/
-    - assets/asset_packs/14_line/mobile-app-source/
-    - assets/asset_packs/15_line/
-    - assets/asset_packs/15_line/mobile-app-source/
     - assets/asset_packs/16_line/
     - assets/asset_packs/16_line/mobile-app-source/
-    - assets/asset_packs/17_line/
-    - assets/asset_packs/17_line/mobile-app-source/
-    - assets/asset_packs/kanzul_iman/
-    - assets/asset_packs/kanzul_iman/mobile-app-source/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
