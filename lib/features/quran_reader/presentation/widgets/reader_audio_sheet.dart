@@ -116,7 +116,7 @@ class ReaderAudioContent extends StatelessWidget {
                             width: 54,
                             height: 5,
                             decoration: BoxDecoration(
-                              color: theme.dividerColor.withOpacity(0.8),
+                              color: theme.dividerColor.withValues(alpha: 0.8),
                               borderRadius: BorderRadius.circular(999),
                             ),
                           ),
@@ -131,19 +131,20 @@ class ReaderAudioContent extends StatelessWidget {
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             colors: [
-                              theme.colorScheme.surface.withOpacity(0.97),
-                              theme.colorScheme.surfaceContainer.withOpacity(
-                                0.92,
+                              theme.colorScheme.surface.withValues(alpha: 0.97),
+                              theme.colorScheme.surfaceContainer.withValues(
+                                alpha: 0.92,
                               ),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(28),
                           border: Border.all(
-                            color: theme.dividerColor.withOpacity(0.46),
+                            color: theme.dividerColor.withValues(alpha: 0.46),
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: theme.colorScheme.shadow.withOpacity(0.06),
+                              color: theme.colorScheme.shadow
+                                  .withValues(alpha: 0.06),
                               blurRadius: 22,
                               offset: const Offset(0, 10),
                             ),
@@ -161,7 +162,7 @@ class ReaderAudioContent extends StatelessWidget {
                                     height: compact ? 46 : 52,
                                     decoration: BoxDecoration(
                                       color: theme.colorScheme.primary
-                                          .withOpacity(0.1),
+                                          .withValues(alpha: 0.1),
                                       borderRadius: BorderRadius.circular(16),
                                     ),
                                     child: Icon(
@@ -195,8 +196,8 @@ class ReaderAudioContent extends StatelessWidget {
                                               : 'Choose any Surah and Qari, then play recitation.',
                                           style: theme.textTheme.bodyMedium
                                               ?.copyWith(
-                                            color: theme.colorScheme
-                                                .onSurfaceVariant,
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant,
                                           ),
                                         ),
                                       ],
@@ -233,7 +234,7 @@ class ReaderAudioContent extends StatelessWidget {
                               const _AudioSectionLabel(label: 'Selection'),
                               const SizedBox(height: 10),
                               DropdownButtonFormField<int>(
-                                value: chapter?.id,
+                                initialValue: chapter?.id,
                                 isExpanded: true,
                                 menuMaxHeight: 360,
                                 decoration: const InputDecoration(
@@ -276,7 +277,7 @@ class ReaderAudioContent extends StatelessWidget {
                               ),
                               SizedBox(height: sectionGap),
                               DropdownButtonFormField<int>(
-                                value: audio.selectedReciter?.id,
+                                initialValue: audio.selectedReciter?.id,
                                 isExpanded: true,
                                 menuMaxHeight: 320,
                                 decoration: const InputDecoration(
@@ -308,7 +309,8 @@ class ReaderAudioContent extends StatelessWidget {
                                   if (value == null) {
                                     return;
                                   }
-                                  final reciter = controller.reciters.firstWhere(
+                                  final reciter =
+                                      controller.reciters.firstWhere(
                                     (entry) => entry.id == value,
                                   );
                                   controller.selectReciter(reciter);
@@ -408,7 +410,8 @@ class ReaderAudioContent extends StatelessWidget {
                                   ),
                                   OutlinedButton.icon(
                                     onPressed: chapter == null ||
-                                            !controller.isSelectedAudioDownloaded
+                                            !controller
+                                                .isSelectedAudioDownloaded
                                         ? null
                                         : () {
                                             controller
@@ -435,7 +438,7 @@ class ReaderAudioContent extends StatelessWidget {
                                 DecoratedBox(
                                   decoration: BoxDecoration(
                                     color: theme.colorScheme.errorContainer
-                                        .withOpacity(0.72),
+                                        .withValues(alpha: 0.72),
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Padding(
@@ -444,8 +447,8 @@ class ReaderAudioContent extends StatelessWidget {
                                       audio.errorMessage!,
                                       style:
                                           theme.textTheme.bodySmall?.copyWith(
-                                        color: theme
-                                            .colorScheme.onErrorContainer,
+                                        color:
+                                            theme.colorScheme.onErrorContainer,
                                       ),
                                     ),
                                   ),
@@ -472,14 +475,8 @@ class ReaderAudioContent extends StatelessWidget {
 
   String _formatMillis(int millis) {
     final duration = Duration(milliseconds: millis);
-    final minutes = duration.inMinutes
-        .remainder(60)
-        .toString()
-        .padLeft(2, '0');
-    final seconds = duration.inSeconds
-        .remainder(60)
-        .toString()
-        .padLeft(2, '0');
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
     final hours = duration.inHours;
     if (hours > 0) {
       return '${hours.toString().padLeft(2, '0')}:$minutes:$seconds';
@@ -523,10 +520,11 @@ class _AudioStatusChip extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.24),
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.24),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: theme.dividerColor.withOpacity(0.38),
+          color: theme.dividerColor.withValues(alpha: 0.38),
         ),
       ),
       child: Padding(

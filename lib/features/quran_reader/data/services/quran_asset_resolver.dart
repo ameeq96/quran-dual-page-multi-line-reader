@@ -1,9 +1,10 @@
 import 'dart:collection';
-import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:dio/dio.dart';
 
 import '../../../../core/constants/quran_constants.dart';
+import '../../domain/models/quran_asset_pack_download.dart';
 import '../../domain/models/reader_admin_config.dart';
 import '../../domain/models/reader_settings.dart';
 import 'quran_offline_pack_service.dart';
@@ -72,6 +73,10 @@ class QuranAssetResolver {
       <MushafEdition, ReaderRemoteAssetPack>{};
   final Map<MushafEdition, ReaderRemoteAssetPack> _localPacksByEdition =
       <MushafEdition, ReaderRemoteAssetPack>{};
+  final Map<MushafEdition, ReaderRemoteAssetPack> _downloadedZipPacksByEdition =
+      <MushafEdition, ReaderRemoteAssetPack>{};
+  final Map<MushafEdition, QuranZipAssetPack> _zipCatalogByEdition =
+      <MushafEdition, QuranZipAssetPack>{};
   final LinkedHashMap<String, String?> _resolvedAssetPathCache =
       LinkedHashMap<String, String?>();
   final Map<MushafEdition, _EditionAssetMetrics> _editionMetrics =
@@ -85,6 +90,8 @@ class QuranAssetResolver {
 
   Future<void> initialize() async {
     await _offlinePackService.initialize();
+    _setZipCatalog(_offlinePackService.defaultZipPacks());
+    await _loadDownloadedZipPacks();
     await _loadLocalPacks();
     _rebuildActivePacks();
   }
@@ -266,44 +273,92 @@ class QuranAssetResolver {
   }
 
   Future<bool> hasOfflinePackForEdition(MushafEdition edition) async {
-    final remotePack = _remotePacksByEdition[edition];
-    if (remotePack == null) {
-      return false;
-    }
-    return _offlinePackService.hasEditionPack(
-      edition: edition,
-      pack: remotePack,
-    );
+    return _downloadedZipPacksByEdition.containsKey(edition);
   }
 
   Future<void> downloadOfflinePack(
     MushafEdition edition, {
     void Function(double progress)? onProgress,
+    CancelToken? cancelToken,
   }) async {
+    await _loadZipCatalog();
+    final zipPack = _zipCatalogByEdition[edition];
+    if (zipPack != null) {
+      final downloadedPack = await _offlinePackService.downloadEditionZipPack(
+        zipPack: zipPack,
+        onProgress: onProgress,
+        cancelToken: cancelToken,
+      );
+      _downloadedZipPacksByEdition[edition] =
+          downloadedPack.toRemoteAssetPack();
+      _rebuildActivePacks();
+      _clearResolvedAssetPathCache();
+      return;
+    }
+
     final remotePack = _remotePacksByEdition[edition];
     if (remotePack == null || _remoteAssetsBaseUrl.trim().isEmpty) {
-      throw StateError(
-          'No active admin pack is available for ${edition.label}.');
+      throw StateError('No ZIP pack is available for ${edition.label}.');
     }
     await _offlinePackService.downloadEditionPack(
       edition: edition,
       pack: remotePack,
       assetsBaseUrl: _remoteAssetsBaseUrl,
       onProgress: onProgress,
+      cancelToken: cancelToken,
     );
+    await _loadDownloadedZipPacks();
+    _rebuildActivePacks();
     _clearResolvedAssetPathCache();
   }
 
   Future<void> removeOfflinePack(MushafEdition edition) async {
-    final remotePack = _remotePacksByEdition[edition];
-    if (remotePack == null) {
-      return;
-    }
-    await _offlinePackService.removeEditionPack(
-      edition: edition,
-      pack: remotePack,
-    );
+    await _offlinePackService.removeZipPack(edition);
+    _downloadedZipPacksByEdition.remove(edition);
+    _rebuildActivePacks();
     _clearResolvedAssetPathCache();
+  }
+
+  List<QuranZipAssetPack> get availableZipPacksSnapshot {
+    return _zipCatalogSnapshot();
+  }
+
+  Future<List<QuranZipAssetPack>> fetchAvailableZipPacks({
+    bool forceRefresh = false,
+  }) async {
+    if (forceRefresh || _zipCatalogByEdition.isEmpty) {
+      await _loadZipCatalog();
+    }
+    return _zipCatalogSnapshot();
+  }
+
+  Future<void> _loadZipCatalog() async {
+    final packs = await _offlinePackService.fetchAvailableZipPacks();
+    _setZipCatalog(packs);
+  }
+
+  void _setZipCatalog(List<QuranZipAssetPack> packs) {
+    _zipCatalogByEdition
+      ..clear()
+      ..addEntries(packs.map((pack) => MapEntry(pack.edition, pack)));
+  }
+
+  List<QuranZipAssetPack> _zipCatalogSnapshot() {
+    return MushafEdition.values
+        .map((edition) => _zipCatalogByEdition[edition])
+        .whereType<QuranZipAssetPack>()
+        .toList(growable: false);
+  }
+
+  Future<void> _loadDownloadedZipPacks() async {
+    final packs = await _offlinePackService.loadDownloadedZipPacks();
+    _downloadedZipPacksByEdition
+      ..clear()
+      ..addEntries(
+        packs.entries.map(
+          (entry) => MapEntry(entry.key, entry.value.toRemoteAssetPack()),
+        ),
+      );
   }
 
   Future<void> _loadLocalPacks() async {
@@ -312,9 +367,9 @@ class QuranAssetResolver {
     }
     _localPacksLoaded = true;
 
-    final manifestJson = await rootBundle.loadString('AssetManifest.json');
-    final manifest = json.decode(manifestJson) as Map<String, dynamic>;
-    final assetKeys = manifest.keys
+    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    final assetKeys = manifest
+        .listAssets()
         .where((key) => key.startsWith('assets/asset_packs/'))
         .toList(growable: false);
     if (assetKeys.isEmpty) {
@@ -401,6 +456,11 @@ class QuranAssetResolver {
     for (final edition in MushafEdition.values) {
       if (_enabledEditionFilter != null &&
           !_enabledEditionFilter!.contains(edition)) {
+        continue;
+      }
+      final downloadedZipPack = _downloadedZipPacksByEdition[edition];
+      if (downloadedZipPack != null) {
+        _remotePacksByEdition[edition] = downloadedZipPack;
         continue;
       }
       final configuredPack = _configuredRemotePacksByEdition[edition];

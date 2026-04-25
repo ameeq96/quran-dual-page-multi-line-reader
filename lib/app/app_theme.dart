@@ -100,8 +100,8 @@ abstract final class AppTheme {
     );
 
     final fieldFillColor = isDark
-        ? colorScheme.surfaceContainerHighest.withOpacity(0.42)
-        : Colors.white.withOpacity(0.74);
+        ? colorScheme.surfaceContainerHighest.withValues(alpha: 0.42)
+        : Colors.white.withValues(alpha: 0.74);
 
     return baseTheme.copyWith(
       textTheme: textTheme,
@@ -118,24 +118,24 @@ abstract final class AppTheme {
           fontWeight: FontWeight.w900,
         ),
       ),
-      dialogTheme: DialogTheme(
+      dialogTheme: DialogThemeData(
         backgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(30),
           side: BorderSide(
-            color: effectiveDivider.withOpacity(isDark ? 0.42 : 0.68),
+            color: effectiveDivider.withValues(alpha: isDark ? 0.42 : 0.68),
           ),
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         elevation: 0,
         margin: EdgeInsets.zero,
-        color: colorScheme.surface.withOpacity(isDark ? 0.9 : 0.95),
+        color: colorScheme.surface.withValues(alpha: isDark ? 0.9 : 0.95),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(28),
           side: BorderSide(
-            color: effectiveDivider.withOpacity(isDark ? 0.44 : 0.72),
+            color: effectiveDivider.withValues(alpha: isDark ? 0.44 : 0.72),
           ),
         ),
       ),
@@ -143,7 +143,7 @@ abstract final class AppTheme {
         backgroundColor: colorScheme.surface,
         modalBackgroundColor: colorScheme.surface,
         surfaceTintColor: Colors.transparent,
-        dragHandleColor: effectiveDivider.withOpacity(0.9),
+        dragHandleColor: effectiveDivider.withValues(alpha: 0.9),
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
         ),
@@ -174,7 +174,7 @@ abstract final class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),
-          side: BorderSide(color: effectiveDivider.withOpacity(0.72)),
+          side: BorderSide(color: effectiveDivider.withValues(alpha: 0.72)),
           textStyle: textTheme.labelLarge,
         ),
       ),
@@ -195,16 +195,18 @@ abstract final class AppTheme {
         suffixIconColor: colorScheme.onSurfaceVariant,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(color: effectiveDivider.withOpacity(0.58)),
+          borderSide:
+              BorderSide(color: effectiveDivider.withValues(alpha: 0.58)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: BorderSide(color: effectiveDivider.withOpacity(0.58)),
+          borderSide:
+              BorderSide(color: effectiveDivider.withValues(alpha: 0.58)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(
-            color: colorScheme.primary.withOpacity(0.72),
+            color: colorScheme.primary.withValues(alpha: 0.72),
             width: 1.5,
           ),
         ),
@@ -226,12 +228,12 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(22),
           side: BorderSide(
-            color: effectiveDivider.withOpacity(0.48),
+            color: effectiveDivider.withValues(alpha: 0.48),
           ),
         ),
         textStyle: textTheme.bodyMedium,
       ),
-      tabBarTheme: const TabBarTheme(dividerColor: Colors.transparent),
+      tabBarTheme: const TabBarThemeData(dividerColor: Colors.transparent),
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
@@ -243,15 +245,15 @@ abstract final class AppTheme {
           if (states.contains(WidgetState.selected)) {
             return colorScheme.primary;
           }
-          return effectiveDivider.withOpacity(0.62);
+          return effectiveDivider.withValues(alpha: 0.62);
         }),
       ),
       chipTheme: baseTheme.chipTheme.copyWith(
         backgroundColor: fieldFillColor,
-        disabledColor: fieldFillColor.withOpacity(0.72),
-        selectedColor: colorScheme.primary.withOpacity(0.14),
+        disabledColor: fieldFillColor.withValues(alpha: 0.72),
+        selectedColor: colorScheme.primary.withValues(alpha: 0.14),
         side: BorderSide(
-          color: effectiveDivider.withOpacity(0.6),
+          color: effectiveDivider.withValues(alpha: 0.6),
         ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(999),
@@ -260,13 +262,13 @@ abstract final class AppTheme {
       ),
       sliderTheme: baseTheme.sliderTheme.copyWith(
         activeTrackColor: colorScheme.primary,
-        inactiveTrackColor: effectiveDivider.withOpacity(0.52),
+        inactiveTrackColor: effectiveDivider.withValues(alpha: 0.52),
         thumbColor: colorScheme.primary,
-        overlayColor: colorScheme.primary.withOpacity(0.12),
+        overlayColor: colorScheme.primary.withValues(alpha: 0.12),
         trackHeight: 4,
       ),
       dividerTheme: DividerThemeData(
-        color: effectiveDivider.withOpacity(isDark ? 0.52 : 0.68),
+        color: effectiveDivider.withValues(alpha: isDark ? 0.52 : 0.68),
         thickness: 1,
         space: 1,
       ),

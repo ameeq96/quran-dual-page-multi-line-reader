@@ -99,7 +99,7 @@ class ReaderPageStripContent extends StatelessWidget {
     final thumbnailCacheWidth =
         (MediaQuery.of(context).devicePixelRatio * tileLogicalWidth)
             .round()
-            .clamp(180, 420)
+            .clamp(140, 280)
             .toInt();
 
     return SafeArea(
@@ -115,7 +115,7 @@ class ReaderPageStripContent extends StatelessWidget {
                   width: 54,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: theme.dividerColor.withOpacity(0.8),
+                    color: theme.dividerColor.withValues(alpha: 0.8),
                     borderRadius: BorderRadius.circular(999),
                   ),
                 ),
@@ -138,10 +138,10 @@ class ReaderPageStripContent extends StatelessWidget {
             const SizedBox(height: 16),
             Expanded(
               child: GridView.builder(
-                cacheExtent: size.height * 0.8,
+                cacheExtent: size.height * 0.35,
                 itemCount: controller.totalPages,
                 addAutomaticKeepAlives: false,
-                addRepaintBoundaries: false,
+                addRepaintBoundaries: true,
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: columns,
                   crossAxisSpacing: 12,
@@ -159,12 +159,13 @@ class ReaderPageStripContent extends StatelessWidget {
                       onTap: () => _handlePageOpen(context, pageNumber),
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.surface.withOpacity(0.95),
+                          color:
+                              theme.colorScheme.surface.withValues(alpha: 0.95),
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(
                             color: selected
                                 ? theme.colorScheme.primary
-                                : theme.dividerColor.withOpacity(0.5),
+                                : theme.dividerColor.withValues(alpha: 0.5),
                             width: selected ? 1.6 : 1,
                           ),
                         ),
@@ -180,7 +181,7 @@ class ReaderPageStripContent extends StatelessWidget {
                                           decoration: BoxDecoration(
                                             color: theme.colorScheme
                                                 .surfaceContainerHighest
-                                                .withOpacity(0.35),
+                                                .withValues(alpha: 0.35),
                                           ),
                                           child: Center(
                                             child: Text(

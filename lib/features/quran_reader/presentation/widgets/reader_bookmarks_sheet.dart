@@ -60,7 +60,7 @@ class ReaderBookmarksContent extends StatelessWidget {
                           width: 54,
                           height: 5,
                           decoration: BoxDecoration(
-                            color: theme.dividerColor.withOpacity(0.8),
+                            color: theme.dividerColor.withValues(alpha: 0.8),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         )
@@ -143,19 +143,19 @@ class ReaderBookmarksContent extends StatelessWidget {
                             runSpacing: 10,
                             children: entry.value.map((bookmark) {
                               return ActionChip(
-                              label: Text(bookmark.label),
-                              onPressed: () async {
-                                if (onSelectPage != null) {
-                                  await onSelectPage!(bookmark.pageNumber);
-                                } else {
-                                  Navigator.of(context).pop();
-                                  await controller.jumpToPage(
-                                    bookmark.pageNumber,
-                                  );
-                                }
-                              },
-                            );
-                          }).toList(growable: false),
+                                label: Text(bookmark.label),
+                                onPressed: () async {
+                                  if (onSelectPage != null) {
+                                    await onSelectPage!(bookmark.pageNumber);
+                                  } else {
+                                    Navigator.of(context).pop();
+                                    await controller.jumpToPage(
+                                      bookmark.pageNumber,
+                                    );
+                                  }
+                                },
+                              );
+                            }).toList(growable: false),
                           ),
                         ],
                       ),
@@ -183,12 +183,12 @@ class _BookmarksCard extends StatelessWidget {
     final theme = Theme.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.96),
+        color: theme.colorScheme.surface.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.42)),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.42)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 22,
             offset: const Offset(0, 12),
           ),

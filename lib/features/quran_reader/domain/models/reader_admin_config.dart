@@ -62,7 +62,8 @@ class ReaderRemoteAssetPack {
       return availableImportedPages.contains(importedPageNumber);
     }
 
-    if (contiguousImportedPageStart != null && contiguousImportedPageEnd != null) {
+    if (contiguousImportedPageStart != null &&
+        contiguousImportedPageEnd != null) {
       return importedPageNumber >= contiguousImportedPageStart! &&
           importedPageNumber <= contiguousImportedPageEnd!;
     }
@@ -152,7 +153,8 @@ class ReaderAdminConfig {
       featureFlags.isEmpty &&
       announcements.isEmpty;
 
-  bool get hasRemoteAssetPacks => assetsBaseUrl.isNotEmpty && assetPacks.isNotEmpty;
+  bool get hasRemoteAssetPacks =>
+      assetsBaseUrl.isNotEmpty && assetPacks.isNotEmpty;
   bool get hasRemoteContentDatasets => contentDatasets.isNotEmpty;
   bool get hasEditionControls => editions.isNotEmpty;
 
@@ -163,6 +165,7 @@ class ReaderAdminConfig {
     }
     return contentDatasets[key];
   }
+
   ReaderAdminEdition? editionConfig(MushafEdition edition) => editions[edition];
 
   bool isFeatureEnabled(String key, {bool fallback = false}) {

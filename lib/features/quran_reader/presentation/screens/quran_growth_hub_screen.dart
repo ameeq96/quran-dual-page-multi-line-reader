@@ -6,7 +6,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../../app/app_theme.dart';
 import '../../domain/models/reader_growth_models.dart';
-import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
 
 class QuranGrowthHubScreen extends StatelessWidget {
@@ -39,50 +38,6 @@ class QuranGrowthHubScreen extends StatelessWidget {
       text:
           'Reader backup export with bookmarks, notes, plan, and hifz tracking.',
     );
-  }
-
-  Future<void> _downloadOfflinePack(
-    BuildContext context,
-    MushafEdition edition,
-  ) async {
-    try {
-      await controller.downloadOfflineEditionPack(edition);
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${edition.label} is now available offline.')),
-      );
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to download ${edition.label}: $error')),
-      );
-    }
-  }
-
-  Future<void> _removeOfflinePack(
-    BuildContext context,
-    MushafEdition edition,
-  ) async {
-    try {
-      await controller.removeOfflineEditionPack(edition);
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${edition.label} offline pack removed.')),
-      );
-    } catch (error) {
-      if (!context.mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to remove ${edition.label}: $error')),
-      );
-    }
   }
 
   @override
@@ -139,7 +94,7 @@ class QuranGrowthHubScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Manage reading plans, hifz revision, AI depth, offline edition packs, accessibility, and backup-ready sync settings from one place.',
+                        'Manage reading plans, hifz revision, AI depth, accessibility, and backup-ready sync settings from one place.',
                         style: themeData.textTheme.bodyMedium?.copyWith(
                           color: themeData.colorScheme.onSurfaceVariant,
                         ),
@@ -351,164 +306,6 @@ class QuranGrowthHubScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Offline edition packs',
-                        style: themeData.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Download the exact Quran scan packs you use online so the same editions keep working offline.',
-                        style: themeData.textTheme.bodyMedium?.copyWith(
-                          color: themeData.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      ...controller.offlineEditionPacks.map((pack) {
-                        final remotePack =
-                            controller.remoteAssetPackForEdition(pack.edition);
-                        final isDownloading =
-                            controller.isOfflinePackDownloading(pack.edition);
-                        final isDownloaded =
-                            controller.isOfflinePackDownloaded(pack.edition);
-                        final isBundled =
-                            controller.isBundledPackForEdition(pack.edition);
-                        final canDownload = remotePack != null &&
-                            !isDownloading &&
-                            !isDownloaded &&
-                            !isBundled;
-                        final canRemove =
-                            isDownloaded && !isDownloading && !isBundled;
-                        final progress =
-                            controller.offlinePackProgressForEdition(
-                          pack.edition,
-                        );
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 14),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color:
-                                  themeData.colorScheme.surfaceContainerLowest,
-                              borderRadius: BorderRadius.circular(22),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 18,
-                                        backgroundColor: themeData
-                                            .colorScheme.primary
-                                            .withOpacity(0.12),
-                                        child: Text(
-                                          pack.edition.shortLabel,
-                                          style: themeData.textTheme.labelLarge
-                                              ?.copyWith(
-                                            color:
-                                                themeData.colorScheme.primary,
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              pack.title,
-                                              style: themeData
-                                                  .textTheme.titleMedium
-                                                  ?.copyWith(
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              controller
-                                                  .adminPackSubtitleForEdition(
-                                                pack.edition,
-                                              ),
-                                              style: themeData
-                                                  .textTheme.bodySmall
-                                                  ?.copyWith(
-                                                color: themeData.colorScheme
-                                                    .onSurfaceVariant,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      _StatusChip(
-                                        label: controller
-                                            .adminPackStatusForEdition(
-                                          pack.edition,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  if (isDownloading) ...[
-                                    const SizedBox(height: 12),
-                                    LinearProgressIndicator(
-                                      value: progress <= 0 || progress >= 1
-                                          ? null
-                                          : progress,
-                                      minHeight: 8,
-                                      borderRadius: BorderRadius.circular(999),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 12),
-                                  Wrap(
-                                    spacing: 10,
-                                    runSpacing: 10,
-                                    children: [
-                                      FilledButton.tonal(
-                                        onPressed: canDownload
-                                            ? () => _downloadOfflinePack(
-                                                  context,
-                                                  pack.edition,
-                                                )
-                                            : null,
-                                        child: Text(
-                                          isBundled
-                                              ? 'Built-in'
-                                              : isDownloaded
-                                                  ? 'Downloaded'
-                                                  : isDownloading
-                                                      ? 'Downloading...'
-                                                      : 'Download offline',
-                                        ),
-                                      ),
-                                      OutlinedButton(
-                                        onPressed: canRemove
-                                            ? () => _removeOfflinePack(
-                                                  context,
-                                                  pack.edition,
-                                                )
-                                            : null,
-                                        child: const Text('Remove'),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _HubCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
                         'Accessibility & sync',
                         style: themeData.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w900,
@@ -612,7 +409,7 @@ class _HubCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.shadow.withOpacity(0.08),
+            color: theme.colorScheme.shadow.withValues(alpha: 0.08),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -715,34 +512,6 @@ class _Pill extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({
-    required this.label,
-  });
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Text(
-          label,
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: theme.colorScheme.primary,
-          ),
         ),
       ),
     );

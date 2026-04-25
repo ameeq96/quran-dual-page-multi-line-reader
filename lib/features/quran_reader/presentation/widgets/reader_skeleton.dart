@@ -17,11 +17,11 @@ class ReaderSkeletonBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final base = theme.colorScheme.surfaceContainerHighest.withOpacity(
-      theme.brightness == Brightness.dark ? 0.34 : 0.62,
+    final base = theme.colorScheme.surfaceContainerHighest.withValues(
+      alpha: theme.brightness == Brightness.dark ? 0.34 : 0.62,
     );
-    final edge = theme.colorScheme.outlineVariant.withOpacity(
-      theme.brightness == Brightness.dark ? 0.18 : 0.18,
+    final edge = theme.colorScheme.outlineVariant.withValues(
+      alpha: theme.brightness == Brightness.dark ? 0.18 : 0.18,
     );
 
     return Align(
@@ -67,7 +67,8 @@ class ReaderSkeletonLines extends StatelessWidget {
       children: List<Widget>.generate(lineCount, (index) {
         final isLast = index == lineCount - 1;
         return Padding(
-          padding: EdgeInsets.only(bottom: index == lineCount - 1 ? 0 : spacing),
+          padding:
+              EdgeInsets.only(bottom: index == lineCount - 1 ? 0 : spacing),
           child: ReaderSkeletonBlock(
             height: lineHeight,
             width: isLast ? 220 * lastLineWidthFactor : double.infinity,
@@ -102,10 +103,11 @@ class ReaderSkeletonResultList extends StatelessWidget {
         return Container(
           padding: EdgeInsets.all(tilePadding),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface.withOpacity(0.92),
+            color:
+                Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: Theme.of(context).dividerColor.withOpacity(0.4),
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.4),
             ),
           ),
           child: Row(
@@ -165,8 +167,8 @@ class ReaderSkeletonPage extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: <Color>[
-            theme.colorScheme.surface.withOpacity(0.98),
-            theme.colorScheme.surfaceContainerLowest.withOpacity(0.98),
+            theme.colorScheme.surface.withValues(alpha: 0.98),
+            theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.98),
           ],
         ),
       ),

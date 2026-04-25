@@ -12,7 +12,8 @@ class QuranRemoteContentService {
   final http.Client _client;
   final Map<int, String> _chapterInfoCache = <int, String>{};
   final Map<int, String> _tafsirCache = <int, String>{};
-  final Map<int, Future<String?>> _chapterInfoRequests = <int, Future<String?>>{};
+  final Map<int, Future<String?>> _chapterInfoRequests =
+      <int, Future<String?>>{};
   final Map<int, Future<String?>> _tafsirRequests = <int, Future<String?>>{};
 
   static const Map<String, String> _headers = <String, String>{

@@ -79,8 +79,7 @@ class ReaderHifzLineMask extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final topInset = constraints.maxHeight * geometry.topInsetFactor;
-        final bottomInset =
-            constraints.maxHeight * geometry.bottomInsetFactor;
+        final bottomInset = constraints.maxHeight * geometry.bottomInsetFactor;
         final usableHeight = math.max(
           0.0,
           constraints.maxHeight - topInset - bottomInset,
@@ -105,17 +104,17 @@ class ReaderHifzLineMask extends StatelessWidget {
               height: barHeight,
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: maskColor.withOpacity(maskOpacity),
+                  color: maskColor.withValues(alpha: maskOpacity),
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(
                     color: maskColor.computeLuminance() < 0.5
-                        ? Colors.white.withOpacity(0.06)
-                        : Colors.black.withOpacity(0.05),
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : Colors.black.withValues(alpha: 0.05),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: maskColor.withOpacity(
-                        maskColor.computeLuminance() < 0.5 ? 0.18 : 0.08,
+                      color: maskColor.withValues(
+                        alpha: maskColor.computeLuminance() < 0.5 ? 0.18 : 0.08,
                       ),
                       blurRadius: 4,
                       offset: const Offset(0, 1),
@@ -289,7 +288,8 @@ class ReaderHifzManualMask extends StatelessWidget {
     var nearestIndex = 0;
     var nearestDistance = double.infinity;
     for (var index = 0; index < anchors.length; index += 1) {
-      final anchorDy = topInset + (usableHeight * anchors[index].clamp(0.0, 1.0));
+      final anchorDy =
+          topInset + (usableHeight * anchors[index].clamp(0.0, 1.0));
       final distance = (anchorDy - localDy).abs();
       if (distance < nearestDistance) {
         nearestDistance = distance;
@@ -314,8 +314,7 @@ class ReaderHifzManualMask extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final topInset = constraints.maxHeight * geometry.topInsetFactor;
-        final bottomInset =
-            constraints.maxHeight * geometry.bottomInsetFactor;
+        final bottomInset = constraints.maxHeight * geometry.bottomInsetFactor;
         final usableHeight = math.max(
           0.0,
           constraints.maxHeight - topInset - bottomInset,
@@ -336,18 +335,22 @@ class ReaderHifzManualMask extends StatelessWidget {
                 topInset + (usableHeight * clampedAnchor) - (barHeight / 2);
             Widget bar = DecoratedBox(
               decoration: BoxDecoration(
-                color: maskColor.withOpacity(
-                  linesHidden ? maskOpacity : math.max(maskOpacity * 0.3, 0.2),
+                color: maskColor.withValues(
+                  alpha: linesHidden
+                      ? maskOpacity
+                      : math.max(maskOpacity * 0.3, 0.2),
                 ),
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(
                   color: maskColor.computeLuminance() < 0.5
-                      ? Colors.white.withOpacity(linesHidden ? 0.06 : 0.22)
-                      : Colors.black.withOpacity(0.05),
+                      ? Colors.white
+                          .withValues(alpha: linesHidden ? 0.06 : 0.22)
+                      : Colors.black.withValues(alpha: 0.05),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: maskColor.withOpacity(linesHidden ? 0.2 : 0.08),
+                    color:
+                        maskColor.withValues(alpha: linesHidden ? 0.2 : 0.08),
                     blurRadius: 4,
                     offset: const Offset(0, 1),
                   ),
@@ -364,13 +367,13 @@ class ReaderHifzManualMask extends StatelessWidget {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(
-                          linesHidden ? 0.18 : 0.08,
+                        color: Colors.black.withValues(
+                          alpha: linesHidden ? 0.18 : 0.08,
                         ),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: Colors.white.withOpacity(
-                            linesHidden ? 0.14 : 0.24,
+                          color: Colors.white.withValues(
+                            alpha: linesHidden ? 0.14 : 0.24,
                           ),
                         ),
                       ),
@@ -378,8 +381,8 @@ class ReaderHifzManualMask extends StatelessWidget {
                         'L$selectedLineNumber',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Colors.white.withOpacity(
-                                linesHidden ? 0.92 : 0.76,
+                              color: Colors.white.withValues(
+                                alpha: linesHidden ? 0.92 : 0.76,
                               ),
                               fontWeight: FontWeight.w800,
                             ),
@@ -390,8 +393,8 @@ class ReaderHifzManualMask extends StatelessWidget {
                       width: 52,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(
-                          linesHidden ? 0.34 : 0.62,
+                        color: Colors.white.withValues(
+                          alpha: linesHidden ? 0.34 : 0.62,
                         ),
                         borderRadius: BorderRadius.circular(999),
                       ),
@@ -401,8 +404,8 @@ class ReaderHifzManualMask extends StatelessWidget {
                       width: 42,
                       child: Icon(
                         Icons.drag_indicator_rounded,
-                        color: Colors.white.withOpacity(
-                          linesHidden ? 0.8 : 0.7,
+                        color: Colors.white.withValues(
+                          alpha: linesHidden ? 0.8 : 0.7,
                         ),
                         size: 18,
                       ),

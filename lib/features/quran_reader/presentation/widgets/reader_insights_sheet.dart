@@ -157,7 +157,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                       width: 54,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: theme.dividerColor.withOpacity(0.8),
+                        color: theme.dividerColor.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
@@ -662,7 +662,8 @@ class _FolderBookmarkGroup extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.18),
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Padding(
@@ -767,10 +768,10 @@ class _SectionCard extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.95),
+        color: theme.colorScheme.surface.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: theme.dividerColor.withOpacity(0.5),
+          color: theme.dividerColor.withValues(alpha: 0.5),
         ),
       ),
       child: Padding(
@@ -796,7 +797,7 @@ class _StatPill extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Padding(

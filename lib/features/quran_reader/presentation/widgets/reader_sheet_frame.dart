@@ -86,8 +86,8 @@ class _ReaderSheetFrameState extends State<ReaderSheetFrame> {
           if (delta == 0) {
             return;
           }
-          final nextOffset = (_dragOffset + delta)
-              .clamp(0.0, widget.dismissThreshold * 1.45);
+          final nextOffset =
+              (_dragOffset + delta).clamp(0.0, widget.dismissThreshold * 1.45);
           if ((_dragOffset - nextOffset).abs() > 0.5) {
             setState(() {
               _dragOffset = nextOffset;

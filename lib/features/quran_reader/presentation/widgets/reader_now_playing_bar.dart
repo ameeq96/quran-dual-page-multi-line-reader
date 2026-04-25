@@ -34,14 +34,14 @@ class ReaderNowPlayingBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(24),
             child: Ink(
               decoration: BoxDecoration(
-                color: theme.colorScheme.surface.withOpacity(0.94),
+                color: theme.colorScheme.surface.withValues(alpha: 0.94),
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: theme.dividerColor.withOpacity(0.55),
+                  color: theme.dividerColor.withValues(alpha: 0.55),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: theme.colorScheme.shadow.withOpacity(0.12),
+                    color: theme.colorScheme.shadow.withValues(alpha: 0.12),
                     blurRadius: 20,
                     offset: const Offset(0, 10),
                   ),
@@ -58,7 +58,8 @@ class ReaderNowPlayingBar extends StatelessWidget {
                           width: 42,
                           height: 42,
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withOpacity(0.1),
+                            color: theme.colorScheme.primary
+                                .withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: Icon(
@@ -127,7 +128,8 @@ class ReaderNowPlayingBar extends StatelessWidget {
                       child: LinearProgressIndicator(
                         minHeight: 4,
                         value: audio.durationMillis > 0 ? audio.progress : 0,
-                        backgroundColor: theme.dividerColor.withOpacity(0.22),
+                        backgroundColor:
+                            theme.dividerColor.withValues(alpha: 0.22),
                       ),
                     ),
                   ],

@@ -63,18 +63,19 @@ class ReaderControlsOverlay extends StatelessWidget {
                         color: Theme.of(context)
                             .colorScheme
                             .surface
-                            .withOpacity(0.9),
+                            .withValues(alpha: 0.9),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color:
-                              Theme.of(context).dividerColor.withOpacity(0.66),
+                          color: Theme.of(context)
+                              .dividerColor
+                              .withValues(alpha: 0.66),
                         ),
                         boxShadow: [
                           BoxShadow(
                             color: Theme.of(context)
                                 .colorScheme
                                 .shadow
-                                .withOpacity(0.08),
+                                .withValues(alpha: 0.08),
                             blurRadius: 20,
                             offset: const Offset(0, 10),
                           ),
@@ -133,17 +134,17 @@ class _ReaderEdgeButton extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              theme.colorScheme.surface.withOpacity(0.94),
-              theme.colorScheme.surfaceContainer.withOpacity(0.86),
+              theme.colorScheme.surface.withValues(alpha: 0.94),
+              theme.colorScheme.surfaceContainer.withValues(alpha: 0.86),
             ],
           ),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
-            color: theme.dividerColor.withOpacity(0.52),
+            color: theme.dividerColor.withValues(alpha: 0.52),
           ),
           boxShadow: [
             BoxShadow(
-              color: theme.colorScheme.shadow.withOpacity(0.08),
+              color: theme.colorScheme.shadow.withValues(alpha: 0.08),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -171,8 +172,8 @@ class _ReaderEdgeButton extends StatelessWidget {
             ),
             style: FilledButton.styleFrom(
               elevation: 0,
-              backgroundColor:
-                  theme.colorScheme.surfaceContainerHighest.withOpacity(0.34),
+              backgroundColor: theme.colorScheme.surfaceContainerHighest
+                  .withValues(alpha: 0.34),
               foregroundColor: theme.colorScheme.onSurface,
               padding: EdgeInsets.symmetric(
                 horizontal: compact ? 15 : 18,

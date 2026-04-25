@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/models/quran_page.dart';
 
-const int _maxQuranPageImageProviderCacheEntries = 240;
+const int _maxQuranPageImageProviderCacheEntries = 96;
 
 final LinkedHashMap<String, ImageProvider<Object>>
     _quranPageImageProviderCache =

@@ -196,7 +196,8 @@ class QuranAiFeatureService {
     final seen = <String>{};
     final lowerQuery = userInput.toLowerCase();
     for (final result in collected) {
-      final key = '${result.pageNumber}|${result.verseKey ?? ''}|${result.title}';
+      final key =
+          '${result.pageNumber}|${result.verseKey ?? ''}|${result.title}';
       if (seen.add(key)) {
         unique.add(result);
       }
@@ -598,8 +599,7 @@ class QuranAiFeatureService {
       return const QuranAiBookmarkSuggestion(
         folder: 'Hifz',
         label: 'Hifz review',
-        reason:
-            'This page looks suitable for memorization or later revision.',
+        reason: 'This page looks suitable for memorization or later revision.',
       );
     }
     return const QuranAiBookmarkSuggestion(
@@ -737,7 +737,8 @@ class QuranAiFeatureService {
 
   String _bestTheme(QuranAiPageContext context) {
     final haystack = '${context.translationUr} ${context.translationEn} '
-        '${context.chapterInfo} ${context.tafsirExcerpt}'.toLowerCase();
+            '${context.chapterInfo} ${context.tafsirExcerpt}'
+        .toLowerCase();
     if (_containsAny(haystack, <String>['prayer', 'salah', 'salat', 'namaz'])) {
       return 'worship and salah';
     }

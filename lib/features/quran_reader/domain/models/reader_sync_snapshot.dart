@@ -121,6 +121,7 @@ class ReaderSyncSnapshot {
         'customBrightnessEnabled': settings.customBrightnessEnabled,
         'pageBrightness': settings.pageBrightness,
         'nightMode': settings.nightMode,
+        'pageNightMode': settings.pageNightMode,
         'pagePresetEnabled': settings.pagePresetEnabled,
         'pagePreset': settings.pagePreset.storageValue,
         'pageOverlayEnabled': settings.pageOverlayEnabled,
@@ -191,6 +192,7 @@ class ReaderSyncSnapshot {
         pageBrightness:
             (settingsJson['pageBrightness'] as num? ?? 1.0).toDouble(),
         nightMode: settingsJson['nightMode'] as bool? ?? false,
+        pageNightMode: settingsJson['pageNightMode'] as bool? ?? false,
         pagePresetEnabled: settingsJson['pagePresetEnabled'] as bool? ?? false,
         pagePreset:
             PagePresetX.fromStorageValue(settingsJson['pagePreset'] as String?),

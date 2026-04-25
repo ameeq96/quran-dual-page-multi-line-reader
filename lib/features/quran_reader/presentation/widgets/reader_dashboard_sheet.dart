@@ -201,12 +201,11 @@ class ReaderDashboardContent extends StatelessWidget {
               children: [
                 if (showHandle) ...[
                   Center(
-                    child: Container(       
-                                                                                                                                      
+                    child: Container(
                       width: 54,
-                      height: 5,                                      
+                      height: 5,
                       decoration: BoxDecoration(
-                        color: theme.dividerColor.withOpacity(0.8),
+                        color: theme.dividerColor.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
@@ -642,8 +641,8 @@ class _MonthHeatmap extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: active
-                      ? theme.colorScheme.primary.withOpacity(
-                          count >= 3 ? 1 : (count == 2 ? 0.72 : 0.42),
+                      ? theme.colorScheme.primary.withValues(
+                          alpha: count >= 3 ? 1 : (count == 2 ? 0.72 : 0.42),
                         )
                       : theme.colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
@@ -684,10 +683,10 @@ class _DashboardCard extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.95),
+        color: theme.colorScheme.surface.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: theme.dividerColor.withOpacity(0.52),
+          color: theme.dividerColor.withValues(alpha: 0.52),
         ),
       ),
       child: Padding(
@@ -734,7 +733,7 @@ class _InfoPill extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Padding(

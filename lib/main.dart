@@ -18,8 +18,8 @@ Future<void> main() async {
 
 void _configureImageCache() {
   final cache = PaintingBinding.instance.imageCache;
-  cache.maximumSizeBytes = 160 << 20;
-  cache.maximumSize = 220;
+  cache.maximumSizeBytes = 80 << 20;
+  cache.maximumSize = 96;
 }
 
 Future<void> _initializeBackgroundAudio() async {

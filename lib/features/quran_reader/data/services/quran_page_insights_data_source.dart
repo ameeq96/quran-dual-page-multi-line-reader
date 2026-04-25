@@ -75,7 +75,8 @@ class QuranPageInsightsDataSource {
 
   Iterable<QuranChapterSummary> get chapters => _chapters.values;
 
-  Future<Map<String, dynamic>> _loadPayload(ReaderAdminConfig? adminConfig) async {
+  Future<Map<String, dynamic>> _loadPayload(
+      ReaderAdminConfig? adminConfig) async {
     final remoteDataset = adminConfig?.contentDataset('page_insights');
     try {
       if (remoteDataset == null || remoteDataset.url.trim().isEmpty) {

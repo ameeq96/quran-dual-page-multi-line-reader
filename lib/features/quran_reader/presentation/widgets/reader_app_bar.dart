@@ -68,15 +68,15 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
             color: (isDark
                     ? theme.colorScheme.surfaceContainerLow
                     : theme.colorScheme.surface)
-                .withOpacity(0.94),
+                .withValues(alpha: 0.94),
             borderRadius: BorderRadius.circular(compact ? 24 : 28),
             border: Border.all(
-              color: theme.dividerColor.withOpacity(isDark ? 0.5 : 0.4),
+              color: theme.dividerColor.withValues(alpha: isDark ? 0.5 : 0.4),
             ),
             boxShadow: [
               BoxShadow(
-                color:
-                    theme.colorScheme.shadow.withOpacity(isDark ? 0.18 : 0.06),
+                color: theme.colorScheme.shadow
+                    .withValues(alpha: isDark ? 0.18 : 0.06),
                 blurRadius: isDark ? 24 : 20,
                 offset: const Offset(0, 10),
               ),
@@ -136,6 +136,19 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
+                _ActionPill(
+                  icon: controller.settings.pageNightMode
+                      ? Icons.light_mode_rounded
+                      : Icons.dark_mode_rounded,
+                  tooltip: controller.settings.pageNightMode
+                      ? 'Use light Quran page'
+                      : 'Use dark Quran page',
+                  onPressed: () => controller.togglePageNightMode(
+                    !controller.settings.pageNightMode,
+                  ),
+                  compact: compact,
+                ),
+                const SizedBox(width: 8),
                 _ActionPill(
                   icon: Icons.search_rounded,
                   tooltip: 'Search',
@@ -286,10 +299,11 @@ class _ActionPill extends StatelessWidget {
             width: compact ? 44 : 48,
             height: compact ? 44 : 48,
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerLowest.withOpacity(0.9),
+              color: theme.colorScheme.surfaceContainerLowest
+                  .withValues(alpha: 0.9),
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: theme.dividerColor.withOpacity(0.36),
+                color: theme.dividerColor.withValues(alpha: 0.36),
               ),
             ),
             child: Icon(
@@ -318,10 +332,10 @@ class _MorePill extends StatelessWidget {
       width: compact ? 44 : 48,
       height: compact ? 44 : 48,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest.withOpacity(0.9),
+        color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: theme.dividerColor.withOpacity(0.36),
+          color: theme.dividerColor.withValues(alpha: 0.36),
         ),
       ),
       child: Icon(

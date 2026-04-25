@@ -228,8 +228,7 @@ class _ReaderSearchContentState extends State<ReaderSearchContent>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final activeTabIndex = _tabController.index;
-    final filteredSurahs =
-        activeTabIndex == 0 ? _surahResults : widget.surahs;
+    final filteredSurahs = activeTabIndex == 0 ? _surahResults : widget.surahs;
     final filteredJuzs = activeTabIndex == 1 ? _juzResults : widget.juzs;
 
     return SafeArea(
@@ -273,7 +272,7 @@ class _ReaderSearchContentState extends State<ReaderSearchContent>
                           width: 54,
                           height: 5,
                           decoration: BoxDecoration(
-                            color: theme.dividerColor.withOpacity(0.8),
+                            color: theme.dividerColor.withValues(alpha: 0.8),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         )
@@ -338,8 +337,8 @@ class _ReaderSearchContentState extends State<ReaderSearchContent>
                                                   '${surah.nameArabic} | Page ${widget.surahPageResolver(surah)}',
                                               trailing: surah.translatedName,
                                               compact: compact,
-                                              onTap: () => Navigator.of(context)
-                                                  .pop(
+                                              onTap: () =>
+                                                  Navigator.of(context).pop(
                                                 widget.surahPageResolver(surah),
                                               ),
                                             );
@@ -388,8 +387,8 @@ class _ReaderSearchContentState extends State<ReaderSearchContent>
                                                   '${juz.name} | ${juz.nameArabic} | Page ${widget.juzPageResolver(juz)}',
                                               trailing: 'Juz',
                                               compact: compact,
-                                              onTap: () => Navigator.of(context)
-                                                  .pop(
+                                              onTap: () =>
+                                                  Navigator.of(context).pop(
                                                 widget.juzPageResolver(juz),
                                               ),
                                             );
@@ -436,10 +435,11 @@ class _SearchTabSwitcher extends StatelessWidget {
       builder: (context, _) {
         return DecoratedBox(
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.24),
+            color: theme.colorScheme.surfaceContainerHighest
+                .withValues(alpha: 0.24),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: theme.dividerColor.withOpacity(0.44),
+              color: theme.dividerColor.withValues(alpha: 0.44),
             ),
           ),
           child: Padding(
@@ -450,9 +450,7 @@ class _SearchTabSwitcher extends StatelessWidget {
                 return Expanded(
                   child: Padding(
                     padding: EdgeInsets.only(
-                      right: index == _tabs.length - 1
-                          ? 0
-                          : (compact ? 8 : 10),
+                      right: index == _tabs.length - 1 ? 0 : (compact ? 8 : 10),
                     ),
                     child: _SearchTabChip(
                       label: tab.label,
@@ -514,17 +512,17 @@ class _SearchTabChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected
               ? theme.colorScheme.primaryContainer
-              : theme.colorScheme.surface.withOpacity(0.44),
+              : theme.colorScheme.surface.withValues(alpha: 0.44),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: selected
-                ? theme.colorScheme.primary.withOpacity(0.26)
-                : theme.dividerColor.withOpacity(0.32),
+                ? theme.colorScheme.primary.withValues(alpha: 0.26)
+                : theme.dividerColor.withValues(alpha: 0.32),
           ),
           boxShadow: selected
               ? [
                   BoxShadow(
-                    color: theme.colorScheme.primary.withOpacity(0.12),
+                    color: theme.colorScheme.primary.withValues(alpha: 0.12),
                     blurRadius: 14,
                     offset: const Offset(0, 6),
                   ),
@@ -594,7 +592,7 @@ class _SearchField extends StatelessWidget {
             ? const []
             : [
                 BoxShadow(
-                  color: theme.colorScheme.shadow.withOpacity(0.04),
+                  color: theme.colorScheme.shadow.withValues(alpha: 0.04),
                   blurRadius: 14,
                   offset: const Offset(0, 6),
                 ),
@@ -605,9 +603,8 @@ class _SearchField extends StatelessWidget {
         decoration: InputDecoration(
           isDense: dense,
           prefixIcon: Icon(icon, size: dense ? 18 : 22),
-          prefixIconConstraints: dense
-              ? const BoxConstraints(minWidth: 40, minHeight: 40)
-              : null,
+          prefixIconConstraints:
+              dense ? const BoxConstraints(minWidth: 40, minHeight: 40) : null,
           contentPadding: dense
               ? const EdgeInsets.symmetric(horizontal: 12, vertical: 12)
               : null,
@@ -635,17 +632,17 @@ class _ListSurface extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            theme.colorScheme.surface.withOpacity(0.96),
-            theme.colorScheme.surfaceContainer.withOpacity(0.9),
+            theme.colorScheme.surface.withValues(alpha: 0.96),
+            theme.colorScheme.surfaceContainer.withValues(alpha: 0.9),
           ],
         ),
         borderRadius: BorderRadius.circular(26),
         border: Border.all(
-          color: theme.dividerColor.withOpacity(0.46),
+          color: theme.dividerColor.withValues(alpha: 0.46),
         ),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.shadow.withOpacity(0.05),
+            color: theme.colorScheme.shadow.withValues(alpha: 0.05),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -679,10 +676,10 @@ class _ResultTile extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.58),
+        color: theme.colorScheme.surface.withValues(alpha: 0.58),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: theme.dividerColor.withOpacity(0.34),
+          color: theme.dividerColor.withValues(alpha: 0.34),
         ),
       ),
       child: ListTile(
@@ -695,7 +692,7 @@ class _ResultTile extends StatelessWidget {
         ),
         leading: CircleAvatar(
           radius: 18,
-          backgroundColor: theme.colorScheme.primary.withOpacity(0.14),
+          backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.14),
           foregroundColor: theme.colorScheme.primary,
           child: FittedBox(
             fit: BoxFit.scaleDown,
@@ -734,11 +731,11 @@ class _ResultTile extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color:
-                    theme.colorScheme.surfaceContainerHighest.withOpacity(0.28),
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.28),
                 borderRadius: BorderRadius.circular(999),
                 border: Border.all(
-                  color: theme.dividerColor.withOpacity(0.34),
+                  color: theme.dividerColor.withValues(alpha: 0.34),
                 ),
               ),
               child: Padding(

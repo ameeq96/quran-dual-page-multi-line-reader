@@ -88,20 +88,24 @@ class DualPageSpread extends StatelessWidget {
                                   begin: Alignment.centerLeft,
                                   end: Alignment.centerRight,
                                   colors: [
-                                    theme.colorScheme.surface.withOpacity(0.16),
-                                    theme.colorScheme.surface.withOpacity(0.08),
-                                    theme.colorScheme.surface.withOpacity(0.16),
+                                    theme.colorScheme.surface
+                                        .withValues(alpha: 0.16),
+                                    theme.colorScheme.surface
+                                        .withValues(alpha: 0.08),
+                                    theme.colorScheme.surface
+                                        .withValues(alpha: 0.16),
                                   ],
                                 ),
                                 border: Border.all(
-                                  color: theme.dividerColor.withOpacity(0.16),
+                                  color: theme.dividerColor
+                                      .withValues(alpha: 0.16),
                                 ),
                                 boxShadow: settings.lowMemoryMode
                                     ? const []
                                     : [
                                         BoxShadow(
                                           color: theme.colorScheme.shadow
-                                              .withOpacity(0.04),
+                                              .withValues(alpha: 0.04),
                                           blurRadius: 18,
                                           offset: const Offset(0, 10),
                                         ),
@@ -122,7 +126,8 @@ class DualPageSpread extends StatelessWidget {
                               gradient: LinearGradient(
                                 colors: [
                                   Colors.transparent,
-                                  theme.colorScheme.shadow.withOpacity(0.08),
+                                  theme.colorScheme.shadow
+                                      .withValues(alpha: 0.08),
                                   Colors.transparent,
                                 ],
                               ),

@@ -1,5 +1,7 @@
 import 'dart:collection';
 
+import 'package:dio/dio.dart';
+
 import '../../../../core/constants/quran_constants.dart';
 import '../../../../core/storage/reader_preferences.dart';
 import '../../domain/models/quran_chapter_summary.dart';
@@ -9,6 +11,7 @@ import '../../domain/models/quran_page.dart';
 import '../../domain/models/quran_page_insight.dart';
 import '../../domain/models/quran_search_result.dart';
 import '../../domain/models/quran_spread.dart';
+import '../../domain/models/quran_asset_pack_download.dart';
 import '../../domain/models/quran_surah_navigation_entry.dart';
 import '../../domain/models/reader_admin_config.dart';
 import '../../domain/models/reader_growth_models.dart';
@@ -79,6 +82,10 @@ class QuranReaderRepository {
     final effectiveAdminConfig = await _initializeNavigationConfig(
       adminConfig,
       edition: settings.mushafEdition,
+    );
+    settings = await applyAdminReaderDefaults(
+      settings,
+      config: effectiveAdminConfig,
     );
     _assetResolver.applyRemoteConfig(effectiveAdminConfig);
     await _assetResolver.initialize();
@@ -188,13 +195,25 @@ class QuranReaderRepository {
     return _assetResolver.hasOfflinePackForEdition(edition);
   }
 
+  List<QuranZipAssetPack> get availableZipPacks {
+    return _assetResolver.availableZipPacksSnapshot;
+  }
+
+  Future<List<QuranZipAssetPack>> fetchAvailableZipPacks({
+    bool forceRefresh = false,
+  }) {
+    return _assetResolver.fetchAvailableZipPacks(forceRefresh: forceRefresh);
+  }
+
   Future<void> downloadOfflinePack(
     MushafEdition edition, {
     void Function(double progress)? onProgress,
+    CancelToken? cancelToken,
   }) async {
     await _assetResolver.downloadOfflinePack(
       edition,
       onProgress: onProgress,
+      cancelToken: cancelToken,
     );
     _clearResolvedPageCaches();
   }
@@ -1167,6 +1186,118 @@ class QuranReaderRepository {
     _assetResolver.applyRemoteConfig(effectiveConfig);
     _clearResolvedPageCaches();
     return effectiveConfig;
+  }
+
+  Future<ReaderSettings> applyAdminReaderDefaults(
+    ReaderSettings settings, {
+    ReaderAdminConfig? config,
+  }) async {
+    final effectiveConfig = config ?? _adminConfigService.currentConfig;
+    var nextSettings = settings;
+
+    final defaultEdition = _editionSetting(
+      effectiveConfig.setting('default_mushaf_edition'),
+    );
+    if (defaultEdition != null) {
+      nextSettings = nextSettings.copyWith(mushafEdition: defaultEdition);
+    }
+
+    nextSettings = nextSettings.copyWith(
+      fullscreenReading: _boolSetting(
+        effectiveConfig.setting('default_fullscreen_reading'),
+        fallback: nextSettings.fullscreenReading,
+      ),
+      showPageNumbers: _boolSetting(
+        effectiveConfig.setting('default_show_page_numbers'),
+        fallback: nextSettings.showPageNumbers,
+      ),
+      nightMode: _boolSetting(
+        effectiveConfig.setting('default_app_dark_mode'),
+        fallback: nextSettings.nightMode,
+      ),
+      pageNightMode: _boolSetting(
+        effectiveConfig.setting('default_quran_page_dark_mode'),
+        fallback: nextSettings.pageNightMode,
+      ),
+      lowMemoryMode: _boolSetting(
+        effectiveConfig.setting('default_low_memory_mode'),
+        fallback: nextSettings.lowMemoryMode,
+      ),
+      hifzFocusMode: _boolSetting(
+        effectiveConfig.setting('default_hifz_focus_mode'),
+        fallback: nextSettings.hifzFocusMode,
+      ),
+      pageOverlayEnabled: _boolSetting(
+        effectiveConfig.setting('default_page_overlay_enabled'),
+        fallback: nextSettings.pageOverlayEnabled,
+      ),
+      pageReflectionEnabled: _boolSetting(
+        effectiveConfig.setting('default_page_reflection_enabled'),
+        fallback: nextSettings.pageReflectionEnabled,
+      ),
+      pagePreset: _pagePresetSetting(
+        effectiveConfig.setting('default_page_preset'),
+      ),
+      pagePresetEnabled: _boolSetting(
+        effectiveConfig.setting('default_page_preset_enabled'),
+        fallback: nextSettings.pagePresetEnabled,
+      ),
+    );
+
+    if (nextSettings != settings) {
+      await _preferences.saveSettings(nextSettings);
+    }
+    return nextSettings;
+  }
+
+  MushafEdition? _editionSetting(String? value) {
+    final normalized = value?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return switch (normalized) {
+      '10_line' || '10_lines' || 'lines10' => MushafEdition.lines10,
+      '13_line' || '13_lines' || 'lines13' => MushafEdition.lines13,
+      '14_line' || '14_lines' || 'lines14' => MushafEdition.lines14,
+      '15_line' || '15_lines' || 'lines15' => MushafEdition.lines15,
+      '16_line' || '16_lines' || 'lines16' => MushafEdition.lines16,
+      '17_line' || '17_lines' || 'lines17' => MushafEdition.lines17,
+      'kanzul_iman' || 'kanzuliman' => MushafEdition.kanzulIman,
+      _ => null,
+    };
+  }
+
+  PagePreset? _pagePresetSetting(String? value) {
+    final normalized = value?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return PagePreset.values.firstWhere(
+      (preset) => preset.storageValue == normalized,
+      orElse: () => PagePreset.classic,
+    );
+  }
+
+  bool _boolSetting(String? value, {required bool fallback}) {
+    final normalized = value?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return fallback;
+    }
+    if (normalized == 'true' ||
+        normalized == '1' ||
+        normalized == 'yes' ||
+        normalized == 'on' ||
+        normalized == 'enabled') {
+      return true;
+    }
+    if (normalized == 'false' ||
+        normalized == '0' ||
+        normalized == 'no' ||
+        normalized == 'off' ||
+        normalized == 'disabled') {
+      return false;
+    }
+    return fallback;
   }
 
   Future<ReaderAdminConfig> _initializeNavigationConfig(

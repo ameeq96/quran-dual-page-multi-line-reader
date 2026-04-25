@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../../app/app_theme.dart';
-import 'reader_skeleton.dart';
 
 class BootstrapSplash extends StatefulWidget {
   const BootstrapSplash({
@@ -42,8 +41,7 @@ class _BootstrapSplashState extends State<BootstrapSplash>
     final compact = size.width < 420 || size.height < 760;
     final shortHeight = size.height < 700;
     final ultraCompact = size.height < 620;
-    final useDark = widget.nightMode ??
-        (MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+    final useDark = widget.nightMode ?? false;
     final effectiveTheme = useDark ? AppTheme.dark() : AppTheme.light();
 
     return Theme(
@@ -66,7 +64,8 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                       colors: [
                         theme.scaffoldBackgroundColor,
                         theme.colorScheme.surface,
-                        theme.colorScheme.surfaceContainer.withOpacity(0.96),
+                        theme.colorScheme.surfaceContainer
+                            .withValues(alpha: 0.96),
                       ],
                     ),
                   ),
@@ -77,7 +76,8 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                         left: -90,
                         child: _SplashOrb(
                           size: compact ? 240 : 320,
-                          color: theme.colorScheme.primary.withOpacity(0.1),
+                          color:
+                              theme.colorScheme.primary.withValues(alpha: 0.1),
                           driftX: -14 + (t * 20),
                           driftY: -8 + (t * 16),
                         ),
@@ -87,7 +87,8 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                         bottom: -140,
                         child: _SplashOrb(
                           size: compact ? 260 : 360,
-                          color: theme.colorScheme.secondary.withOpacity(0.08),
+                          color: theme.colorScheme.secondary
+                              .withValues(alpha: 0.08),
                           driftX: 16 - (t * 18),
                           driftY: 12 - (t * 14),
                         ),
@@ -125,11 +126,11 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                           end: Alignment.bottomRight,
                                           colors: [
                                             theme.colorScheme.surface
-                                                .withOpacity(
-                                              0.96,
+                                                .withValues(
+                                              alpha: 0.96,
                                             ),
                                             theme.colorScheme.surfaceContainer
-                                                .withOpacity(0.9),
+                                                .withValues(alpha: 0.9),
                                           ],
                                         ),
                                         borderRadius: BorderRadius.circular(
@@ -138,7 +139,7 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                         boxShadow: [
                                           BoxShadow(
                                             color: theme.colorScheme.shadow
-                                                .withOpacity(0.12),
+                                                .withValues(alpha: 0.12),
                                             blurRadius: compact ? 26 : 36,
                                             offset: const Offset(0, 18),
                                           ),
@@ -233,32 +234,7 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                                   ? 12
                                                   : (compact ? 14 : 18),
                                             ),
-                                            const Row(
-                                              children: [
-                                                ReaderSkeletonBlock(
-                                                  width: 18,
-                                                  height: 18,
-                                                  borderRadius:
-                                                      BorderRadius.all(
-                                                    Radius.circular(6),
-                                                  ),
-                                                ),
-                                                SizedBox(width: 12),
-                                                Expanded(
-                                                  child: ReaderSkeletonBlock(
-                                                    height: 12,
-                                                    borderRadius:
-                                                        BorderRadius.all(
-                                                      Radius.circular(999),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
                                             if (!ultraCompact) ...[
-                                              SizedBox(
-                                                height: compact ? 14 : 18,
-                                              ),
                                               Container(
                                                 padding:
                                                     const EdgeInsets.symmetric(
@@ -268,7 +244,7 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                                 decoration: BoxDecoration(
                                                   color: theme
                                                       .colorScheme.surface
-                                                      .withOpacity(0.6),
+                                                      .withValues(alpha: 0.6),
                                                   borderRadius:
                                                       BorderRadius.circular(18),
                                                 ),
@@ -310,8 +286,8 @@ class _SplashHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = Color.lerp(
-      theme.colorScheme.primary.withOpacity(0.16),
-      theme.colorScheme.secondary.withOpacity(0.12),
+      theme.colorScheme.primary.withValues(alpha: 0.16),
+      theme.colorScheme.secondary.withValues(alpha: 0.12),
       pulseValue,
     )!;
 
@@ -325,7 +301,7 @@ class _SplashHeader extends StatelessWidget {
               gradient: LinearGradient(
                 colors: [
                   Colors.transparent,
-                  theme.dividerColor.withOpacity(0.7),
+                  theme.dividerColor.withValues(alpha: 0.7),
                 ],
               ),
             ),
@@ -342,12 +318,12 @@ class _SplashHeader extends StatelessWidget {
               end: Alignment.bottomRight,
               colors: [
                 accent,
-                theme.colorScheme.surface.withOpacity(0.32),
+                theme.colorScheme.surface.withValues(alpha: 0.32),
               ],
             ),
             boxShadow: [
               BoxShadow(
-                color: theme.colorScheme.primary.withOpacity(0.12),
+                color: theme.colorScheme.primary.withValues(alpha: 0.12),
                 blurRadius: 20 + (pulseValue * 6),
                 offset: const Offset(0, 10),
               ),
@@ -370,7 +346,7 @@ class _SplashHeader extends StatelessWidget {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  theme.dividerColor.withOpacity(0.7),
+                  theme.dividerColor.withValues(alpha: 0.7),
                   Colors.transparent,
                 ],
               ),
@@ -396,7 +372,8 @@ class _LoadingRail extends StatelessWidget {
     return Container(
       height: 12,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.28),
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.28),
         borderRadius: BorderRadius.circular(999),
       ),
       child: LayoutBuilder(
@@ -420,14 +397,15 @@ class _LoadingRail extends StatelessWidget {
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                       colors: [
-                        theme.colorScheme.primary.withOpacity(0.2),
-                        theme.colorScheme.primary.withOpacity(0.9),
-                        theme.colorScheme.secondary.withOpacity(0.55),
+                        theme.colorScheme.primary.withValues(alpha: 0.2),
+                        theme.colorScheme.primary.withValues(alpha: 0.9),
+                        theme.colorScheme.secondary.withValues(alpha: 0.55),
                       ],
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: theme.colorScheme.primary.withOpacity(0.24),
+                        color:
+                            theme.colorScheme.primary.withValues(alpha: 0.24),
                         blurRadius: 10,
                         offset: const Offset(0, 2),
                       ),
@@ -458,7 +436,7 @@ class _SplashFeatureChip extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.72),
+        color: theme.colorScheme.surface.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Padding(
@@ -511,7 +489,7 @@ class _SplashOrb extends StatelessWidget {
             gradient: RadialGradient(
               colors: [
                 color,
-                color.withOpacity(0.04),
+                color.withValues(alpha: 0.04),
                 Colors.transparent,
               ],
             ),

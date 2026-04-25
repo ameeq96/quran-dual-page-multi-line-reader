@@ -125,9 +125,9 @@ class _CompareHeader extends StatelessWidget {
     final theme = Theme.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.94),
+        color: theme.colorScheme.surface.withValues(alpha: 0.94),
         borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.36)),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.36)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -185,16 +185,16 @@ class _CompareEditionCard extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.95),
+        color: theme.colorScheme.surface.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
           color: isActive
-              ? theme.colorScheme.primary.withOpacity(0.38)
-              : theme.dividerColor.withOpacity(0.34),
+              ? theme.colorScheme.primary.withValues(alpha: 0.38)
+              : theme.dividerColor.withValues(alpha: 0.34),
         ),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.shadow.withOpacity(0.05),
+            color: theme.colorScheme.shadow.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -231,9 +231,9 @@ class _CompareEditionCard extends StatelessWidget {
                 DecoratedBox(
                   decoration: BoxDecoration(
                     color: isActive
-                        ? theme.colorScheme.primary.withOpacity(0.14)
+                        ? theme.colorScheme.primary.withValues(alpha: 0.14)
                         : theme.colorScheme.surfaceContainerHighest
-                            .withOpacity(0.72),
+                            .withValues(alpha: 0.72),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Padding(
@@ -335,9 +335,9 @@ class _CompareChip extends StatelessWidget {
     final theme = Theme.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow.withOpacity(0.8),
+        color: theme.colorScheme.surfaceContainerLow.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.28)),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.28)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

@@ -23,16 +23,19 @@ class BookGutter extends StatelessWidget {
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
             colors: [
-              theme.colorScheme.shadow.withOpacity(lowMemoryMode ? 0.05 : 0.08),
-              theme.colorScheme.shadow.withOpacity(lowMemoryMode ? 0.14 : 0.24),
-              theme.colorScheme.shadow.withOpacity(lowMemoryMode ? 0.05 : 0.08),
+              theme.colorScheme.shadow
+                  .withValues(alpha: lowMemoryMode ? 0.05 : 0.08),
+              theme.colorScheme.shadow
+                  .withValues(alpha: lowMemoryMode ? 0.14 : 0.24),
+              theme.colorScheme.shadow
+                  .withValues(alpha: lowMemoryMode ? 0.05 : 0.08),
             ],
           ),
           boxShadow: lowMemoryMode
               ? const []
               : [
                   BoxShadow(
-                    color: theme.colorScheme.shadow.withOpacity(0.12),
+                    color: theme.colorScheme.shadow.withValues(alpha: 0.12),
                     blurRadius: 18,
                     offset: const Offset(0, 8),
                   ),

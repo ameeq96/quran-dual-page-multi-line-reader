@@ -44,6 +44,7 @@ class QuranSettingsScreen extends StatelessWidget {
                 onToggleCustomBrightness: controller.toggleCustomBrightness,
                 onBrightnessChanged: controller.setPageBrightness,
                 onToggleNightMode: controller.toggleNightMode,
+                onTogglePageNightMode: controller.togglePageNightMode,
                 onTogglePagePreset: controller.togglePagePreset,
                 onSelectPagePreset: controller.setPagePreset,
                 onTogglePageOverlay: controller.togglePageOverlay,

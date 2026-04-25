@@ -62,10 +62,11 @@ class MushafPageWidget extends StatelessWidget {
         ? Matrix4.identity()
         : (Matrix4.identity()
           ..setEntry(3, 2, 0.0011)
-          ..translate(
+          ..translateByDouble(
             page.isLeftPage ? clampedTurn * 10.0 : clampedTurn * 6.0,
             0.0,
             page.isLeftPage ? clampedTurn.abs() * -6 : clampedTurn.abs() * -4,
+            1.0,
           )
           ..rotateY(
             page.isLeftPage ? clampedTurn * 0.14 : clampedTurn * 0.1,
@@ -136,7 +137,8 @@ class MushafPageWidget extends StatelessWidget {
                             color: appearance.pageNumberBackgroundColor,
                             borderRadius: BorderRadius.circular(999),
                             border: Border.all(
-                              color: appearance.borderColor.withOpacity(0.74),
+                              color: appearance.borderColor
+                                  .withValues(alpha: 0.74),
                             ),
                           ),
                           child: Padding(
@@ -378,6 +380,9 @@ class _PageSurfaceState extends State<_PageSurface> {
       QuranPageContentType.placeholder => PlaceholderQuranPage(
           page: widget.page,
           appearance: widget.appearance,
+          title: 'This edition is not downloaded',
+          message:
+              'Connect to the internet, or open Asset Packs and download this Quran edition for offline reading.',
         ),
     };
 
@@ -399,8 +404,8 @@ class _PageSurfaceState extends State<_PageSurface> {
                       center: Alignment.topCenter,
                       radius: 1.05,
                       colors: [
-                        widget.appearance.overlayColor
-                            .withOpacity(widget.appearance.overlayOpacity),
+                        widget.appearance.overlayColor.withValues(
+                            alpha: widget.appearance.overlayOpacity),
                         Colors.transparent,
                       ],
                     ),
@@ -546,7 +551,7 @@ class _ImagePageContent extends StatelessWidget {
         final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
         final cacheWidth = (constraints.maxWidth * devicePixelRatio)
             .round()
-            .clamp(lowMemoryMode ? 420 : 520, lowMemoryMode ? 760 : 1080)
+            .clamp(lowMemoryMode ? 360 : 480, lowMemoryMode ? 640 : 900)
             .toInt();
         final imageProvider = buildQuranPageImageProvider(
           page,
@@ -573,6 +578,12 @@ class _ImagePageContent extends StatelessWidget {
             return PlaceholderQuranPage(
               page: page,
               appearance: appearance,
+              title: page.usesRemoteImage
+                  ? 'Unable to load this page'
+                  : 'This page file is missing',
+              message: page.usesRemoteImage
+                  ? 'You may be offline or the server may be unreachable. Connect to the internet, or download this edition from Asset Packs.'
+                  : 'Download this Quran edition again from Asset Packs to restore the offline pages.',
             );
           },
         );
@@ -604,8 +615,8 @@ class _ImagePageContent extends StatelessWidget {
             IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: appearance.imageTintColor.withOpacity(
-                    appearance.imageTintOpacity,
+                  color: appearance.imageTintColor.withValues(
+                    alpha: appearance.imageTintOpacity,
                   ),
                 ),
               ),

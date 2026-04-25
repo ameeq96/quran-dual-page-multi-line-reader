@@ -12,7 +12,7 @@ import '../../features/quran_reader/domain/models/reader_growth_models.dart';
 import '../../features/quran_reader/domain/models/reader_settings.dart';
 
 class ReaderPreferences {
-  static const _defaultAdminPublicBaseUrl = 'https://quranadminapi.opplexify.com';
+  static const _defaultAdminPublicBaseUrl = 'https://adminapi.opplexify.com';
   static const _lastPageKey = 'reader.lastPageNumber';
   static const _legacyLastSpreadKey = 'reader.lastSpreadIndex';
   static const _mushafEditionKey = 'reader.mushafEdition';
@@ -22,6 +22,7 @@ class ReaderPreferences {
   static const _customBrightnessEnabledKey = 'reader.customBrightnessEnabled';
   static const _pageBrightnessKey = 'reader.pageBrightness';
   static const _nightModeKey = 'reader.nightMode';
+  static const _pageNightModeKey = 'reader.pageNightMode';
   static const _pagePresetEnabledKey = 'reader.pagePresetEnabled';
   static const _pagePresetKey = 'reader.pagePreset';
   static const _pageOverlayEnabledKey = 'reader.pageOverlayEnabled';
@@ -95,6 +96,7 @@ class ReaderPreferences {
       pageBrightness:
           (prefs.getDouble(_pageBrightnessKey) ?? 1.0).clamp(0.7, 1.25),
       nightMode: prefs.getBool(_nightModeKey) ?? false,
+      pageNightMode: prefs.getBool(_pageNightModeKey) ?? false,
       pagePresetEnabled: prefs.getBool(_pagePresetEnabledKey) ?? false,
       pagePreset: PagePresetX.fromStorageValue(prefs.getString(_pagePresetKey)),
       pageOverlayEnabled: prefs.getBool(_pageOverlayEnabledKey) ?? false,
@@ -126,6 +128,7 @@ class ReaderPreferences {
     );
     await prefs.setDouble(_pageBrightnessKey, settings.pageBrightness);
     await prefs.setBool(_nightModeKey, settings.nightMode);
+    await prefs.setBool(_pageNightModeKey, settings.pageNightMode);
     await prefs.setBool(_pagePresetEnabledKey, settings.pagePresetEnabled);
     await prefs.setString(_pagePresetKey, settings.pagePreset.storageValue);
     await prefs.setBool(_pageOverlayEnabledKey, settings.pageOverlayEnabled);
@@ -419,7 +422,8 @@ class ReaderPreferences {
 
   Future<void> saveExperienceSettings(ReaderExperienceSettings settings) async {
     final prefs = await _prefs;
-    await prefs.setString(_experienceSettingsKey, json.encode(settings.toJson()));
+    await prefs.setString(
+        _experienceSettingsKey, json.encode(settings.toJson()));
   }
 
   Future<String> loadAdminPublicBaseUrl() async {
@@ -427,8 +431,9 @@ class ReaderPreferences {
     final savedUrl = prefs.getString(_adminPublicBaseUrlKey);
     if (savedUrl != null && savedUrl.trim().isNotEmpty) {
       final normalizedSavedUrl = savedUrl.trim();
-      if (_isLegacyLocalAdminPublicBaseUrl(normalizedSavedUrl)) {
-        await prefs.setString(_adminPublicBaseUrlKey, _defaultAdminPublicBaseUrl);
+      if (_isLegacyAdminPublicBaseUrl(normalizedSavedUrl)) {
+        await prefs.setString(
+            _adminPublicBaseUrlKey, _defaultAdminPublicBaseUrl);
         return _defaultAdminPublicBaseUrl;
       }
       return normalizedSavedUrl;
@@ -442,11 +447,12 @@ class ReaderPreferences {
     };
   }
 
-  bool _isLegacyLocalAdminPublicBaseUrl(String value) {
+  bool _isLegacyAdminPublicBaseUrl(String value) {
     final normalized = value.trim().toLowerCase();
     return normalized == 'http://localhost:5052' ||
         normalized == 'http://10.0.2.2:5052' ||
-        normalized == 'http://127.0.0.1:5052';
+        normalized == 'http://127.0.0.1:5052' ||
+        normalized == 'https://quranadminapi.opplexify.com';
   }
 
   Future<void> saveAdminPublicBaseUrl(String baseUrl) async {

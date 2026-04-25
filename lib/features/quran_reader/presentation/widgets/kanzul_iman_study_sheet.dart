@@ -143,7 +143,7 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                       width: 54,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: theme.dividerColor.withOpacity(0.8),
+                        color: theme.dividerColor.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
@@ -397,13 +397,13 @@ class _StudyCard extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            theme.colorScheme.surface.withOpacity(0.97),
-            theme.colorScheme.surfaceContainer.withOpacity(0.9),
+            theme.colorScheme.surface.withValues(alpha: 0.97),
+            theme.colorScheme.surfaceContainer.withValues(alpha: 0.9),
           ],
         ),
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: theme.dividerColor.withOpacity(0.42),
+          color: theme.dividerColor.withValues(alpha: 0.42),
         ),
       ),
       child: Padding(

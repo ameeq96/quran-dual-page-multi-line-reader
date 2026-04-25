@@ -101,7 +101,7 @@ class ReaderPageAppearance {
     required ThemeData theme,
     required ReaderSettings settings,
   }) {
-    final isNight = settings.nightMode;
+    final isNight = settings.pageNightMode;
     final preset =
         settings.pagePresetEnabled ? settings.pagePreset : PagePreset.classic;
 
@@ -115,22 +115,22 @@ class ReaderPageAppearance {
     return ReaderPageAppearance(
       baseColor: baseColors.$1,
       baseColorSecondary: baseColors.$2,
-      borderColor: accentColor.withOpacity(isNight ? 0.38 : 0.24),
+      borderColor: accentColor.withValues(alpha: isNight ? 0.38 : 0.24),
       textColor: textColor,
       accentColor: accentColor,
-      placeholderLineColor: textColor.withOpacity(isNight ? 0.22 : 0.12),
+      placeholderLineColor: textColor.withValues(alpha: isNight ? 0.22 : 0.12),
       pageNumberBackgroundColor: isNight
-          ? const Color(0xFF111613).withOpacity(0.92)
-          : Colors.white.withOpacity(0.9),
+          ? const Color(0xFF111613).withValues(alpha: 0.92)
+          : Colors.white.withValues(alpha: 0.9),
       pageNumberForegroundColor: textColor,
       imageTintColor: imageTintColor,
       imageTintOpacity: imageTintOpacity,
       overlayColor: accentColor,
       overlayOpacity:
           settings.pageOverlayEnabled ? (isNight ? 0.12 : 0.08) : 0.0,
-      reflectionColor: Colors.white.withOpacity(isNight ? 0.06 : 0.12),
-      sideShadowColor: Colors.black.withOpacity(isNight ? 0.28 : 0.16),
-      outerShadowColor: Colors.black.withOpacity(isNight ? 0.28 : 0.12),
+      reflectionColor: Colors.white.withValues(alpha: isNight ? 0.06 : 0.12),
+      sideShadowColor: Colors.black.withValues(alpha: isNight ? 0.28 : 0.16),
+      outerShadowColor: Colors.black.withValues(alpha: isNight ? 0.28 : 0.12),
       pageBrightness:
           settings.customBrightnessEnabled ? settings.pageBrightness : 1.0,
       nightMode: isNight,

@@ -58,14 +58,14 @@ class _ReaderTranslationDrawerState extends State<ReaderTranslationDrawer> {
                 curve: Curves.easeOutCubic,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surface.withOpacity(0.96),
+                  color: theme.colorScheme.surface.withValues(alpha: 0.96),
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: theme.dividerColor.withOpacity(0.5),
+                    color: theme.dividerColor.withValues(alpha: 0.5),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: theme.colorScheme.shadow.withOpacity(0.12),
+                      color: theme.colorScheme.shadow.withValues(alpha: 0.12),
                       blurRadius: 24,
                       offset: const Offset(0, 10),
                     ),

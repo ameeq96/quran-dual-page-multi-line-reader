@@ -65,7 +65,8 @@ class QuranReaderSyncService {
       if (payload['found'] != true) {
         return null;
       }
-      final snapshotJson = payload['payload'] as Map<String, dynamic>? ?? const {};
+      final snapshotJson =
+          payload['payload'] as Map<String, dynamic>? ?? const {};
       return ReaderSyncSnapshot.fromJson(snapshotJson);
     } catch (_) {
       return null;

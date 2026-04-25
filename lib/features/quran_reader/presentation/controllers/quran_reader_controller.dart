@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -12,6 +13,7 @@ import '../../data/services/quran_ai_feature_service.dart';
 import '../../data/services/quran_audio_service.dart';
 import '../../data/services/quran_reader_sync_service.dart';
 import '../../domain/models/quran_ai_models.dart';
+import '../../domain/models/quran_asset_pack_download.dart';
 import '../../domain/models/quran_chapter_summary.dart';
 import '../../domain/models/quran_juz_navigation_entry.dart';
 import '../../domain/models/quran_navigation_marker.dart';
@@ -144,8 +146,11 @@ class QuranReaderController extends ChangeNotifier {
   bool _isDisposed = false;
   String _syncClientId = '';
   Set<MushafEdition> _downloadedOfflineEditions = const <MushafEdition>{};
+  List<QuranZipAssetPack> _zipAssetPacks = const <QuranZipAssetPack>[];
   Map<MushafEdition, double> _offlinePackProgress =
       const <MushafEdition, double>{};
+  final Map<MushafEdition, CancelToken> _offlinePackCancelTokens =
+      <MushafEdition, CancelToken>{};
 
   bool get isLoading => _isLoading;
   bool get controlsVisible => _controlsVisible;
@@ -184,7 +189,12 @@ class QuranReaderController extends ChangeNotifier {
   List<QuranChapterSummary> get chapters => _repository.chapters;
   List<QuranReciter> get reciters => _reciters;
   List<MushafEdition> get availableImageEditions {
-    final editions = _repository.availableImageEditions;
+    final storedEditions = _repository.availableImageEditions
+        .where(isMushafEditionStoredOffline)
+        .toList(growable: false);
+    final editions = storedEditions.isEmpty
+        ? _repository.availableImageEditions
+        : storedEditions;
     if (!_adminConfig.hasEditionControls) {
       return editions;
     }
@@ -198,7 +208,9 @@ class QuranReaderController extends ChangeNotifier {
     return filtered;
   }
 
-  List<MushafEdition> get compareEditions => _repository.compareEditions;
+  List<MushafEdition> get compareEditions => _repository.compareEditions
+      .where(isMushafEditionStoredOffline)
+      .toList(growable: false);
   List<ReaderAdminAnnouncement> get adminAnnouncements =>
       _adminConfig.announcements;
   bool get hasAdminManagedAssets => _adminConfig.hasRemoteAssetPacks;
@@ -254,14 +266,18 @@ class QuranReaderController extends ChangeNotifier {
         'feature_page_thumbnails',
         fallback: true,
       );
-  bool get isCompareEnabled => _featureFlag(
+  bool get isCompareEnabled =>
+      _featureFlag(
         'feature_compare',
         fallback: true,
-      );
-  bool get isKanzulStudyEnabled => _featureFlag(
+      ) &&
+      compareEditions.length >= 2;
+  bool get isKanzulStudyEnabled =>
+      _featureFlag(
         'feature_kanzul_study',
         fallback: true,
-      );
+      ) &&
+      isMushafEditionStoredOffline(MushafEdition.kanzulIman);
   String get appDisplayTitle =>
       _adminConfig.setting('app_title')?.trim().isNotEmpty == true
           ? _adminConfig.setting('app_title')!.trim()
@@ -506,18 +522,21 @@ class QuranReaderController extends ChangeNotifier {
 
   List<OfflineEditionPack> get offlineEditionPacks {
     final available = availableImageEditions.toSet();
+    final zipAvailable = _zipAssetPacks.map((pack) => pack.edition).toSet();
     return MushafEdition.values.map((edition) {
       final state = _offlinePackProgress.containsKey(edition)
           ? OfflinePackState.downloading
           : _downloadedOfflineEditions.contains(edition)
               ? OfflinePackState.downloaded
-              : remoteAssetPackForEdition(edition) != null
+              : zipAvailable.contains(edition)
                   ? OfflinePackState.adminManaged
-                  : available.contains(edition)
+                  : remoteAssetPackForEdition(edition) != null
                       ? OfflinePackState.adminManaged
-                      : edition == _settings.mushafEdition
-                          ? OfflinePackState.localOnly
-                          : OfflinePackState.planned;
+                      : available.contains(edition)
+                          ? OfflinePackState.adminManaged
+                          : edition == _settings.mushafEdition
+                              ? OfflinePackState.localOnly
+                              : OfflinePackState.planned;
       return OfflineEditionPack(
         edition: edition,
         state: state,
@@ -529,9 +548,54 @@ class QuranReaderController extends ChangeNotifier {
     return _downloadedOfflineEditions.contains(edition);
   }
 
+  bool isMushafEditionReady(MushafEdition edition) {
+    return isMushafEditionStoredOffline(edition);
+  }
+
+  bool isMushafEditionStoredOffline(MushafEdition edition) {
+    return isBundledPackForEdition(edition) || isOfflinePackDownloaded(edition);
+  }
+
   bool isOfflinePackDownloading(MushafEdition edition) {
     return _offlinePackProgress.containsKey(edition);
   }
+
+  bool hasZipPackForEdition(MushafEdition edition) {
+    return _zipAssetPacks.any((pack) => pack.edition == edition);
+  }
+
+  QuranZipAssetPack? zipPackForEdition(MushafEdition edition) {
+    for (final pack in _zipAssetPacks) {
+      if (pack.edition == edition) {
+        return pack;
+      }
+    }
+    return null;
+  }
+
+  int get downloadableZipPackCount {
+    return _zipAssetPacks
+        .where(
+          (pack) =>
+              !_downloadedOfflineEditions.contains(pack.edition) &&
+              !_repository.hasBundledPackForEdition(pack.edition),
+        )
+        .length;
+  }
+
+  int get downloadedZipPackCount {
+    return _downloadedOfflineEditions
+        .where((edition) => !_repository.hasBundledPackForEdition(edition))
+        .length;
+  }
+
+  MushafEdition? get activeOfflineDownloadEdition {
+    return _offlinePackProgress.isEmpty
+        ? null
+        : _offlinePackProgress.keys.first;
+  }
+
+  bool get hasActiveOfflinePackDownloads => _offlinePackProgress.isNotEmpty;
 
   double offlinePackProgressForEdition(MushafEdition edition) {
     return _offlinePackProgress[edition] ?? 0;
@@ -648,6 +712,8 @@ class QuranReaderController extends ChangeNotifier {
       _settings = launchState.settings;
       _settingsNotifier.value = _settings;
       _adminConfig = _repository.adminConfig;
+      _zipAssetPacks = _repository.availableZipPacks;
+      _refreshZipPacksInBackground();
       _aiSettings = await aiSettingsFuture;
       _syncCurrentAiSettingsWithAdminConfig();
       _aiSettingsNotifier.value = _aiSettings;
@@ -1157,6 +1223,15 @@ class QuranReaderController extends ChangeNotifier {
     );
   }
 
+  Future<void> togglePageNightMode(bool enabled) async {
+    if (_settings.pageNightMode == enabled) {
+      return;
+    }
+    await _commitSettingsUpdate(
+      _settings.copyWith(pageNightMode: enabled),
+    );
+  }
+
   Future<void> togglePagePreset(bool enabled) async {
     if (_settings.pagePresetEnabled == enabled) {
       return;
@@ -1304,6 +1379,10 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> selectMushafEdition(MushafEdition edition) async {
+    if (!isMushafEditionStoredOffline(edition)) {
+      return;
+    }
+
     final nextPreferImageMode = _repository.hasAssetsForEdition(edition);
 
     if (_settings.mushafEdition == edition &&
@@ -1531,6 +1610,7 @@ class QuranReaderController extends ChangeNotifier {
       'settings': <String, dynamic>{
         'mushafEdition': _settings.mushafEdition.storageValue,
         'nightMode': _settings.nightMode,
+        'pageNightMode': _settings.pageNightMode,
         'preferImageMode': _settings.preferImageMode,
       },
       'readingPlan': _readingPlan.toJson(),
@@ -2349,6 +2429,14 @@ class QuranReaderController extends ChangeNotifier {
   Future<void> refreshAdminSync() async {
     final nextConfig = await _repository.refreshAdminConfig();
     _adminConfig = nextConfig;
+    final adminDefaultSettings =
+        await _repository.applyAdminReaderDefaults(_settings);
+    if (adminDefaultSettings != _settings) {
+      _settings = adminDefaultSettings;
+      _publishSettings();
+    }
+    _zipAssetPacks =
+        await _repository.fetchAvailableZipPacks(forceRefresh: true);
     _syncCurrentAiSettingsWithAdminConfig();
     await _refreshOfflinePackAvailability();
     await _applyAdminEditionVisibilityRules();
@@ -2433,6 +2521,9 @@ class QuranReaderController extends ChangeNotifier {
     if (remotePack != null) {
       return 'Admin v${remotePack.version}';
     }
+    if (hasZipPackForEdition(edition)) {
+      return 'Not downloaded';
+    }
     return 'Not available';
   }
 
@@ -2441,15 +2532,23 @@ class QuranReaderController extends ChangeNotifier {
     if (isBundledPackForEdition(edition)) {
       return '${edition.bestUseLabel}. This edition is bundled with the app and always available offline.';
     }
-    if (isOfflinePackDownloaded(edition) && remotePack != null) {
-      return '${edition.bestUseLabel}. Admin pack ${remotePack.version} is stored on this device and will keep working offline.';
-    }
-    if (isOfflinePackDownloading(edition) && remotePack != null) {
+    if (isOfflinePackDownloading(edition)) {
       final progress = (offlinePackProgressForEdition(edition) * 100).round();
-      return '${edition.bestUseLabel}. Downloading admin pack ${remotePack.version} for offline use ($progress%).';
+      final versionLabel =
+          remotePack == null ? 'ZIP pack' : 'admin pack ${remotePack.version}';
+      return '${edition.bestUseLabel}. Downloading $versionLabel for offline use ($progress%).';
+    }
+    if (isOfflinePackDownloaded(edition)) {
+      final versionLabel =
+          remotePack == null ? 'ZIP pack' : 'admin pack ${remotePack.version}';
+      return '${edition.bestUseLabel}. $versionLabel is stored on this device and will keep working offline.';
     }
     if (remotePack != null) {
       return '${edition.bestUseLabel}. Admin pack ${remotePack.version} with ${remotePack.pageCount} imported pages is active.';
+    }
+    final zipPack = zipPackForEdition(edition);
+    if (zipPack != null) {
+      return '${edition.bestUseLabel}. ZIP pack is available from the server and will work offline after download.';
     }
     return '${edition.bestUseLabel}. No admin-managed pack is active yet.';
   }
@@ -2459,24 +2558,41 @@ class QuranReaderController extends ChangeNotifier {
       return;
     }
 
+    final cancelToken = CancelToken();
+    _offlinePackCancelTokens[edition] = cancelToken;
     _offlinePackProgress = Map<MushafEdition, double>.from(_offlinePackProgress)
       ..[edition] = 0;
     notifyListeners();
 
     try {
+      var lastProgress = 0.0;
+      var lastProgressNotifyAt = DateTime.fromMillisecondsSinceEpoch(0);
       await _repository.downloadOfflinePack(
         edition,
+        cancelToken: cancelToken,
         onProgress: (progress) {
           if (_isDisposed) {
             return;
           }
+          final clampedProgress = progress.clamp(0, 1).toDouble();
+          final now = DateTime.now();
+          final progressDelta = (clampedProgress - lastProgress).abs();
+          final elapsed = now.difference(lastProgressNotifyAt);
+          if (clampedProgress < 1 &&
+              progressDelta < 0.01 &&
+              elapsed < const Duration(milliseconds: 250)) {
+            return;
+          }
+          lastProgress = clampedProgress;
+          lastProgressNotifyAt = now;
           _offlinePackProgress =
               Map<MushafEdition, double>.from(_offlinePackProgress)
-                ..[edition] = progress.clamp(0, 1);
+                ..[edition] = clampedProgress;
           notifyListeners();
         },
       );
     } finally {
+      _offlinePackCancelTokens.remove(edition);
       _offlinePackProgress =
           Map<MushafEdition, double>.from(_offlinePackProgress)
             ..remove(edition);
@@ -2485,6 +2601,23 @@ class QuranReaderController extends ChangeNotifier {
       _publishContentChange();
       if (!_isDisposed) {
         notifyListeners();
+      }
+    }
+  }
+
+  void cancelOfflineEditionPackDownload(MushafEdition edition) {
+    final token = _offlinePackCancelTokens[edition];
+    if (token == null || token.isCancelled) {
+      return;
+    }
+    token.cancel('${edition.label} download cancelled.');
+  }
+
+  void cancelAllOfflinePackDownloads() {
+    final tokens = List<CancelToken>.from(_offlinePackCancelTokens.values);
+    for (final token in tokens) {
+      if (!token.isCancelled) {
+        token.cancel('All downloads cancelled.');
       }
     }
   }
@@ -2730,5 +2863,17 @@ class QuranReaderController extends ChangeNotifier {
       ...bundledEditions,
       ...checks.where((entry) => entry.value).map((entry) => entry.key),
     };
+  }
+
+  void _refreshZipPacksInBackground() {
+    unawaited(
+      _repository.fetchAvailableZipPacks(forceRefresh: true).then((packs) {
+        if (_isDisposed) {
+          return;
+        }
+        _zipAssetPacks = packs;
+        notifyListeners();
+      }).catchError((_) {}),
+    );
   }
 }

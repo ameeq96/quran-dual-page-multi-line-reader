@@ -143,6 +143,7 @@ class ReaderSettings {
     required this.customBrightnessEnabled,
     required this.pageBrightness,
     required this.nightMode,
+    required this.pageNightMode,
     required this.pagePresetEnabled,
     required this.pagePreset,
     required this.pageOverlayEnabled,
@@ -161,6 +162,7 @@ class ReaderSettings {
         customBrightnessEnabled = false,
         pageBrightness = 1.0,
         nightMode = false,
+        pageNightMode = false,
         pagePresetEnabled = false,
         pagePreset = PagePreset.classic,
         pageOverlayEnabled = false,
@@ -177,6 +179,7 @@ class ReaderSettings {
   final bool customBrightnessEnabled;
   final double pageBrightness;
   final bool nightMode;
+  final bool pageNightMode;
   final bool pagePresetEnabled;
   final PagePreset pagePreset;
   final bool pageOverlayEnabled;
@@ -194,6 +197,7 @@ class ReaderSettings {
     bool? customBrightnessEnabled,
     double? pageBrightness,
     bool? nightMode,
+    bool? pageNightMode,
     bool? pagePresetEnabled,
     PagePreset? pagePreset,
     bool? pageOverlayEnabled,
@@ -212,6 +216,7 @@ class ReaderSettings {
           customBrightnessEnabled ?? this.customBrightnessEnabled,
       pageBrightness: (pageBrightness ?? this.pageBrightness).clamp(0.7, 1.25),
       nightMode: nightMode ?? this.nightMode,
+      pageNightMode: pageNightMode ?? this.pageNightMode,
       pagePresetEnabled: pagePresetEnabled ?? this.pagePresetEnabled,
       pagePreset: pagePreset ?? this.pagePreset,
       pageOverlayEnabled: pageOverlayEnabled ?? this.pageOverlayEnabled,
@@ -238,6 +243,7 @@ class ReaderSettings {
         other.customBrightnessEnabled == customBrightnessEnabled &&
         other.pageBrightness == pageBrightness &&
         other.nightMode == nightMode &&
+        other.pageNightMode == pageNightMode &&
         other.pagePresetEnabled == pagePresetEnabled &&
         other.pagePreset == pagePreset &&
         other.pageOverlayEnabled == pageOverlayEnabled &&
@@ -257,6 +263,7 @@ class ReaderSettings {
         customBrightnessEnabled,
         pageBrightness,
         nightMode,
+        pageNightMode,
         pagePresetEnabled,
         pagePreset,
         pageOverlayEnabled,

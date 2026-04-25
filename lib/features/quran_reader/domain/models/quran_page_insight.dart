@@ -55,5 +55,6 @@ class QuranPageInsight {
     }
     return chapterIds.isEmpty ? null : chapterIds.first;
   }
+
   bool get hasSajdah => sajdahVerseKeys.isNotEmpty;
 }

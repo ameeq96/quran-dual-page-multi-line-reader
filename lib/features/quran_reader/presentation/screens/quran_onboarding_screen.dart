@@ -70,12 +70,12 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
     _OnboardingItem(
       title: 'Plan, revise, and scale',
       subtitle:
-          'Use the new plans and packs hub for reading goals, hifz revision, offline edition pack strategy, accessibility, and backup-ready sync settings.',
+          'Use the new plans hub for reading goals, hifz revision, accessibility, and backup-ready sync settings.',
       icon: Icons.insights_outlined,
       highlights: <String>[
         'Reading plans for steady flow, Ramadan, 30-day khatam, and custom goals',
         'Weak-page hifz tracking and quick revision queue',
-        'Offline pack planning, AI depth modes, larger text, and backup export',
+        'AI depth modes, larger text, and backup export',
       ],
     ),
     _OnboardingItem(
@@ -165,8 +165,9 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
                       end: Alignment.bottomCenter,
                       colors: [
                         theme.scaffoldBackgroundColor,
-                        theme.colorScheme.surfaceContainerLowest.withOpacity(
-                            theme.brightness == Brightness.dark ? 0.92 : 1),
+                        theme.colorScheme.surfaceContainerLowest.withValues(
+                            alpha:
+                                theme.brightness == Brightness.dark ? 0.92 : 1),
                         theme.colorScheme.surface,
                       ],
                     ),
@@ -188,8 +189,8 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
                                 width: compact ? 48 : 56,
                                 height: compact ? 48 : 56,
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary.withOpacity(
-                                    theme.brightness == Brightness.dark
+                                  color: theme.colorScheme.primary.withValues(
+                                    alpha: theme.brightness == Brightness.dark
                                         ? 0.18
                                         : 0.12,
                                   ),
@@ -327,14 +328,14 @@ class _OnboardingCard extends StatelessWidget {
       },
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: theme.colorScheme.surface.withOpacity(
-            theme.brightness == Brightness.dark ? 0.96 : 0.9,
+          color: theme.colorScheme.surface.withValues(
+            alpha: theme.brightness == Brightness.dark ? 0.96 : 0.9,
           ),
           borderRadius: BorderRadius.circular(30),
           boxShadow: [
             BoxShadow(
-              color: theme.colorScheme.shadow.withOpacity(
-                theme.brightness == Brightness.dark ? 0.16 : 0.08,
+              color: theme.colorScheme.shadow.withValues(
+                alpha: theme.brightness == Brightness.dark ? 0.16 : 0.08,
               ),
               blurRadius: 26,
               offset: const Offset(0, 14),
@@ -367,8 +368,8 @@ class _OnboardingCard extends StatelessWidget {
                   width: shortCard ? 56 : (compact ? 64 : 72),
                   height: shortCard ? 56 : (compact ? 64 : 72),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(
-                      theme.brightness == Brightness.dark ? 0.2 : 0.12,
+                    color: theme.colorScheme.primary.withValues(
+                      alpha: theme.brightness == Brightness.dark ? 0.2 : 0.12,
                     ),
                     borderRadius: BorderRadius.circular(shortCard ? 18 : 22),
                   ),
@@ -394,9 +395,9 @@ class _OnboardingCard extends StatelessWidget {
                     padding: EdgeInsets.only(bottom: shortCard ? 10 : 12),
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerLowest
-                            .withOpacity(
-                          theme.brightness == Brightness.dark ? 0.72 : 1,
+                        color:
+                            theme.colorScheme.surfaceContainerLowest.withValues(
+                          alpha: theme.brightness == Brightness.dark ? 0.72 : 1,
                         ),
                         borderRadius:
                             BorderRadius.circular(shortCard ? 16 : 20),
@@ -445,8 +446,10 @@ class _OnboardingCard extends StatelessWidget {
                           width: compact ? 64 : 72,
                           height: compact ? 64 : 72,
                           decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withOpacity(
-                              theme.brightness == Brightness.dark ? 0.2 : 0.12,
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: theme.brightness == Brightness.dark
+                                  ? 0.2
+                                  : 0.12,
                             ),
                             borderRadius: BorderRadius.circular(22),
                           ),
@@ -482,10 +485,11 @@ class _OnboardingCard extends StatelessWidget {
                                     decoration: BoxDecoration(
                                       color: theme
                                           .colorScheme.surfaceContainerLowest
-                                          .withOpacity(
-                                        theme.brightness == Brightness.dark
-                                            ? 0.72
-                                            : 1,
+                                          .withValues(
+                                        alpha:
+                                            theme.brightness == Brightness.dark
+                                                ? 0.72
+                                                : 1,
                                       ),
                                       borderRadius: BorderRadius.circular(20),
                                     ),

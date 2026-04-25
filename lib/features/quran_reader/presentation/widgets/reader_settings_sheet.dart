@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/models/reader_settings.dart';
+
 class ReaderSettingsSheet extends StatefulWidget {
   const ReaderSettingsSheet({
     super.key,
@@ -13,6 +14,7 @@ class ReaderSettingsSheet extends StatefulWidget {
     required this.onToggleCustomBrightness,
     required this.onBrightnessChanged,
     required this.onToggleNightMode,
+    required this.onTogglePageNightMode,
     required this.onTogglePagePreset,
     required this.onSelectPagePreset,
     required this.onTogglePageOverlay,
@@ -32,6 +34,7 @@ class ReaderSettingsSheet extends StatefulWidget {
   final ValueChanged<bool> onToggleCustomBrightness;
   final ValueChanged<double> onBrightnessChanged;
   final ValueChanged<bool> onToggleNightMode;
+  final ValueChanged<bool> onTogglePageNightMode;
   final ValueChanged<bool> onTogglePagePreset;
   final ValueChanged<PagePreset> onSelectPagePreset;
   final ValueChanged<bool> onTogglePageOverlay;
@@ -65,11 +68,12 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
     final theme = Theme.of(context);
     final settings = widget.settings;
     final availableImageEditions = widget.availableImageEditions;
-    final selectedEdition = availableImageEditions.contains(settings.mushafEdition)
-        ? settings.mushafEdition
-        : (availableImageEditions.isNotEmpty
-            ? availableImageEditions.first
-            : settings.mushafEdition);
+    final selectedEdition =
+        availableImageEditions.contains(settings.mushafEdition)
+            ? settings.mushafEdition
+            : (availableImageEditions.isNotEmpty
+                ? availableImageEditions.first
+                : settings.mushafEdition);
 
     return SafeArea(
       top: false,
@@ -85,7 +89,7 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                       width: 54,
                       height: 5,
                       decoration: BoxDecoration(
-                        color: theme.dividerColor.withOpacity(0.8),
+                        color: theme.dividerColor.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(999),
                       ),
                     )
@@ -114,8 +118,8 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                         const SizedBox(height: 4),
                         Text(
                           availableImageEditions.length <= 1
-                              ? 'Only the scanned Quran editions available from the admin API are shown here.'
-                              : 'Only the scanned Quran editions currently available from the admin API are shown here.',
+                              ? 'Only offline-ready Quran editions are shown here.'
+                              : 'Only downloaded or bundled Quran editions are shown here.',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                             height: 1.34,
@@ -132,7 +136,7 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                           )
                         else
                           Text(
-                            'No scanned Mushaf edition is available from the admin API right now.',
+                            'No offline-ready Mushaf edition is available right now.',
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -170,11 +174,19 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                   const Divider(height: 1),
                   _SwitchRow(
                     icon: Icons.dark_mode_rounded,
-                    title: 'Night mode',
-                    subtitle:
-                        'Use a darker Mushaf treatment for low-light reading.',
+                    title: 'App dark mode',
+                    subtitle: 'Use dark surfaces for menus and app screens.',
                     value: settings.nightMode,
                     onChanged: widget.onToggleNightMode,
+                  ),
+                  const Divider(height: 1),
+                  _SwitchRow(
+                    icon: Icons.auto_stories_outlined,
+                    title: 'Quran page dark mode',
+                    subtitle:
+                        'Keep the Mushaf page dark or light independently.',
+                    value: settings.pageNightMode,
+                    onChanged: widget.onTogglePageNightMode,
                   ),
                   const Divider(height: 1),
                   _SwitchRow(
@@ -303,11 +315,11 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
             const SizedBox(height: 14),
             DecoratedBox(
               decoration: BoxDecoration(
-                color:
-                    theme.colorScheme.surfaceContainerHighest.withOpacity(0.34),
+                color: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.34),
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(
-                  color: theme.dividerColor.withOpacity(0.46),
+                  color: theme.dividerColor.withValues(alpha: 0.46),
                 ),
               ),
               child: Padding(
@@ -375,17 +387,17 @@ class _SettingsCard extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            theme.colorScheme.surface.withOpacity(0.96),
-            theme.colorScheme.surfaceContainer.withOpacity(0.9),
+            theme.colorScheme.surface.withValues(alpha: 0.96),
+            theme.colorScheme.surfaceContainer.withValues(alpha: 0.9),
           ],
         ),
         borderRadius: BorderRadius.circular(26),
         border: Border.all(
-          color: theme.dividerColor.withOpacity(0.46),
+          color: theme.dividerColor.withValues(alpha: 0.46),
         ),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.shadow.withOpacity(0.05),
+            color: theme.colorScheme.shadow.withValues(alpha: 0.05),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
@@ -536,10 +548,11 @@ class _InlineSwitchTile extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.22),
+        color:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.22),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: theme.dividerColor.withOpacity(0.38),
+          color: theme.dividerColor.withValues(alpha: 0.38),
         ),
       ),
       child: ListTile(

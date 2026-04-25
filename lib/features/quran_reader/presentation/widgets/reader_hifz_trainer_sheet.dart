@@ -129,7 +129,7 @@ class _ReaderHifzTrainerSheetState extends State<_ReaderHifzTrainerSheet> {
               width: 54,
               height: 5,
               decoration: BoxDecoration(
-                color: theme.dividerColor.withOpacity(0.8),
+                color: theme.dividerColor.withValues(alpha: 0.8),
                 borderRadius: BorderRadius.circular(999),
               ),
             ),
@@ -378,18 +378,18 @@ class _ManualMaskEditor extends StatelessWidget {
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     color: linesHidden
-                        ? const Color(0xFF090909).withOpacity(0.92)
-                        : const Color(0xFF111111).withOpacity(0.18),
+                        ? const Color(0xFF090909).withValues(alpha: 0.92)
+                        : const Color(0xFF111111).withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(999),
                     border: Border.all(
                       color: linesHidden
-                          ? Colors.white.withOpacity(0.08)
-                          : Colors.white.withOpacity(0.24),
+                          ? Colors.white.withValues(alpha: 0.08)
+                          : Colors.white.withValues(alpha: 0.24),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(
-                          linesHidden ? 0.24 : 0.08,
+                        color: Colors.black.withValues(
+                          alpha: linesHidden ? 0.24 : 0.08,
                         ),
                         blurRadius: 6,
                         offset: const Offset(0, 2),
@@ -401,8 +401,8 @@ class _ManualMaskEditor extends StatelessWidget {
                       width: 44,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(
-                          linesHidden ? 0.32 : 0.6,
+                        color: Colors.white.withValues(
+                          alpha: linesHidden ? 0.32 : 0.6,
                         ),
                         borderRadius: BorderRadius.circular(999),
                       ),
@@ -435,12 +435,12 @@ class _TrainerCard extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: [
-            theme.colorScheme.surface.withOpacity(0.97),
-            theme.colorScheme.surfaceContainer.withOpacity(0.9),
+            theme.colorScheme.surface.withValues(alpha: 0.97),
+            theme.colorScheme.surfaceContainer.withValues(alpha: 0.9),
           ],
         ),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.42)),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.42)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(18),
@@ -464,9 +464,9 @@ class _TrainerChip extends StatelessWidget {
     final theme = Theme.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(0.82),
+        color: theme.colorScheme.surface.withValues(alpha: 0.82),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: theme.dividerColor.withOpacity(0.36)),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.36)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

@@ -30,14 +30,14 @@ class ReaderBottomDock extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: 520),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: theme.colorScheme.surface.withOpacity(0.9),
+                color: theme.colorScheme.surface.withValues(alpha: 0.9),
                 borderRadius: BorderRadius.circular(compact ? 20 : 24),
                 border: Border.all(
-                  color: theme.dividerColor.withOpacity(0.36),
+                  color: theme.dividerColor.withValues(alpha: 0.36),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: theme.colorScheme.shadow.withOpacity(0.06),
+                    color: theme.colorScheme.shadow.withValues(alpha: 0.06),
                     blurRadius: 18,
                     offset: const Offset(0, 8),
                   ),
@@ -150,10 +150,11 @@ class _DockActionTile extends StatelessWidget {
             vertical: compact ? 12 : 13,
           ),
           decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerLowest.withOpacity(0.74),
+            color: theme.colorScheme.surfaceContainerLowest
+                .withValues(alpha: 0.74),
             borderRadius: BorderRadius.circular(compact ? 16 : 18),
             border: Border.all(
-              color: theme.dividerColor.withOpacity(0.3),
+              color: theme.dividerColor.withValues(alpha: 0.3),
             ),
           ),
           child: Row(
@@ -162,7 +163,7 @@ class _DockActionTile extends StatelessWidget {
                 width: compact ? 38 : 42,
                 height: compact ? 38 : 42,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(

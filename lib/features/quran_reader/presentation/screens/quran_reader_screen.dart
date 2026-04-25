@@ -62,6 +62,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
   late int _lastKnownSpreadIndex;
   late int _lastKnownPageViewIndex;
   Timer? _prefetchTimer;
+  Timer? _deferredPrefetchTimer;
   int? _lastPrefetchedPageNumber;
   bool? _lastPrefetchedLowMemoryMode;
   bool? _lastPrefetchedPreferImageMode;
@@ -167,6 +168,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     widget.controller.pageListenable.removeListener(_syncViewControllers);
     widget.controller.settingsListenable.removeListener(_syncViewControllers);
     _prefetchTimer?.cancel();
+    _deferredPrefetchTimer?.cancel();
     _portraitZoomNotifier.dispose();
     _landscapeZoomNotifier.dispose();
     _spreadController.dispose();
@@ -411,6 +413,12 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
   }
 
   Future<void> _openCompareSheet() {
+    if (!widget.controller.isCompareEnabled) {
+      _showUnavailablePackMessage(
+        'Download at least one more Quran edition to compare pages.',
+      );
+      return Future<void>.value();
+    }
     return Navigator.of(context).push(
       buildReaderPageRoute<void>(
         builder: (context) => QuranCompareScreen(
@@ -421,12 +429,27 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
   }
 
   Future<void> _openKanzulStudySheet() {
+    if (!widget.controller.isKanzulStudyEnabled) {
+      _showUnavailablePackMessage(
+        'Download the Kanzul Iman pack first to open Kanzul study mode.',
+      );
+      return Future<void>.value();
+    }
     return Navigator.of(context).push(
       buildReaderPageRoute<void>(
         builder: (context) => QuranKanzulImanStudyScreen(
           controller: widget.controller,
         ),
       ),
+    );
+  }
+
+  void _showUnavailablePackMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -463,7 +486,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     final devicePixelRatio = mediaQuery?.devicePixelRatio ?? 1.0;
     final cacheWidth = (viewportWidth * devicePixelRatio)
         .round()
-        .clamp(lowMemoryMode ? 420 : 520, lowMemoryMode ? 760 : 1080)
+        .clamp(lowMemoryMode ? 360 : 480, lowMemoryMode ? 640 : 900)
         .toInt();
     if (!force &&
         _lastPrefetchedPageNumber == currentPageNumber &&
@@ -476,30 +499,54 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     _lastPrefetchedLowMemoryMode = lowMemoryMode;
     _lastPrefetchedPreferImageMode = preferImageMode;
 
-    final pagesToWarm = widget.controller.settings.lowMemoryMode
-        ? <int>{currentPageNumber}
-        : <int>{
-            currentPageNumber - 2,
-            currentPageNumber - 1,
+    final pagesToWarm = lowMemoryMode
+        ? <int>[currentPageNumber]
+        : <int>[
             currentPageNumber,
             currentPageNumber + 1,
-            currentPageNumber + 2,
-          };
+            currentPageNumber - 1,
+          ];
+    _precachePagesSequentially(
+      pagesToWarm
+          .where((page) => page >= 1 && page <= widget.controller.totalPages)
+          .toList(growable: false),
+      cacheWidth: cacheWidth,
+    );
+  }
 
-    for (final pageNumber in pagesToWarm
-        .where((page) => page >= 1 && page <= widget.controller.totalPages)) {
+  void _precachePagesSequentially(
+    List<int> pageNumbers, {
+    required int cacheWidth,
+  }) {
+    _deferredPrefetchTimer?.cancel();
+    if (pageNumbers.isEmpty || !mounted) {
+      return;
+    }
+
+    final pageNumber = pageNumbers.first;
+    final remaining = pageNumbers.skip(1).toList(growable: false);
+    try {
       final page = widget.controller.pageForNumber(pageNumber);
       final assetPath = page.assetPath;
       if (assetPath != null) {
-        precacheImage(
+        unawaited(precacheImage(
           buildQuranPageImageProvider(
             page,
             cacheWidth: cacheWidth,
           ),
           context,
-        );
+        ).catchError((_) {}));
       }
+    } catch (_) {
+      // Prefetching is opportunistic; the reader should never pause for it.
     }
+
+    if (remaining.isEmpty) {
+      return;
+    }
+    _deferredPrefetchTimer = Timer(const Duration(milliseconds: 90), () {
+      _precachePagesSequentially(remaining, cacheWidth: cacheWidth);
+    });
   }
 
   @override
@@ -630,7 +677,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                                       colors: [
                                         theme.scaffoldBackgroundColor,
                                         theme.colorScheme.surface
-                                            .withOpacity(0.98),
+                                            .withValues(alpha: 0.98),
                                         theme.colorScheme.surface,
                                       ],
                                     ),
@@ -748,7 +795,7 @@ class _LandscapeSpreadReader extends StatelessWidget {
         controller: controller,
         reverse: true,
         padEnds: false,
-        allowImplicitScrolling: true,
+        allowImplicitScrolling: false,
         itemCount: readerController.totalSpreads,
         onPageChanged: onPageChanged,
         itemBuilder: (context, index) {
@@ -831,7 +878,7 @@ class _PortraitPageReader extends StatelessWidget {
         controller: controller,
         reverse: true,
         padEnds: false,
-        allowImplicitScrolling: true,
+        allowImplicitScrolling: false,
         itemCount: readerController.totalPages,
         onPageChanged: onPageChanged,
         itemBuilder: (context, index) {
@@ -885,7 +932,7 @@ class _ReaderBackdrop extends StatelessWidget {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              theme.colorScheme.surface.withOpacity(0.06),
+              theme.colorScheme.surface.withValues(alpha: 0.06),
               Colors.transparent,
             ],
           ),
@@ -900,7 +947,7 @@ class _ReaderBackdrop extends StatelessWidget {
           left: -60,
           child: _BackdropOrb(
             size: 340,
-            color: theme.colorScheme.primary.withOpacity(0.08),
+            color: theme.colorScheme.primary.withValues(alpha: 0.08),
           ),
         ),
         Positioned(
@@ -908,7 +955,7 @@ class _ReaderBackdrop extends StatelessWidget {
           bottom: -120,
           child: _BackdropOrb(
             size: 380,
-            color: theme.colorScheme.secondary.withOpacity(0.07),
+            color: theme.colorScheme.secondary.withValues(alpha: 0.07),
           ),
         ),
         Positioned.fill(
@@ -918,7 +965,7 @@ class _ReaderBackdrop extends StatelessWidget {
                 center: Alignment.topCenter,
                 radius: 1.22,
                 colors: [
-                  theme.colorScheme.surface.withOpacity(0.14),
+                  theme.colorScheme.surface.withValues(alpha: 0.14),
                   Colors.transparent,
                 ],
               ),
@@ -933,9 +980,9 @@ class _ReaderBackdrop extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    theme.colorScheme.primary.withOpacity(0.025),
+                    theme.colorScheme.primary.withValues(alpha: 0.025),
                     Colors.transparent,
-                    theme.colorScheme.secondary.withOpacity(0.025),
+                    theme.colorScheme.secondary.withValues(alpha: 0.025),
                   ],
                 ),
               ),
@@ -967,7 +1014,7 @@ class _BackdropOrb extends StatelessWidget {
           gradient: RadialGradient(
             colors: [
               color,
-              color.withOpacity(0.02),
+              color.withValues(alpha: 0.02),
               Colors.transparent,
             ],
           ),

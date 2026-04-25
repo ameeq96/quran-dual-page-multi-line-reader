@@ -59,7 +59,8 @@ class QuranTextDataSource {
     return _pages[pageNumber];
   }
 
-  Future<Map<String, dynamic>> _loadPayload(ReaderAdminConfig? adminConfig) async {
+  Future<Map<String, dynamic>> _loadPayload(
+      ReaderAdminConfig? adminConfig) async {
     final remoteDataset = adminConfig?.contentDataset('text_pages');
     try {
       if (remoteDataset == null || remoteDataset.url.trim().isEmpty) {
