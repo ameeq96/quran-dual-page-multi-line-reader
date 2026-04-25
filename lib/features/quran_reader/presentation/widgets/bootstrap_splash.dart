@@ -51,6 +51,7 @@ class _BootstrapSplashState extends State<BootstrapSplash>
           final theme = Theme.of(context);
 
           return Scaffold(
+            backgroundColor: theme.scaffoldBackgroundColor,
             body: AnimatedBuilder(
               animation: _controller,
               builder: (context, _) {
@@ -229,27 +230,6 @@ class _BootstrapSplashState extends State<BootstrapSplash>
                                             _LoadingRail(
                                               progress: _controller.value,
                                             ),
-                                            SizedBox(
-                                              height: ultraCompact
-                                                  ? 12
-                                                  : (compact ? 14 : 18),
-                                            ),
-                                            if (!ultraCompact) ...[
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 14,
-                                                  vertical: 10,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: theme
-                                                      .colorScheme.surface
-                                                      .withValues(alpha: 0.6),
-                                                  borderRadius:
-                                                      BorderRadius.circular(18),
-                                                ),
-                                              ),
-                                            ],
                                           ],
                                         ),
                                       ),

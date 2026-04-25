@@ -263,7 +263,7 @@ class QuranHomeScreen extends StatelessWidget {
         .map((pack) => pack.edition)
         .where(
           (edition) =>
-              controller.hasZipPackForEdition(edition) &&
+              controller.hasDownloadablePackForEdition(edition) &&
               !controller.isOfflinePackDownloaded(edition) &&
               !controller.isOfflinePackDownloading(edition) &&
               !controller.isBundledPackForEdition(edition),
@@ -431,8 +431,6 @@ class QuranHomeScreen extends StatelessWidget {
                                   title: controller.homeHeroTitle,
                                   subtitle: heroSubtitle,
                                   /* '$chapterLabel • $pageLabel • $editionLabel', */
-                                  streakLabel:
-                                      '${controller.readingStreakCount} day streak',
                                   onResume: () => _openReader(context),
                                 ),
                               ),
@@ -464,29 +462,13 @@ class QuranHomeScreen extends StatelessWidget {
                               const SizedBox(height: 16),
                               ReaderEntranceMotion(
                                 distance: 17,
-                                child: Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    _InfoPill(
-                                      icon: Icons.menu_book_rounded,
-                                      label: pageLabel,
-                                    ),
-                                    _InfoPill(
-                                      icon: Icons.auto_graph_rounded,
-                                      label:
-                                          controller.dailyProgressSummaryLabel,
-                                    ),
-                                    _InfoPill(
-                                      icon:
-                                          Icons.local_fire_department_outlined,
-                                      label:
-                                          '${controller.readingStreakCount} day streak',
-                                    ),
-                                  ],
+                                child: _SectionTitle(
+                                  title: 'Quick Access',
+                                  subtitle: controller.quickAccessSubtitle,
+                                  horizontalInset: 14,
                                 ),
                               ),
-                              const SizedBox(height: 14),
+                              const SizedBox(height: 12),
                               ReaderEntranceMotion(
                                 distance: 18,
                                 child: _EditionSelectorCard(
@@ -537,15 +519,6 @@ class QuranHomeScreen extends StatelessWidget {
                               const SizedBox(height: 16),
                               ReaderEntranceMotion(
                                 distance: 20,
-                                child: _SectionTitle(
-                                  title: 'Quick Access',
-                                  subtitle: controller.quickAccessSubtitle,
-                                  horizontalInset: 14,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              ReaderEntranceMotion(
-                                distance: 22,
                                 child: _MenuCard(
                                   child: Column(
                                     children: [
@@ -726,13 +699,11 @@ class _HomeTopCard extends StatelessWidget {
   const _HomeTopCard({
     required this.title,
     required this.subtitle,
-    required this.streakLabel,
     required this.onResume,
   });
 
   final String title;
   final String subtitle;
-  final String streakLabel;
   final VoidCallback onResume;
 
   @override
@@ -742,9 +713,6 @@ class _HomeTopCard extends StatelessWidget {
     const heroTextColor = Color(0xFFF5F0E3);
     const heroSubtextColor = Color(0xFFD5E4D8);
     final heroShellColor = Colors.white.withValues(alpha: isDark ? 0.10 : 0.12);
-    final heroPillColor = Colors.white.withValues(alpha: isDark ? 0.08 : 0.10);
-    final heroPillBorderColor =
-        Colors.white.withValues(alpha: isDark ? 0.12 : 0.16);
     const heroButtonColor = Color(0xFFD9F2E8);
     const heroButtonTextColor = Color(0xFF0E3B26);
 
@@ -823,24 +791,6 @@ class _HomeTopCard extends StatelessWidget {
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 18),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: heroPillColor,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: heroPillBorderColor,
-              ),
-            ),
-            child: Text(
-              streakLabel,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: heroTextColor,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
@@ -1095,23 +1045,25 @@ class _OfflinePacksCard extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
+        color: theme.colorScheme.surface.withValues(
+          alpha: theme.brightness == Brightness.dark ? 0.96 : 0.9,
+        ),
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(
-          color: theme.colorScheme.primary.withValues(alpha: 0.18),
+          color: theme.dividerColor.withValues(alpha: 0.7),
         ),
         boxShadow: [
           BoxShadow(
             color: theme.colorScheme.shadow.withValues(
-              alpha: theme.brightness == Brightness.dark ? 0.14 : 0.05,
+              alpha: theme.brightness == Brightness.dark ? 0.16 : 0.06,
             ),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1331,53 +1283,6 @@ class _TileDivider extends StatelessWidget {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 16),
       child: Divider(height: 1),
-    );
-  }
-}
-
-class _InfoPill extends StatelessWidget {
-  const _InfoPill({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(
-          alpha: theme.brightness == Brightness.dark ? 0.94 : 0.82,
-        ),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: theme.dividerColor.withValues(alpha: 0.7),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: theme.colorScheme.primary,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: theme.textTheme.labelLarge?.copyWith(
-                color: theme.colorScheme.onSurface,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

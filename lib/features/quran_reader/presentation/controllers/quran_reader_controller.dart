@@ -564,6 +564,11 @@ class QuranReaderController extends ChangeNotifier {
     return _zipAssetPacks.any((pack) => pack.edition == edition);
   }
 
+  bool hasDownloadablePackForEdition(MushafEdition edition) {
+    return hasZipPackForEdition(edition) ||
+        remoteAssetPackForEdition(edition) != null;
+  }
+
   QuranZipAssetPack? zipPackForEdition(MushafEdition edition) {
     for (final pack in _zipAssetPacks) {
       if (pack.edition == edition) {
@@ -574,11 +579,12 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   int get downloadableZipPackCount {
-    return _zipAssetPacks
+    return MushafEdition.values
         .where(
-          (pack) =>
-              !_downloadedOfflineEditions.contains(pack.edition) &&
-              !_repository.hasBundledPackForEdition(pack.edition),
+          (edition) =>
+              hasDownloadablePackForEdition(edition) &&
+              !_downloadedOfflineEditions.contains(edition) &&
+              !_repository.hasBundledPackForEdition(edition),
         )
         .length;
   }
@@ -2544,7 +2550,7 @@ class QuranReaderController extends ChangeNotifier {
       return '${edition.bestUseLabel}. $versionLabel is stored on this device and will keep working offline.';
     }
     if (remotePack != null) {
-      return '${edition.bestUseLabel}. Admin pack ${remotePack.version} with ${remotePack.pageCount} imported pages is active.';
+      return '${edition.bestUseLabel}. Admin pack ${remotePack.version} with ${remotePack.pageCount} imported pages can be downloaded for offline use.';
     }
     final zipPack = zipPackForEdition(edition);
     if (zipPack != null) {

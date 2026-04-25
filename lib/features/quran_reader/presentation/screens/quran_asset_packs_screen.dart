@@ -243,10 +243,11 @@ class _AssetPackListState extends State<_AssetPackList> {
         );
         final isReady = widget.controller.isOfflinePackDownloaded(edition);
         final isBuiltIn = widget.controller.isBundledPackForEdition(edition);
-        final canDownload = widget.controller.hasZipPackForEdition(edition) &&
-            !isDownloading &&
-            !isReady &&
-            !isBuiltIn;
+        final canDownload =
+            widget.controller.hasDownloadablePackForEdition(edition) &&
+                !isDownloading &&
+                !isReady &&
+                !isBuiltIn;
         final canDelete = isReady && !isBuiltIn && !isDownloading;
         final progress = widget.controller.offlinePackProgressForEdition(
           edition,
