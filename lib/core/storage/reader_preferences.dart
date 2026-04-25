@@ -12,7 +12,8 @@ import '../../features/quran_reader/domain/models/reader_growth_models.dart';
 import '../../features/quran_reader/domain/models/reader_settings.dart';
 
 class ReaderPreferences {
-  static const _defaultAdminPublicBaseUrl = 'https://adminapi.opplexify.com';
+  static const _defaultAdminPublicBaseUrl =
+      'https://quranadminapi.opplexify.com';
   static const _lastPageKey = 'reader.lastPageNumber';
   static const _legacyLastSpreadKey = 'reader.lastSpreadIndex';
   static const _mushafEditionKey = 'reader.mushafEdition';
@@ -452,7 +453,7 @@ class ReaderPreferences {
     return normalized == 'http://localhost:5052' ||
         normalized == 'http://10.0.2.2:5052' ||
         normalized == 'http://127.0.0.1:5052' ||
-        normalized == 'https://quranadminapi.opplexify.com';
+        normalized == 'https://adminapi.opplexify.com';
   }
 
   Future<void> saveAdminPublicBaseUrl(String baseUrl) async {

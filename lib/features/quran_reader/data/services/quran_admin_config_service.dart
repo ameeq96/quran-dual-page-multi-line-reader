@@ -9,7 +9,7 @@ import '../../domain/models/reader_settings.dart';
 
 class QuranAdminConfigService {
   static const String _productionAdminBaseUrl =
-      'https://adminapi.opplexify.com';
+      'https://quranadminapi.opplexify.com';
   static const Duration _requestTimeout = Duration(seconds: 4);
 
   QuranAdminConfigService({

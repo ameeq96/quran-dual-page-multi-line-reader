@@ -282,14 +282,156 @@ class QuranOfflinePackService {
     final zipPacks = await fetchAvailableZipPacks();
     final zipPack =
         zipPacks.where((item) => item.edition == edition).firstOrNull;
-    if (zipPack == null) {
-      throw StateError('No ZIP pack is available for ${edition.label}.');
+    if (zipPack != null) {
+      await downloadEditionZipPack(
+        zipPack: zipPack,
+        onProgress: onProgress,
+        cancelToken: cancelToken,
+      );
+      return;
     }
-    await downloadEditionZipPack(
-      zipPack: zipPack,
+
+    await _downloadRemotePagePack(
+      edition: edition,
+      pack: pack,
+      assetsBaseUrl: assetsBaseUrl,
       onProgress: onProgress,
       cancelToken: cancelToken,
     );
+  }
+
+  Future<QuranDownloadedAssetPack> _downloadRemotePagePack({
+    required MushafEdition edition,
+    required ReaderRemoteAssetPack pack,
+    required String assetsBaseUrl,
+    void Function(double progress)? onProgress,
+    CancelToken? cancelToken,
+  }) async {
+    await initialize();
+    if (assetsBaseUrl.trim().isEmpty) {
+      throw StateError('No asset base URL is available for ${edition.label}.');
+    }
+
+    final manifestFile = File(_manifestPath(edition, pack.version));
+    final existing = _readManifest(manifestFile);
+    if (existing != null &&
+        existing.pageCount > 0 &&
+        _downloadedPackHasUsableFiles(existing)) {
+      onProgress?.call(1);
+      return existing;
+    }
+
+    final pageNumbers = _remotePageNumbers(pack);
+    if (pageNumbers.isEmpty) {
+      throw StateError('No remote pages are available for ${edition.label}.');
+    }
+
+    final stagingDirectory = Directory(
+      '${_offlineRoot!.path}${Platform.pathSeparator}'
+      '.incoming_${edition.storageValue}_${DateTime.now().microsecondsSinceEpoch}',
+    );
+
+    try {
+      await stagingDirectory.create(recursive: true);
+      final importedPages = <int>[];
+      var downloaded = 0;
+      for (final pageNumber in pageNumbers) {
+        final sourceUrl = pack.buildPageUrl(
+          assetsBaseUrl,
+          importedPageNumber: pageNumber,
+        );
+        final extension = pack.fileExtension.trim().isEmpty
+            ? 'webp'
+            : pack.fileExtension.trim().toLowerCase();
+        final destinationFile = File(
+          '${stagingDirectory.path}${Platform.pathSeparator}'
+          '${pageNumber.toString().padLeft(3, '0')}.$extension',
+        );
+        await _downloadRemotePage(
+          url: sourceUrl,
+          destinationFile: destinationFile,
+          cancelToken: cancelToken,
+        );
+        importedPages.add(pageNumber);
+        downloaded += 1;
+        onProgress?.call((downloaded / pageNumbers.length).clamp(0, 1));
+      }
+
+      importedPages.sort();
+      final finalDirectory =
+          Directory(_packDirectoryPath(edition, pack.version));
+      if (finalDirectory.existsSync()) {
+        await finalDirectory.delete(recursive: true);
+      }
+      await finalDirectory.parent.create(recursive: true);
+      await stagingDirectory.rename(finalDirectory.path);
+
+      final downloadedPack = QuranDownloadedAssetPack(
+        edition: edition,
+        folderName: pack.folderName,
+        version: pack.version,
+        sourceUrl: assetsBaseUrl,
+        directoryPath: finalDirectory.path,
+        archivePath: '',
+        pageCount: importedPages.length,
+        fileExtension: pack.fileExtension.trim().isEmpty
+            ? 'webp'
+            : pack.fileExtension.trim().toLowerCase(),
+        availableImportedPages: List<int>.unmodifiable(importedPages),
+        completedAtIso: DateTime.now().toUtc().toIso8601String(),
+      );
+      await _writeManifest(downloadedPack);
+      _clearLocalPagePathCacheForEdition(edition);
+      onProgress?.call(1);
+      return downloadedPack;
+    } finally {
+      if (stagingDirectory.existsSync()) {
+        await stagingDirectory.delete(recursive: true);
+      }
+    }
+  }
+
+  Future<void> _downloadRemotePage({
+    required String url,
+    required File destinationFile,
+    CancelToken? cancelToken,
+  }) async {
+    final tempFile = File('${destinationFile.path}.download');
+    await destinationFile.parent.create(recursive: true);
+    if (tempFile.existsSync()) {
+      await tempFile.delete();
+    }
+    await _dio.downloadUri(
+      Uri.parse(url),
+      tempFile.path,
+      cancelToken: cancelToken,
+      deleteOnError: true,
+    );
+    if (!tempFile.existsSync() || tempFile.lengthSync() == 0) {
+      throw StateError('Downloaded page asset is empty.');
+    }
+    if (destinationFile.existsSync()) {
+      await destinationFile.delete();
+    }
+    await tempFile.rename(destinationFile.path);
+  }
+
+  List<int> _remotePageNumbers(ReaderRemoteAssetPack pack) {
+    final explicitPages = pack.availableImportedPages
+        .where((pageNumber) => pageNumber > 0)
+        .toSet()
+        .toList()
+      ..sort();
+    if (explicitPages.isNotEmpty) {
+      return explicitPages;
+    }
+
+    final start = pack.contiguousImportedPageStart ?? 1;
+    final end = pack.contiguousImportedPageEnd ?? pack.pageCount;
+    if (start <= 0 || end < start) {
+      return const [];
+    }
+    return List<int>.generate(end - start + 1, (index) => start + index);
   }
 
   Future<void> removeEditionPack({

@@ -10,17 +10,23 @@ class QuranAssetPackCatalogService {
   }) : _dio = dio ?? Dio(_defaultOptions);
 
   static const String defaultCatalogUrl =
-      'https://adminapi.opplexify.com/public/asset-packs.json';
+      'https://quranadminapi.opplexify.com/public/asset-packs.json';
 
   static const Map<String, String> fallbackZipUrls = <String, String>{
-    '10_line': 'https://adminapi.opplexify.com/assets/asset_packs/10_line.zip',
-    '13_line': 'https://adminapi.opplexify.com/assets/asset_packs/13_line.zip',
-    '14_line': 'https://adminapi.opplexify.com/assets/asset_packs/14_line.zip',
-    '15_line': 'https://adminapi.opplexify.com/assets/asset_packs/15_line.zip',
-    '16_line': 'https://adminapi.opplexify.com/assets/asset_packs/16_line.zip',
-    '17_line': 'https://adminapi.opplexify.com/assets/asset_packs/17_line.zip',
+    '10_line':
+        'https://quranadminapi.opplexify.com/assets/asset_packs/10_line.zip',
+    '13_line':
+        'https://quranadminapi.opplexify.com/assets/asset_packs/13_line.zip',
+    '14_line':
+        'https://quranadminapi.opplexify.com/assets/asset_packs/14_line.zip',
+    '15_line':
+        'https://quranadminapi.opplexify.com/assets/asset_packs/15_line.zip',
+    '16_line':
+        'https://quranadminapi.opplexify.com/assets/asset_packs/16_line.zip',
+    '17_line':
+        'https://quranadminapi.opplexify.com/assets/asset_packs/17_line.zip',
     'kanzul_iman':
-        'https://adminapi.opplexify.com/assets/asset_packs/kanzul_iman.zip',
+        'https://quranadminapi.opplexify.com/assets/asset_packs/kanzul_iman.zip',
   };
 
   static final BaseOptions _defaultOptions = BaseOptions(
@@ -67,6 +73,9 @@ class QuranAssetPackCatalogService {
       final data = response.data;
       if (data is Map) {
         final parsed = _parseCatalogMap(data);
+        if (parsed.isEmpty && data['assetPacks'] is List) {
+          return const [];
+        }
         final packs = packsFromUrls(
           parsed,
           fillMissingWithFallback: allowFallback,
