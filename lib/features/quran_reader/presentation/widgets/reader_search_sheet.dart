@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../domain/models/quran_juz_navigation_entry.dart';
 import '../../domain/models/quran_surah_navigation_entry.dart';
 import 'reader_skeleton.dart';
@@ -303,7 +305,7 @@ class _ReaderSearchContentState extends State<ReaderSearchContent>
                           _SearchField(
                             controller: _surahSearchController,
                             icon: Icons.search_rounded,
-                            hintText: 'Search surah name',
+                            hintText: tr(context, 'Search surah name'),
                             dense: collapseTopChrome,
                           ),
                           SizedBox(height: fieldGap),
@@ -316,8 +318,8 @@ class _ReaderSearchContentState extends State<ReaderSearchContent>
                                           child: Padding(
                                             padding: const EdgeInsets.all(24),
                                             child: Text(
-                                              _searchError ??
-                                                  'No matching surahs were found.',
+                                              tr(context, _searchError ??
+                                                  'No matching surahs were found.'),
                                               textAlign: TextAlign.center,
                                               style: theme.textTheme.bodyMedium,
                                             ),
@@ -334,7 +336,7 @@ class _ReaderSearchContentState extends State<ReaderSearchContent>
                                               leadingLabel: '${surah.id}',
                                               title: surah.nameSimple,
                                               subtitle:
-                                                  '${surah.nameArabic} | Page ${widget.surahPageResolver(surah)}',
+                                                  tr(context, '${surah.nameArabic} | Page ${widget.surahPageResolver(surah)}'),
                                               trailing: surah.translatedName,
                                               compact: compact,
                                               onTap: () =>
@@ -353,7 +355,7 @@ class _ReaderSearchContentState extends State<ReaderSearchContent>
                           _SearchField(
                             controller: _juzSearchController,
                             icon: Icons.search_rounded,
-                            hintText: 'Search sipara',
+                            hintText: tr(context, 'Search sipara'),
                             dense: collapseTopChrome,
                           ),
                           SizedBox(height: fieldGap),
@@ -366,8 +368,8 @@ class _ReaderSearchContentState extends State<ReaderSearchContent>
                                           child: Padding(
                                             padding: const EdgeInsets.all(24),
                                             child: Text(
-                                              _searchError ??
-                                                  'No matching siparas were found.',
+                                              tr(context, _searchError ??
+                                                  'No matching siparas were found.'),
                                               textAlign: TextAlign.center,
                                               style: theme.textTheme.bodyMedium,
                                             ),
@@ -382,9 +384,9 @@ class _ReaderSearchContentState extends State<ReaderSearchContent>
                                             final juz = filteredJuzs[index];
                                             return _ResultTile(
                                               leadingLabel: '${juz.number}',
-                                              title: 'Sipara ${juz.number}',
+                                              title: tr(context, 'Sipara ${juz.number}'),
                                               subtitle:
-                                                  '${juz.name} | ${juz.nameArabic} | Page ${widget.juzPageResolver(juz)}',
+                                                  tr(context, '${juz.name} | ${juz.nameArabic} | Page ${widget.juzPageResolver(juz)}'),
                                               trailing: 'Juz',
                                               compact: compact,
                                               onTap: () =>
@@ -548,7 +550,7 @@ class _SearchTabChip extends StatelessWidget {
               ],
               Flexible(
                 child: Text(
-                  label,
+                  tr(context, label),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textScaler: const TextScaler.linear(1),
@@ -608,7 +610,7 @@ class _SearchField extends StatelessWidget {
           contentPadding: dense
               ? const EdgeInsets.symmetric(horizontal: 12, vertical: 12)
               : null,
-          hintText: hintText,
+          hintText: tr(context, hintText),
         ),
       ),
     );
@@ -699,7 +701,7 @@ class _ResultTile extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 3),
               child: Text(
-                leadingLabel,
+                tr(context, leadingLabel),
                 maxLines: 1,
                 style: theme.textTheme.labelMedium?.copyWith(
                   fontWeight: FontWeight.w800,
@@ -709,7 +711,7 @@ class _ResultTile extends StatelessWidget {
           ),
         ),
         title: Text(
-          title,
+          tr(context, title),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.titleSmall?.copyWith(
@@ -717,7 +719,7 @@ class _ResultTile extends StatelessWidget {
           ),
         ),
         subtitle: Text(
-          subtitle,
+          tr(context, subtitle),
           maxLines: compact ? 2 : 3,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.bodySmall?.copyWith(
@@ -744,7 +746,7 @@ class _ResultTile extends StatelessWidget {
                   vertical: 6,
                 ),
                 child: Text(
-                  trailing,
+                  tr(context, trailing),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.end,

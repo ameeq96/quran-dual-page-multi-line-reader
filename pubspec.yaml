@@ -30,7 +30,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   shared_preferences: ^2.3.2
+  connectivity_plus: 6.1.5
+  disk_space_2: 1.0.12
+  flutter_local_notifications: 19.5.0
+  flutter_timezone: 4.1.1
+  timezone: 0.10.1
 
 
   # The following adds the Cupertino Icons font to your application.

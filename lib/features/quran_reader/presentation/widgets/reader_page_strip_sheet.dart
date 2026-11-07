@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../../../app/app_theme.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
@@ -123,14 +125,14 @@ class ReaderPageStripContent extends StatelessWidget {
               const SizedBox(height: 18),
             ],
             Text(
-              'Page thumbnails',
+              tr(context, 'Page thumbnails'),
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 6),
             Text(
-              'Jump quickly by previewing the nearby Mushaf pages.',
+              tr(context, 'Jump quickly by previewing the nearby Mushaf pages.'),
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -185,7 +187,7 @@ class ReaderPageStripContent extends StatelessWidget {
                                           ),
                                           child: Center(
                                             child: Text(
-                                              'Page\n$pageNumber',
+                                              tr(context, 'Page\n$pageNumber'),
                                               textAlign: TextAlign.center,
                                               style: theme.textTheme.titleSmall,
                                             ),
@@ -208,7 +210,7 @@ class ReaderPageStripContent extends StatelessWidget {
                             Padding(
                               padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
                               child: Text(
-                                'Page $pageNumber',
+                                tr(context, 'Page $pageNumber'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.labelLarge?.copyWith(

@@ -119,9 +119,15 @@ class QuranAssetPackCatalogService {
 
   static List<QuranZipAssetPack> _packsFromMap(Map<String, String> urlsByKey) {
     final packs = <QuranZipAssetPack>[];
+    final normalizedUrls = <MushafEdition, String>{};
+    for (final entry in urlsByKey.entries) {
+      final edition = MushafEdition.register(entry.key);
+      final url = _normalizedDownloadUrl(entry.value);
+      if (edition != null && url != null) normalizedUrls[edition] = url;
+    }
     for (final edition in MushafEdition.values) {
       final key = keyForEdition(edition);
-      final url = _normalizedDownloadUrl(urlsByKey[key]);
+      final url = normalizedUrls[edition];
       if (url == null) {
         continue;
       }
@@ -139,6 +145,7 @@ class QuranAssetPackCatalogService {
       MushafEdition.lines16 => '16_line',
       MushafEdition.lines17 => '17_line',
       MushafEdition.kanzulIman => 'kanzul_iman',
+      _ => edition.storageValue,
     };
   }
 

@@ -171,24 +171,75 @@ extension HifzPageStrengthX on HifzPageStrength {
 class ReaderHifzReviewEntry {
   const ReaderHifzReviewEntry({
     required this.pageNumber,
+    this.edition = MushafEdition.lines16,
+    this.preferImageMode = true,
     required this.strength,
     required this.updatedAtIso,
     required this.reviewCount,
   });
 
   final int pageNumber;
+  final MushafEdition edition;
+  final bool preferImageMode;
   final HifzPageStrength strength;
   final String updatedAtIso;
   final int reviewCount;
 
+  int get reviewIntervalDays => switch (strength) {
+        HifzPageStrength.weak => 1,
+        HifzPageStrength.steady => 3,
+        HifzPageStrength.strong => 7,
+      };
+
+  DateTime reviewDueDate({DateTime? now}) {
+    final today = (now ?? DateTime.now()).toLocal();
+    final parts = RegExp(
+      r'^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):?(\d{2}))?)?$',
+    ).firstMatch(updatedAtIso);
+    final parsed = DateTime.tryParse(updatedAtIso);
+    if (parts == null || parsed == null) {
+      return DateTime(today.year, today.month, today.day);
+    }
+    final year = int.parse(parts.group(1)!);
+    final month = int.parse(parts.group(2)!);
+    final day = int.parse(parts.group(3)!);
+    final date = DateTime(year, month, day);
+    if (date.year != year || date.month != month || date.day != day ||
+        int.parse(parts.group(4) ?? '0') > 23 ||
+        int.parse(parts.group(5) ?? '0') > 59 ||
+        int.parse(parts.group(6) ?? '0') > 59 ||
+        int.parse(parts.group(7) ?? '0') > 23 ||
+        int.parse(parts.group(8) ?? '0') > 59) {
+      return DateTime(today.year, today.month, today.day);
+    }
+    final reviewed = parsed.toLocal();
+    return DateTime(
+      reviewed.year, reviewed.month, reviewed.day + reviewIntervalDays,
+    );
+  }
+
+  int daysUntilReview({DateTime? now}) {
+    final today = (now ?? DateTime.now()).toLocal();
+    final due = reviewDueDate(now: today);
+    return DateTime.utc(due.year, due.month, due.day)
+        .difference(DateTime.utc(today.year, today.month, today.day))
+        .inDays;
+  }
+
+  bool isDueForReview({DateTime? now}) => daysUntilReview(now: now) <= 0;
+
   ReaderHifzReviewEntry copyWith({
     int? pageNumber,
+    MushafEdition? edition,
+    bool? preferImageMode,
     HifzPageStrength? strength,
     String? updatedAtIso,
     int? reviewCount,
   }) {
     return ReaderHifzReviewEntry(
       pageNumber: pageNumber ?? this.pageNumber,
+      edition: edition ?? this.edition,
+      preferImageMode: preferImageMode ?? this.preferImageMode,
       strength: strength ?? this.strength,
       updatedAtIso: updatedAtIso ?? this.updatedAtIso,
       reviewCount: reviewCount ?? this.reviewCount,
@@ -198,15 +249,22 @@ class ReaderHifzReviewEntry {
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'pageNumber': pageNumber,
+      'edition': edition.storageValue,
+      'preferImageMode': preferImageMode,
       'strength': strength.storageValue,
       'updatedAtIso': updatedAtIso,
       'reviewCount': reviewCount,
     };
   }
 
-  static ReaderHifzReviewEntry fromJson(Map<String, dynamic> json) {
+  static ReaderHifzReviewEntry fromJson(Map<String, dynamic> json, {
+    MushafEdition? fallbackEdition,
+    bool fallbackPreferImageMode = true,
+  }) {
     return ReaderHifzReviewEntry(
       pageNumber: (json['pageNumber'] as num? ?? 1).toInt(),
+      edition: MushafEditionX.fromStorageValue(json['edition'] as String? ?? fallbackEdition?.storageValue),
+      preferImageMode: json['preferImageMode'] as bool? ?? fallbackPreferImageMode,
       strength: HifzPageStrengthX.fromStorageValue(json['strength'] as String?),
       updatedAtIso: json['updatedAtIso'] as String? ?? '',
       reviewCount: (json['reviewCount'] as num? ?? 0).toInt(),

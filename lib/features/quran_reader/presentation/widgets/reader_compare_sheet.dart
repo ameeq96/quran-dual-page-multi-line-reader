@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../../../core/constants/quran_constants.dart';
 import '../../domain/models/quran_page.dart';
 import '../../domain/models/reader_settings.dart';
@@ -32,7 +34,7 @@ class _QuranCompareScreenState extends State<QuranCompareScreen> {
     }
     messenger.showSnackBar(
       SnackBar(
-        content: Text('${edition.label} is now active in the reader.'),
+        content: Text(tr(context, '${edition.label} is now active in the reader.')),
       ),
     );
   }
@@ -60,7 +62,7 @@ class _QuranCompareScreenState extends State<QuranCompareScreen> {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('Compare Editions'),
+            title: Text(tr(context, 'Compare Editions')),
           ),
           body: SafeArea(
             top: false,
@@ -97,7 +99,7 @@ class _QuranCompareScreenState extends State<QuranCompareScreen> {
                   );
                 }),
                 Text(
-                  'Compare uses each edition\'s own navigation JSON, so surah and sipara mapping stays aligned with the selected scan.',
+                  tr(context, 'Compare uses each edition\'s own navigation JSON, so surah and sipara mapping stays aligned with the selected scan.'),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -135,14 +137,14 @@ class _CompareHeader extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Same reference across all editions',
+              tr(context, 'Same reference across all editions'),
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 6),
             Text(
-              'Current reader page $currentPageNumber in ${activeEdition.label}. Switch edition directly from any card below.',
+              tr(context, 'Current reader page $currentPageNumber in ${activeEdition.label}. Switch edition directly from any card below.'),
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -213,14 +215,14 @@ class _CompareEditionCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        edition.label,
+                        tr(context, edition.label),
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${edition.companyLabel} - Reader page $navigationPage',
+                        tr(context, '${edition.companyLabel} - Reader page $navigationPage'),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -242,7 +244,7 @@ class _CompareEditionCard extends StatelessWidget {
                       vertical: 8,
                     ),
                     child: Text(
-                      isActive ? 'Active' : 'Available',
+                      tr(context, isActive ? 'Active' : 'Available'),
                       style: theme.textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: isActive
@@ -283,7 +285,7 @@ class _CompareEditionCard extends StatelessWidget {
               children: [
                 _CompareChip(
                   icon: Icons.menu_book_rounded,
-                  label: 'Page ${page.number}',
+                  label: tr(context, 'Page ${page.number}'),
                 ),
                 _CompareChip(
                   icon: Icons.layers_outlined,
@@ -293,7 +295,7 @@ class _CompareEditionCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              edition.historySummary,
+              tr(context, edition.historySummary),
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 height: 1.5,
@@ -306,12 +308,12 @@ class _CompareEditionCard extends StatelessWidget {
                   ? OutlinedButton.icon(
                       onPressed: onUseEdition,
                       icon: const Icon(Icons.check_circle_outline_rounded),
-                      label: const Text('Back to reader'),
+                      label: Text(tr(context, 'Back to reader')),
                     )
                   : FilledButton.icon(
                       onPressed: onUseEdition,
                       icon: const Icon(Icons.swap_horiz_rounded),
-                      label: Text('Use ${edition.label}'),
+                      label: Text(tr(context, 'Use ${edition.label}')),
                     ),
             ),
           ],
@@ -347,7 +349,7 @@ class _CompareChip extends StatelessWidget {
             Icon(icon, size: 16, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             Text(
-              label,
+              tr(context, label),
               style: theme.textTheme.labelLarge?.copyWith(
                 fontWeight: FontWeight.w700,
               ),

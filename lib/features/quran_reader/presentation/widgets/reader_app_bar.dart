@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
+import '../../domain/models/reader_settings.dart';
+
 import '../controllers/quran_reader_controller.dart';
 
 enum ReaderMoreAction {
@@ -65,22 +69,15 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: (isDark
-                    ? theme.colorScheme.surfaceContainerLow
-                    : theme.colorScheme.surface)
-                .withValues(alpha: 0.94),
-            borderRadius: BorderRadius.circular(compact ? 24 : 28),
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(22),
             border: Border.all(
-              color: theme.dividerColor.withValues(alpha: isDark ? 0.5 : 0.4),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: theme.colorScheme.shadow
-                    .withValues(alpha: isDark ? 0.18 : 0.06),
-                blurRadius: isDark ? 24 : 20,
-                offset: const Offset(0, 10),
+              color: Color.alphaBlend(
+                theme.colorScheme.secondary
+                    .withValues(alpha: isDark ? 0.18 : 0.12),
+                theme.dividerColor,
               ),
-            ],
+            ),
           ),
           child: Padding(
             padding: EdgeInsets.fromLTRB(
@@ -91,43 +88,62 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
             child: Row(
               children: [
+                IconButton(
+                  tooltip: tr(context, 'Back'),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  style: IconButton.styleFrom(
+                    foregroundColor: theme.colorScheme.primary,
+                    backgroundColor: theme.colorScheme.surfaceContainerLow,
+                    fixedSize: const Size(44, 44),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                  ),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                ),
+                SizedBox(width: compact ? 10 : 16),
+                if (size.width >= 600) ...[
+                  Container(
+                    width: 1,
+                    height: 30,
+                    color: theme.colorScheme.secondary.withValues(alpha: 0.36),
+                  ),
+                  const SizedBox(width: 16),
+                ],
                 Expanded(
                   child: ValueListenableBuilder<int>(
                     valueListenable: controller.pageListenable,
                     builder: (context, _, __) {
-                      final primaryLabel = portraitMode
-                          ? controller.pageLabel
-                          : controller.spreadLabel;
                       final secondaryLabel = portraitMode
                           ? controller.pageProgressLabel
                           : controller.spreadProgressLabel;
-                      const title = 'Quran Pak Dual Page Reader';
+                      final title = controller.currentChapterSummary?.nameSimple ?? 'Quran Reader';
 
                       return Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            title,
+                            tr(context, title),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: (portraitMode
                                     ? theme.textTheme.titleMedium
                                     : theme.textTheme.titleLarge)
                                 ?.copyWith(
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w600,
                               color: theme.colorScheme.onSurface,
-                              letterSpacing: -0.35,
+                              letterSpacing: -0.3,
                             ),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '$primaryLabel | $secondaryLabel',
+                            '${tr(context, secondaryLabel)} • ${tr(context, controller.settings.preferImageMode ? controller.settings.mushafEdition.label : 'Arabic text')}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w700,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ],
@@ -135,29 +151,29 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                     },
                   ),
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: compact ? 6 : 12),
                 _ActionPill(
                   icon: controller.settings.pageNightMode
                       ? Icons.light_mode_rounded
                       : Icons.dark_mode_rounded,
-                  tooltip: controller.settings.pageNightMode
+                  tooltip: tr(context, controller.settings.pageNightMode
                       ? 'Use light Quran page'
-                      : 'Use dark Quran page',
+                      : 'Use dark Quran page'),
                   onPressed: () => controller.togglePageNightMode(
                     !controller.settings.pageNightMode,
                   ),
                   compact: compact,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: compact ? 4 : 8),
                 _ActionPill(
                   icon: Icons.search_rounded,
-                  tooltip: 'Search',
+                  tooltip: tr(context, 'Search'),
                   onPressed: onOpenSearch,
                   compact: compact,
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: compact ? 4 : 8),
                 PopupMenuButton<ReaderMoreAction>(
-                  tooltip: 'More',
+                  tooltip: tr(context, 'More'),
                   onSelected: (value) {
                     switch (value) {
                       case ReaderMoreAction.dashboard:
@@ -190,74 +206,74 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                     }
                   },
                   itemBuilder: (context) => [
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: ReaderMoreAction.dashboard,
                       child: _MenuRow(
                         icon: Icons.dashboard_customize_outlined,
-                        label: 'Dashboard',
+                        label: tr(context, 'Dashboard'),
                       ),
                     ),
                     if (controller.isPlansPacksEnabled)
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: ReaderMoreAction.growthHub,
                         child: _MenuRow(
                           icon: Icons.insights_outlined,
-                          label: 'Plans & Packs',
+                          label: tr(context, 'Plans & Packs'),
                         ),
                       ),
                     if (controller.isInsightsEnabled)
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: ReaderMoreAction.insights,
                         child: _MenuRow(
                           icon: Icons.auto_stories_outlined,
-                          label: 'Insights',
+                          label: tr(context, 'Insights'),
                         ),
                       ),
                     if (controller.isAudioEnabled)
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: ReaderMoreAction.audio,
                         child: _MenuRow(
                           icon: Icons.headphones_rounded,
-                          label: 'Audio',
+                          label: tr(context, 'Audio'),
                         ),
                       ),
                     if (controller.isAiStudioEnabled)
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: ReaderMoreAction.aiStudio,
                         child: _MenuRow(
                           icon: Icons.auto_awesome_rounded,
-                          label: 'AI Studio',
+                          label: tr(context, 'AI Studio'),
                         ),
                       ),
                     if (controller.isPageStripEnabled)
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: ReaderMoreAction.pageStrip,
                         child: _MenuRow(
                           icon: Icons.photo_library_outlined,
-                          label: 'Pages',
+                          label: tr(context, 'Pages'),
                         ),
                       ),
                     if (controller.isCompareEnabled)
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: ReaderMoreAction.compare,
                         child: _MenuRow(
                           icon: Icons.compare_rounded,
-                          label: 'Compare',
+                          label: tr(context, 'Compare'),
                         ),
                       ),
                     if (controller.isKanzulStudyEnabled)
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: ReaderMoreAction.kanzulStudy,
                         child: _MenuRow(
                           icon: Icons.translate_rounded,
-                          label: 'Kanzul study',
+                          label: tr(context, 'Kanzul study'),
                         ),
                       ),
-                    const PopupMenuItem(
+                    PopupMenuItem(
                       value: ReaderMoreAction.settings,
                       child: _MenuRow(
                         icon: Icons.tune_rounded,
-                        label: 'Settings',
+                        label: tr(context, 'Settings'),
                       ),
                     ),
                   ],
@@ -294,22 +310,18 @@ class _ActionPill extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(13),
           child: Ink(
             width: compact ? 44 : 48,
             height: compact ? 44 : 48,
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerLowest
-                  .withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: theme.dividerColor.withValues(alpha: 0.36),
-              ),
+              color: theme.colorScheme.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(13),
             ),
             child: Icon(
               icon,
               size: compact ? 20 : 22,
-              color: theme.colorScheme.onSurface,
+              color: theme.colorScheme.primary,
             ),
           ),
         ),
@@ -332,11 +344,9 @@ class _MorePill extends StatelessWidget {
       width: compact ? 44 : 48,
       height: compact ? 44 : 48,
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: theme.dividerColor.withValues(alpha: 0.36),
-        ),
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Icon(
         Icons.more_horiz_rounded,
@@ -362,7 +372,7 @@ class _MenuRow extends StatelessWidget {
       children: [
         Icon(icon, size: 18),
         const SizedBox(width: 10),
-        Text(label),
+        Text(tr(context, label)),
       ],
     );
   }

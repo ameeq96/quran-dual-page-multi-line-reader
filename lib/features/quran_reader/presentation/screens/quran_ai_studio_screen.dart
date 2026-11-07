@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../../../app/app_theme.dart';
 import '../../domain/models/quran_ai_models.dart';
 import '../../domain/models/quran_search_result.dart';
@@ -11,9 +13,11 @@ class QuranAiStudioScreen extends StatefulWidget {
   const QuranAiStudioScreen({
     super.key,
     required this.controller,
+    this.initialTool = QuranAiTool.explainer,
   });
 
   final QuranReaderController controller;
+  final QuranAiTool initialTool;
 
   @override
   State<QuranAiStudioScreen> createState() => _QuranAiStudioScreenState();
@@ -30,6 +34,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
   void initState() {
     super.initState();
     _inputController = TextEditingController();
+    _selectedTool = widget.initialTool;
   }
 
   @override
@@ -91,7 +96,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Saved to ${suggestion.folder}'),
+        content: Text(tr(context, 'Saved to ${suggestion.folder}')),
       ),
     );
   }
@@ -105,6 +110,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
       MushafEdition.lines16 => '16 lines',
       MushafEdition.lines17 => '17 lines',
       MushafEdition.kanzulIman => 'Kanzul Iman',
+      _ => edition.label,
     };
   }
 
@@ -120,6 +126,10 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
         final readerSettings = widget.controller.settings;
         final aiSettings = widget.controller.aiSettings;
         final experience = widget.controller.experienceSettings;
+        final screenWidth = MediaQuery.sizeOf(context).width;
+        final contentInset = screenWidth > 920
+            ? (screenWidth - 920) / 2 + 28
+            : screenWidth < 600 ? 18.0 : 28.0;
         final themeData = readerSettings.nightMode
             ? AppTheme.dark(
                 highContrast: experience.highContrastMode,
@@ -135,10 +145,11 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
           child: Scaffold(
             backgroundColor: themeData.scaffoldBackgroundColor,
             appBar: AppBar(
-              title: const Text('AI Studio'),
+              title: Text(tr(context, 'AI Studio')),
+              centerTitle: false,
             ),
             body: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+              padding: EdgeInsets.fromLTRB(contentInset, 12, contentInset, 32),
               children: [
                 ValueListenableBuilder<int>(
                   valueListenable: widget.controller.pageListenable,
@@ -180,8 +191,8 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
                   controller: _inputController,
                 ),
                 const SizedBox(height: 14),
-                SizedBox(
-                  height: 54,
+                ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 56),
                   child: FilledButton.icon(
                     onPressed: _isRunning ? null : _runTool,
                     icon: _isRunning
@@ -191,7 +202,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
                             borderRadius: BorderRadius.all(Radius.circular(6)),
                           )
                         : Icon(_toolIcon(_selectedTool)),
-                    label: Text(_selectedTool.actionLabel),
+                    label: Text(tr(context, _selectedTool.actionLabel)),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -249,15 +260,9 @@ class _AiStudioSkeletonCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         color: theme.colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.shadow.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        border: Border.all(color: theme.dividerColor),
       ),
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -333,57 +338,86 @@ class _OverviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final foreground = theme.colorScheme.onPrimary;
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        color: theme.colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.shadow.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: theme.colorScheme.primary,
+        border: Border.all(
+          color: theme.colorScheme.secondary.withValues(alpha: 0.45),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'AI Quran tools',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w900,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: foreground.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: foreground.withValues(alpha: 0.18)),
+                ),
+                child: Icon(
+                  Icons.auto_awesome_outlined,
+                  color: foreground,
+                  size: 26,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tr(context, 'STUDY COMPANION'),
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: foreground.withValues(alpha: 0.78),
+                        letterSpacing: 1.8,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      tr(context, 'Study & reflect'),
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        color: foreground,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 18),
           Text(
-            'Ask about the current page, generate study notes, search by meaning, review memorization, and get quick tafsir help.',
+            tr(context, 'Explore meaning, strengthen memorization, and make room for thoughtful reflection.'),
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              color: foreground.withValues(alpha: 0.88),
+              height: 1.55,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 20),
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              _Pill(label: pageReference, icon: Icons.menu_book_rounded),
-              _Pill(label: editionLabel, icon: Icons.layers_outlined),
-              _Pill(label: languageLabel, icon: Icons.translate_rounded),
-              _Pill(label: depthLabel, icon: Icons.speed_rounded),
-              _Pill(label: providerLabel, icon: Icons.auto_awesome_rounded),
-              _Pill(label: modelLabel, icon: Icons.memory_rounded),
+              _Pill(
+                label: tr(context, pageReference),
+                icon: Icons.menu_book_outlined,
+                inverse: true,
+              ),
+              _Pill(
+                label: tr(context, editionLabel),
+                icon: Icons.layers_outlined,
+                inverse: true,
+              ),
             ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            endpointLabel.isEmpty
-                ? statusLabel
-                : '$statusLabel\n$endpointLabel',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              height: 1.4,
-            ),
           ),
         ],
       ),
@@ -415,86 +449,173 @@ class _ToolPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final languageOptions = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          tr(context, 'Response language'),
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children:
+              const <AiResponseLanguage>[
+                    AiResponseLanguage.english,
+                    AiResponseLanguage.urdu,
+                    AiResponseLanguage.bilingual,
+                  ]
+                  .map(
+                    (language) => ChoiceChip(
+                      label: Text(tr(context, language.label)),
+                      selected: aiSettings.responseLanguage == language,
+                      onSelected: languageLocked
+                          ? null
+                          : (_) {
+                              onSelectLanguage(language);
+                            },
+                    ),
+                  )
+                  .toList(growable: false),
+        ),
+      ],
+    );
+    final depthOptions = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          tr(context, 'Response depth'),
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: AiResponseDepth.values
+              .map(
+                (depth) => ChoiceChip(
+                  label: Text(tr(context, depth.label)),
+                  selected: aiSettings.responseDepth == depth,
+                  onSelected: depthLocked
+                      ? null
+                      : (_) {
+                          onSelectDepth(depth);
+                        },
+                ),
+              )
+              .toList(growable: false),
+        ),
+      ],
+    );
+
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         color: theme.colorScheme.surface,
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Choose AI feature',
+            tr(context, 'How would you like to study?'),
             style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.35,
             ),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: QuranAiTool.values.map((tool) {
-              return FilterChip(
-                avatar: Icon(_toolIcon(tool), size: 18),
-                label: Text(tool.title),
-                selected: selectedTool == tool,
-                onSelected: (_) => onSelected(tool),
-              );
-            }).toList(growable: false),
+          const SizedBox(height: 18),
+          DropdownButtonFormField<QuranAiTool>(
+            key: ValueKey<QuranAiTool>(selectedTool),
+            initialValue: selectedTool,
+            isExpanded: true,
+            menuMaxHeight: 420,
+            borderRadius: BorderRadius.circular(18),
+            dropdownColor: theme.colorScheme.surface,
+            icon: Icon(
+              Icons.expand_more_rounded,
+              color: theme.colorScheme.primary,
+            ),
+            decoration: InputDecoration(
+              labelText: tr(context, 'Study tool'),
+              prefixIcon: Icon(_toolIcon(selectedTool), size: 21),
+            ),
+            items: QuranAiTool.values
+                .map(
+                  (tool) => DropdownMenuItem<QuranAiTool>(
+                    value: tool,
+                    child: Text(
+                      tr(context, tool.title),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: (tool) {
+              if (tool != null) onSelected(tool);
+            },
           ),
           const SizedBox(height: 12),
           Text(
-            selectedTool.subtitle,
+            tr(context, selectedTool.subtitle),
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
+              height: 1.5,
             ),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: const <AiResponseLanguage>[
-              AiResponseLanguage.english,
-              AiResponseLanguage.urdu,
-              AiResponseLanguage.bilingual,
-            ].map((language) {
-              return ChoiceChip(
-                label: Text(language.label),
-                selected: aiSettings.responseLanguage == language,
-                onSelected: languageLocked
-                    ? null
-                    : (_) {
-                        onSelectLanguage(language);
-                      },
-              );
-            }).toList(growable: false),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Divider(height: 1),
           ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: AiResponseDepth.values.map((depth) {
-              return ChoiceChip(
-                label: Text(depth.label),
-                selected: aiSettings.responseDepth == depth,
-                onSelected: depthLocked
-                    ? null
-                    : (_) {
-                        onSelectDepth(depth);
-                      },
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth >= 620) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: languageOptions),
+                    const SizedBox(width: 24),
+                    Expanded(child: depthOptions),
+                  ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  languageOptions,
+                  const SizedBox(height: 20),
+                  depthOptions,
+                ],
               );
-            }).toList(growable: false),
+            },
           ),
-          if (hasAdminAiConfiguration) ...[
-            const SizedBox(height: 10),
-            Text(
-              languageLocked || depthLocked
-                  ? 'AI defaults are currently managed by the admin dashboard.'
-                  : 'AI provider details are managed by the admin dashboard.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+          if (hasAdminAiConfiguration && (languageLocked || depthLocked)) ...[
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.lock_outline_rounded,
+                  size: 15,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    tr(context, 'Your response preferences are set by the administrator.'),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ],
@@ -518,14 +639,15 @@ class _InputCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         color: theme.colorScheme.surface,
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            tool.inputLabel,
+            tr(context, tool.inputLabel),
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w800,
             ),
@@ -536,7 +658,7 @@ class _InputCard extends StatelessWidget {
             minLines: tool.expectsUserInput ? 4 : 2,
             maxLines: tool.expectsUserInput ? 6 : 3,
             decoration: InputDecoration(
-              hintText: tool.inputHint,
+              hintText: tr(context, tool.inputHint),
               alignLabelWithHint: true,
             ),
           ),
@@ -567,8 +689,9 @@ class _ResultCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         color: theme.colorScheme.surface,
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -577,7 +700,7 @@ class _ResultCard extends StatelessWidget {
             builder: (context, constraints) {
               final compactHeader = constraints.maxWidth < 420;
               final sourcePill = _Pill(
-                label: result.sourceLabel,
+                label: tr(context, result.sourceLabel),
                 icon: result.usedOnlineModel
                     ? Icons.memory_rounded
                     : Icons.offline_bolt_outlined,
@@ -588,9 +711,9 @@ class _ResultCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      result.tool.title,
+                      tr(context, result.tool.title),
                       style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         height: 1.15,
                       ),
                     ),
@@ -605,9 +728,9 @@ class _ResultCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      result.tool.title,
+                      tr(context, result.tool.title),
                       style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
+                        fontWeight: FontWeight.w700,
                         height: 1.15,
                       ),
                     ),
@@ -632,7 +755,7 @@ class _ResultCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Current page',
+                      tr(context, 'Current page'),
                       style: theme.textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w800,
                         color: theme.colorScheme.primary,
@@ -640,7 +763,7 @@ class _ResultCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      pageReference,
+                      tr(context, pageReference),
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
                         height: 1.2,
@@ -653,7 +776,7 @@ class _ResultCard extends StatelessWidget {
                     onOpenCurrentPage();
                   },
                   icon: const Icon(Icons.menu_book_rounded),
-                  label: Text('Open page $currentPageNumber'),
+                  label: Text(tr(context, 'Open page $currentPageNumber')),
                 );
 
                 if (compactActions) {
@@ -711,21 +834,22 @@ class _MatchedLineCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         color: theme.colorScheme.surface,
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Matched line',
+            tr(context, 'Matched line'),
             style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 10),
           _Pill(
-            label: 'Line ${result.matchedLineNumber}',
+            label: tr(context, 'Line ${result.matchedLineNumber}'),
             icon: Icons.hearing_rounded,
           ),
           const SizedBox(height: 10),
@@ -755,16 +879,17 @@ class _BookmarkSuggestionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         color: theme.colorScheme.surface,
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Bookmark suggestion',
+            tr(context, 'Bookmark suggestion'),
             style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 12),
@@ -789,7 +914,7 @@ class _BookmarkSuggestionCard extends StatelessWidget {
               onApply(suggestion);
             },
             icon: const Icon(Icons.bookmark_add_outlined),
-            label: const Text('Apply bookmark'),
+            label: Text(tr(context, 'Apply bookmark')),
           ),
         ],
       ),
@@ -812,16 +937,17 @@ class _SearchResultsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         color: theme.colorScheme.surface,
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Relevant results',
+            tr(context, 'Relevant results'),
             style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w900,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 10),
@@ -841,12 +967,17 @@ class _SearchResultsCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                subtitle: Text(
-                  result.snippet,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(result.snippet, maxLines: 3, overflow: TextOverflow.ellipsis),
+                    if (result.navigationNote != null) ...[
+                      const SizedBox(height: 6),
+                      Text(tr(context, result.navigationNote!), style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
+                    ],
+                  ],
                 ),
-                trailing: Text('P${result.pageNumber}'),
+                trailing: Text(tr(context, 'P${result.pageNumber}')),
               ),
             );
           }),
@@ -857,32 +988,42 @@ class _SearchResultsCard extends StatelessWidget {
 }
 
 class _Pill extends StatelessWidget {
-  const _Pill({
-    required this.label,
-    required this.icon,
-  });
-
+  const _Pill({required this.label, required this.icon, this.inverse = false});
   final String label;
   final IconData icon;
+  final bool inverse;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final foreground = inverse
+        ? theme.colorScheme.onPrimary
+        : theme.colorScheme.primary;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: theme.colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(12),
+        color: inverse
+            ? foreground.withValues(alpha: 0.1)
+            : theme.colorScheme.surfaceContainerLow,
+        border: Border.all(
+          color: inverse
+              ? foreground.withValues(alpha: 0.16)
+              : theme.dividerColor,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: theme.colorScheme.primary),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: theme.textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w700,
+          Icon(icon, size: 15, color: foreground),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: inverse ? foreground : theme.colorScheme.onSurface,
+              ),
             ),
           ),
         ],
@@ -913,7 +1054,7 @@ class _AiOutputBlock {
         return Text(
           text,
           style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w900,
+            fontWeight: FontWeight.w700,
             height: 1.25,
           ),
         );

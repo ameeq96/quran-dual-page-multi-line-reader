@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../../../app/app_theme.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
@@ -449,7 +451,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(content: Text(tr(context, message))),
     );
   }
 
@@ -791,7 +793,9 @@ class _LandscapeSpreadReader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: PageView.builder(
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: PageView.builder(
         controller: controller,
         reverse: true,
         padEnds: false,
@@ -854,6 +858,7 @@ class _LandscapeSpreadReader extends StatelessWidget {
           );
         },
       ),
+      ),
     );
   }
 }
@@ -874,7 +879,9 @@ class _PortraitPageReader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: PageView.builder(
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: PageView.builder(
         controller: controller,
         reverse: true,
         padEnds: false,
@@ -909,6 +916,7 @@ class _PortraitPageReader extends StatelessWidget {
             ),
           );
         },
+      ),
       ),
     );
   }

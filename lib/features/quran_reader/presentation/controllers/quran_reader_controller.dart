@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../../../core/services/system_ui_service.dart';
+import '../../../../core/services/reader_download_policy.dart';
 import '../../../../core/storage/reader_preferences.dart';
 import '../../data/repositories/quran_reader_repository.dart';
 import '../../data/services/quran_admin_ai_proxy_service.dart';
@@ -18,6 +19,7 @@ import '../../domain/models/quran_chapter_summary.dart';
 import '../../domain/models/quran_juz_navigation_entry.dart';
 import '../../domain/models/quran_navigation_marker.dart';
 import '../../domain/models/quran_page.dart';
+import '../../domain/models/quran_page_line.dart';
 import '../../domain/models/quran_page_insight.dart';
 import '../../domain/models/quran_reciter.dart';
 import '../../domain/models/quran_search_result.dart';
@@ -60,6 +62,47 @@ class QuranReaderController extends ChangeNotifier {
   final QuranAudioService _audioService;
   final QuranReaderSyncService _readerSyncService;
   final ReaderPreferences _preferences;
+  final ReaderDownloadPolicy _downloadPolicy = ReaderDownloadPolicy();
+  StreamSubscription<bool>? _downloadNetworkSubscription;
+  Map<MushafEdition, QuranPartialAssetPack> _partialOfflinePacks = {};
+  final Map<MushafEdition, QuranPackTransferProgress> _packTransferProgress = {};
+  QuranPackStorageInfo? _packStorageInfo;
+  int? _availableStorageBytes;
+
+  bool get wifiOnlyDownloads => _downloadPolicy.wifiOnly;
+  bool get supportsWifiOnlyDownloads => _downloadPolicy.supportsWifiOnly;
+  QuranPackStorageInfo? get packStorageInfo => _packStorageInfo;
+  int? get availableStorageBytes => _availableStorageBytes;
+  QuranPartialAssetPack? partialOfflinePackForEdition(MushafEdition edition) =>
+      _partialOfflinePacks[edition];
+  QuranPackTransferProgress? transferProgressForEdition(MushafEdition edition) =>
+      _packTransferProgress[edition];
+  bool isOfflinePackPaused(MushafEdition edition) =>
+      !isOfflinePackDownloading(edition) && _partialOfflinePacks.containsKey(edition);
+
+  Future<void> setWifiOnlyDownloads(bool enabled) async {
+    await _downloadPolicy.setWifiOnly(enabled);
+    await refreshDownloadPolicy();
+    if (!_isDisposed) notifyListeners();
+  }
+
+  Future<void> refreshDownloadPolicy() async {
+    if (!await _downloadPolicy.allowsDownload() && !_isDisposed) {
+      for (final edition in _offlinePackCancelTokens.keys.toList()) {
+        pauseOfflineEditionPackDownload(edition);
+      }
+    }
+  }
+
+  Future<void> refreshDownloadStorage() async {
+    final info = await _repository.offlinePackStorageInfo();
+    final available = await _downloadPolicy.availableStorageBytes();
+    if (_isDisposed) return;
+    _packStorageInfo = info;
+    _availableStorageBytes = available;
+    notifyListeners();
+  }
+
   final QuranAiFeatureService _aiFeatureService;
   final QuranAdminAiProxyService _adminAiProxyService =
       QuranAdminAiProxyService();
@@ -96,6 +139,10 @@ class QuranReaderController extends ChangeNotifier {
   );
   List<ReaderHistoryEntry> _readingHistory = const [];
   Map<int, String> _pageNotes = const {};
+  Map<String, Map<int, String>> _editionPageNotes = {};
+  Map<String, List<int>> _editionFavoritePages = {};
+  String get _annotationKey => _settings.preferImageMode
+      ? _settings.mushafEdition.storageValue : '__canonical_text__';
   List<int> _favoritePages = const [];
   List<ReaderBookmark> _bookmarks = const [];
   List<ReaderHifzReviewEntry> _hifzReviewEntries = const [];
@@ -114,6 +161,24 @@ class QuranReaderController extends ChangeNotifier {
   StreamSubscription<PlayerState>? _playerStateSubscription;
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<Duration?>? _durationSubscription;
+  StreamSubscription<String>? _playbackErrorSubscription;
+  String? _currentRecitationVerseKey;
+  String? get currentRecitationVerseKey => _currentRecitationVerseKey;
+  String get recitationFollowStatus {
+    if (!_experienceSettings.recitationSyncEnabled) return 'Recitation follow is off';
+    if (_audioState.isLoading || _audioState.isBuffering) return 'Loading recitation…';
+    if (_audioState.errorMessage != null) return 'Recitation is unavailable';
+    if (!_audioState.isPlaying) {
+      if (_lastPlayerState?.processingState == ProcessingState.completed) return 'Recitation complete';
+      return _currentRecitationVerseKey == null
+          ? 'Start recitation to follow verses'
+          : 'Paused at verse $_currentRecitationVerseKey';
+    }
+    if (_currentRecitationVerseKey == null) return 'Verse timing is unavailable for this recording';
+    return isStudySurahScoped
+        ? 'Following verse $_currentRecitationVerseKey • reading your selected Mushaf scan'
+        : 'Following verse $_currentRecitationVerseKey';
+  }
   int _lastNotifiedAudioPositionMillis = -1;
   int _lastNotifiedAudioDurationMillis = -1;
   PlayerState? _lastPlayerState;
@@ -122,6 +187,8 @@ class QuranReaderController extends ChangeNotifier {
   int? _lastRecordedHistoryPageNumber;
   String? _lastRecordedHistoryDateKey;
   DateTime? _lastRecordedHistoryAt;
+  MushafEdition? _lastRecordedHistoryEdition;
+  bool? _lastRecordedHistoryPreferImageMode;
   List<QuranNavigationMarker> _rukuMarkers = const [];
   List<QuranNavigationMarker> _hizbMarkers = const [];
   List<QuranNavigationMarker> _manzilMarkers = const [];
@@ -140,11 +207,30 @@ class QuranReaderController extends ChangeNotifier {
   Set<int> _smartHifzHiddenLines = const <int>{};
   List<double> _smartHifzManualMaskAnchors = const <double>[];
   int? _smartHifzStandardPageNumber;
+  int? _smartHifzScanPageNumber;
   MushafEdition? _smartHifzEdition;
   int? _smartHifzLineCount;
   bool _smartHifzRevealed = false;
   bool _isDisposed = false;
   String _syncClientId = '';
+  String _syncToken = '';
+  String _syncBaseUrl = '';
+  String _syncBindingBaseUrl = '';
+  int _syncBindingContext = -1;
+  int _syncContextGeneration = 0;
+  int _localChangeGeneration = 0;
+  int? _syncPushGeneration;
+  bool _readerSyncDirty = true;
+  bool _syncUsesFreshBackup = false;
+  bool _suppressSyncDirty = false;
+  bool _syncStateWriteFailed = false;
+  String _readerSyncStatus = 'Reader data is stored on this device.';
+  Future<bool>? _syncIdentityBinding;
+  Future<void> _syncStateWrites = Future<void>.value();
+  Future<void> _syncOperationQueue = Future<void>.value();
+  String get readerSyncStatusLabel => _experienceSettings.syncMode == ReaderSyncMode.localOnly
+      ? 'Local only. Reader data stays on this device.' : _readerSyncStatus;
+  bool get hasUnsyncedReaderChanges => _readerSyncDirty;
   Set<MushafEdition> _downloadedOfflineEditions = const <MushafEdition>{};
   List<QuranZipAssetPack> _zipAssetPacks = const <QuranZipAssetPack>[];
   Map<MushafEdition, double> _offlinePackProgress =
@@ -189,12 +275,7 @@ class QuranReaderController extends ChangeNotifier {
   List<QuranChapterSummary> get chapters => _repository.chapters;
   List<QuranReciter> get reciters => _reciters;
   List<MushafEdition> get availableImageEditions {
-    final storedEditions = _repository.availableImageEditions
-        .where(isMushafEditionStoredOffline)
-        .toList(growable: false);
-    final editions = storedEditions.isEmpty
-        ? _repository.availableImageEditions
-        : storedEditions;
+    final editions = _repository.availableImageEditions;
     if (!_adminConfig.hasEditionControls) {
       return editions;
     }
@@ -383,11 +464,44 @@ class QuranReaderController extends ChangeNotifier {
     return null;
   }
 
-  List<ReaderHistoryEntry> get readingHistory => _readingHistory;
+  List<ReaderHistoryEntry> get readingHistory => _readingHistory
+      .where((entry) => entry.preferImageMode == _settings.preferImageMode &&
+          (!entry.preferImageMode || entry.edition == _settings.mushafEdition))
+      .toList(growable: false);
   Map<int, String> get pageNotes => _pageNotes;
   List<int> get favoritePages => _favoritePages;
-  List<ReaderBookmark> get bookmarks => _bookmarks;
-  List<ReaderHifzReviewEntry> get hifzReviewEntries => _hifzReviewEntries;
+  List<ReaderBookmark> get bookmarks => _bookmarks
+      .where((entry) => entry.preferImageMode == _settings.preferImageMode &&
+          (!entry.preferImageMode || entry.edition == _settings.mushafEdition))
+      .toList(growable: false);
+  List<ReaderHifzReviewEntry> get hifzReviewEntries => _hifzReviewEntries
+      .where((entry) => entry.preferImageMode == _settings.preferImageMode &&
+          (!entry.preferImageMode || entry.edition == _settings.mushafEdition))
+      .toList(growable: false);
+  List<ReaderHifzReviewEntry> get hifzRevisionQueue {
+    final now = DateTime.now();
+    final entries = _hifzReviewEntries
+        .where((entry) => entry.preferImageMode)
+        .toList(growable: false);
+    entries.sort((a, b) {
+      final due = a.reviewDueDate(now: now).compareTo(b.reviewDueDate(now: now));
+      if (due != 0) return due;
+      final strength = b.strength.priorityWeight - a.strength.priorityWeight;
+      if (strength != 0) return strength;
+      final edition = a.edition.storageValue.compareTo(b.edition.storageValue);
+      return edition != 0 ? edition : a.pageNumber.compareTo(b.pageNumber);
+    });
+    return entries;
+  }
+
+  Future<void> openHifzReviewEntry(ReaderHifzReviewEntry entry) async {
+    if (!entry.preferImageMode || !_repository.hasAssetsForEdition(entry.edition)) {
+      throw StateError('Download this Mushaf edition before opening its review.');
+    }
+    await selectMushafEdition(entry.edition);
+    await jumpToPage(entry.pageNumber);
+  }
+
   List<String> get bookmarkFolders => _bookmarkFoldersCache;
 
   Map<String, List<ReaderBookmark>> get bookmarksByFolder =>
@@ -395,6 +509,15 @@ class QuranReaderController extends ChangeNotifier {
 
   int get readingStreakCount => _readingStreakCount;
   int get dailyTargetPages => _dailyTargetPages;
+  bool get isStudySurahScoped => _settings.preferImageMode;
+  String get studyScopeLabel => isStudySurahScoped
+      ? currentChapterSummary == null
+          ? 'Surah reference unavailable for this scan'
+          : 'Surah ${currentChapterSummary!.nameSimple} • full Surah study'
+      : 'Canonical page $_currentPageNumber';
+  String get scanMappingNotice =>
+      'Scanned pages use Surah-level study. Exact verse-to-scan-page alignment is unavailable.';
+
   int get currentStandardPageNumber =>
       _repository.standardPageForNavigationPage(
         _currentPageNumber,
@@ -493,7 +616,7 @@ class QuranReaderController extends ChangeNotifier {
       _bookmarkByPageCache[pageNumber];
 
   ReaderHifzReviewEntry? hifzReviewEntryForPage(int pageNumber) {
-    for (final entry in _hifzReviewEntries) {
+    for (final entry in hifzReviewEntries) {
       if (entry.pageNumber == pageNumber) {
         return entry;
       }
@@ -508,7 +631,7 @@ class QuranReaderController extends ChangeNotifier {
   int get audioResumePositionMillis => _savedAudioPositionMillis;
   int get downloadedAudioCount => _downloadedAudioKeys.length;
   List<ReaderHifzReviewEntry> get prioritizedHifzReviewEntries {
-    final sorted = List<ReaderHifzReviewEntry>.from(_hifzReviewEntries);
+    final sorted = List<ReaderHifzReviewEntry>.from(hifzReviewEntries);
     sorted.sort((a, b) {
       final priorityDiff =
           b.strength.priorityWeight - a.strength.priorityWeight;
@@ -549,7 +672,7 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   bool isMushafEditionReady(MushafEdition edition) {
-    return isMushafEditionStoredOffline(edition);
+    return _repository.hasAssetsForEdition(edition);
   }
 
   bool isMushafEditionStoredOffline(MushafEdition edition) {
@@ -615,11 +738,11 @@ class QuranReaderController extends ChangeNotifier {
 
   Set<String> get recentActivityDateKeys => _recentActivityDateKeysCache;
 
-  Set<int> _pageNumbersForDateKey(String dateKey) {
-    final pages = <int>{};
+  Set<String> _pageNumbersForDateKey(String dateKey) {
+    final pages = <String>{};
     for (final entry in _readingHistory) {
       if (_dateKeyFromIso(entry.viewedAtIso) == dateKey) {
-        pages.add(entry.pageNumber);
+        pages.add('${entry.preferImageMode ? entry.edition.storageValue : '__canonical_text__'}:${entry.pageNumber}');
       }
     }
     return pages;
@@ -650,6 +773,10 @@ class QuranReaderController extends ChangeNotifier {
   bool smartHifzAppliesToPage(int pageNumber) {
     if (!hasSmartHifzChallenge) {
       return false;
+    }
+    if (_settings.preferImageMode) {
+      return _smartHifzEdition == _settings.mushafEdition &&
+          _smartHifzScanPageNumber == pageNumber;
     }
     return standardPageForPageNumber(pageNumber) ==
         _smartHifzStandardPageNumber;
@@ -698,8 +825,18 @@ class QuranReaderController extends ChangeNotifier {
     int? preferredReciterId;
 
     try {
+      await _downloadPolicy.initialize();
+      _downloadNetworkSubscription ??= _downloadPolicy.allowedChanges.listen(
+        (allowed) {
+          if (!allowed && !_isDisposed) {
+            for (final edition in _offlinePackCancelTokens.keys.toList()) {
+              pauseOfflineEditionPackDownload(edition);
+            }
+          }
+        },
+        onError: (Object _) { unawaited(refreshDownloadPolicy()); },
+      );
       final launchState = await _repository.loadLaunchState();
-      final syncClientIdFuture = _preferences.loadOrCreateSyncClientId();
       final aiSettingsFuture = _preferences.loadAiSettings();
       final dailyTargetPagesFuture = _repository.loadDailyTargetPages();
       final dailyProgressStateFuture = _repository.loadDailyProgressState(
@@ -709,12 +846,11 @@ class QuranReaderController extends ChangeNotifier {
       final readingPlanFuture = _repository.loadReadingPlan();
       final experienceSettingsFuture = _repository.loadExperienceSettings();
       final readingHistoryFuture = _repository.loadReadingHistory();
-      final pageNotesFuture = _repository.loadPageNotes();
-      final favoritePagesFuture = _repository.loadFavoritePages();
+      final pageNotesFuture = _repository.loadPageNotesByEdition();
+      final favoritePagesFuture = _repository.loadFavoritePagesByEdition();
       final bookmarksFuture = _repository.loadBookmarks();
       final hifzRevisionEntriesFuture = _repository.loadHifzRevisionEntries();
 
-      _syncClientId = await syncClientIdFuture;
       _settings = launchState.settings;
       _settingsNotifier.value = _settings;
       _adminConfig = _repository.adminConfig;
@@ -734,21 +870,14 @@ class QuranReaderController extends ChangeNotifier {
       _dailyProgressState = await dailyProgressStateFuture;
       _readingPlan = await readingPlanFuture;
       _experienceSettings = await experienceSettingsFuture;
-      if (_experienceSettings.syncMode == ReaderSyncMode.localOnly &&
-          adminSyncBaseUrl.trim().isNotEmpty) {
-        _experienceSettings = _experienceSettings.copyWith(
-          syncMode: ReaderSyncMode.cloudReady,
-        );
-        await _repository.saveExperienceSettings(_experienceSettings);
-      }
       _experienceNotifier.value = _experienceSettings;
       _readingHistory = await readingHistoryFuture;
-      _pageNotes = await pageNotesFuture;
-      _favoritePages = await favoritePagesFuture;
+      _editionPageNotes = await pageNotesFuture;
+      _editionFavoritePages = await favoritePagesFuture;
+      _activateEditionAnnotations();
       _bookmarks = await bookmarksFuture;
       _hifzReviewEntries = await hifzRevisionEntriesFuture;
       _rebuildContentCaches();
-      await _hydrateFromCloudIfNeeded();
       preferredReciterId = await _repository.loadPreferredReciterId();
       final audioChapterId = await _repository.loadAudioChapterId();
       _savedAudioPositionMillis = await _repository.loadAudioPositionMillis();
@@ -765,13 +894,15 @@ class QuranReaderController extends ChangeNotifier {
         positionMillis: _savedAudioPositionMillis,
         repeatEnabled: repeatEnabled,
       );
+      await _bindReaderSyncIdentity();
+      await _hydrateFromCloudIfNeeded();
       _publishAudioState();
       _rebuildNavigationCaches();
       _refreshCurrentCaches();
       _bindAudioStreams();
       try {
         await _audioService
-            .setRepeatEnabled(repeatEnabled)
+            .setRepeatEnabled(_audioState.repeatEnabled)
             .timeout(const Duration(seconds: 2));
       } catch (_) {}
       await SystemUiService.setFullscreen(_settings.fullscreenReading);
@@ -931,6 +1062,7 @@ class QuranReaderController extends ChangeNotifier {
           : pagesForCurrentPlanPreset(preset),
       createdAtIso: DateTime.now().toUtc().toIso8601String(),
     );
+    _markReaderSyncDirty();
     await _repository.saveReadingPlan(_readingPlan);
     _publishContentChange();
   }
@@ -945,6 +1077,7 @@ class QuranReaderController extends ChangeNotifier {
       customPagesPerDay: pagesPerDay ?? _readingPlan.customPagesPerDay,
       createdAtIso: DateTime.now().toUtc().toIso8601String(),
     );
+    _markReaderSyncDirty();
     await _repository.saveReadingPlan(_readingPlan);
     _publishContentChange();
   }
@@ -971,7 +1104,9 @@ class QuranReaderController extends ChangeNotifier {
     final nowIso = DateTime.now().toUtc().toIso8601String();
     final entries = List<ReaderHifzReviewEntry>.from(_hifzReviewEntries);
     final existingIndex =
-        entries.indexWhere((entry) => entry.pageNumber == pageNumber);
+        entries.indexWhere((entry) => entry.pageNumber == pageNumber &&
+            entry.preferImageMode == _settings.preferImageMode &&
+            (!entry.preferImageMode || entry.edition == _settings.mushafEdition));
     if (existingIndex >= 0) {
       final existing = entries[existingIndex];
       entries[existingIndex] = existing.copyWith(
@@ -983,6 +1118,8 @@ class QuranReaderController extends ChangeNotifier {
       entries.add(
         ReaderHifzReviewEntry(
           pageNumber: pageNumber,
+          edition: _settings.mushafEdition,
+          preferImageMode: _settings.preferImageMode,
           strength: strength,
           updatedAtIso: nowIso,
           reviewCount: 1,
@@ -990,14 +1127,18 @@ class QuranReaderController extends ChangeNotifier {
       );
     }
     _hifzReviewEntries = entries;
+    _markReaderSyncDirty();
     await _repository.saveHifzRevisionEntries(_hifzReviewEntries);
     _publishContentChange();
   }
 
   Future<void> clearHifzReviewEntry(int pageNumber) async {
     _hifzReviewEntries = _hifzReviewEntries
-        .where((entry) => entry.pageNumber != pageNumber)
+        .where((entry) => entry.pageNumber != pageNumber ||
+            entry.preferImageMode != _settings.preferImageMode ||
+            (entry.preferImageMode && entry.edition != _settings.mushafEdition))
         .toList(growable: false);
+    _markReaderSyncDirty();
     await _repository.saveHifzRevisionEntries(_hifzReviewEntries);
     _publishContentChange();
   }
@@ -1048,18 +1189,24 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> setSyncMode(ReaderSyncMode mode) async {
-    if (_experienceSettings.syncMode == mode) {
+    if (_experienceSettings.syncMode == mode) return;
+    _invalidateReaderSyncContext();
+    final context = _syncContextGeneration;
+    _experienceSettings = _experienceSettings.copyWith(syncMode: mode);
+    _suppressSyncDirty = true;
+    try {
+      _publishExperienceSettings();
+    } finally {
+      _suppressSyncDirty = false;
+    }
+    if (!_isDisposed) notifyListeners();
+    await _repository.saveExperienceSettings(_experienceSettings);
+    if (_isDisposed || context != _syncContextGeneration ||
+        mode != ReaderSyncMode.cloudReady) {
       return;
     }
-    await _commitExperienceSettingsUpdate(
-      _experienceSettings.copyWith(syncMode: mode),
-    );
-    if (mode == ReaderSyncMode.cloudReady) {
-      await _hydrateFromCloudIfNeeded();
-      _scheduleCloudSyncPush();
-    } else {
-      _cloudSyncTimer?.cancel();
-    }
+    await _hydrateFromCloudIfNeeded();
+    _scheduleCloudSyncPush(markDirty: false);
   }
 
   Future<QuranAiToolResult> runAiTool(
@@ -1320,6 +1467,8 @@ class QuranReaderController extends ChangeNotifier {
     _smartHifzHiddenLines = Set<int>.from(hiddenLines);
     _smartHifzManualMaskAnchors = const <double>[];
     _smartHifzEdition = edition;
+    _smartHifzScanPageNumber = _settings.preferImageMode && edition == _settings.mushafEdition
+        ? _currentPageNumber : null;
     _smartHifzLineCount = lineCount;
     _smartHifzStandardPageNumber =
         standardPageNumber ?? currentStandardPageNumber;
@@ -1338,6 +1487,8 @@ class QuranReaderController extends ChangeNotifier {
     _smartHifzHiddenLines = const <int>{};
     _smartHifzManualMaskAnchors = List<double>.from(maskAnchors);
     _smartHifzEdition = edition;
+    _smartHifzScanPageNumber = _settings.preferImageMode && edition == _settings.mushafEdition
+        ? _currentPageNumber : null;
     _smartHifzLineCount = lineCount;
     _smartHifzStandardPageNumber =
         standardPageNumber ?? currentStandardPageNumber;
@@ -1377,6 +1528,7 @@ class QuranReaderController extends ChangeNotifier {
     _smartHifzHiddenLines = const <int>{};
     _smartHifzManualMaskAnchors = const <double>[];
     _smartHifzStandardPageNumber = null;
+    _smartHifzScanPageNumber = null;
     _smartHifzEdition = null;
     _smartHifzLineCount = null;
     _smartHifzRevealed = false;
@@ -1385,11 +1537,11 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> selectMushafEdition(MushafEdition edition) async {
-    if (!isMushafEditionStoredOffline(edition)) {
+    if (!_repository.hasAssetsForEdition(edition)) {
       return;
     }
 
-    final nextPreferImageMode = _repository.hasAssetsForEdition(edition);
+    const nextPreferImageMode = true;
 
     if (_settings.mushafEdition == edition &&
         _settings.preferImageMode == nextPreferImageMode) {
@@ -1406,7 +1558,10 @@ class QuranReaderController extends ChangeNotifier {
       mushafEdition: edition,
       preferImageMode: nextPreferImageMode,
     );
+    _markReaderSyncDirty();
     await _repository.setMushafEdition(edition);
+    _activateEditionAnnotations();
+    _rebuildContentCaches();
     _currentPageNumber = _repository.clampPage(
       targetPage,
       preferImageMode: _settings.preferImageMode,
@@ -1424,14 +1579,13 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> togglePreferImageMode(bool enabled) async {
-    if (!enabled) {
-      enabled = true;
-    }
-    if (_settings.preferImageMode == enabled) {
+    if (!enabled || _settings.preferImageMode) {
       return;
     }
     final standardPage = currentStandardPageNumber;
     _settings = _settings.copyWith(preferImageMode: enabled);
+    _activateEditionAnnotations();
+    _rebuildContentCaches();
     _currentPageNumber = _repository.navigationPageForStandardPage(
       standardPage,
       preferImageMode: enabled,
@@ -1506,6 +1660,7 @@ class QuranReaderController extends ChangeNotifier {
       nextNotes[_currentPageNumber] = trimmed;
     }
     _pageNotes = nextNotes;
+    _editionPageNotes[_annotationKey] = nextNotes;
     _publishContentChange();
     _scheduleNotesPersistence();
   }
@@ -1520,9 +1675,10 @@ class QuranReaderController extends ChangeNotifier {
       next.sort();
     }
     _favoritePages = next;
+    _editionFavoritePages[_annotationKey] = next;
     _rebuildContentCaches();
     _publishContentChange();
-    await _repository.saveFavoritePages(_favoritePages);
+    await _repository.saveFavoritePagesByEdition(_editionFavoritePages);
   }
 
   Future<void> addBookmark([
@@ -1533,11 +1689,15 @@ class QuranReaderController extends ChangeNotifier {
         ? 'Page $_currentPageNumber'
         : '${currentChapterSummary!.nameSimple} • Page $_currentPageNumber';
     final next = List<ReaderBookmark>.from(_bookmarks)
-      ..removeWhere((entry) => entry.pageNumber == _currentPageNumber)
+      ..removeWhere((entry) => entry.pageNumber == _currentPageNumber &&
+          entry.preferImageMode == _settings.preferImageMode &&
+          (!entry.preferImageMode || entry.edition == _settings.mushafEdition))
       ..insert(
         0,
         ReaderBookmark(
           pageNumber: _currentPageNumber,
+          edition: _settings.mushafEdition,
+          preferImageMode: _settings.preferImageMode,
           label: (label == null || label.trim().isEmpty)
               ? defaultLabel
               : label.trim(),
@@ -1545,7 +1705,10 @@ class QuranReaderController extends ChangeNotifier {
           createdAtIso: DateTime.now().toUtc().toIso8601String(),
         ),
       );
-    _bookmarks = next.take(24).toList(growable: false);
+    var currentEditionCount = 0;
+    _bookmarks = next.where((entry) => entry.preferImageMode != _settings.preferImageMode ||
+        (entry.preferImageMode && entry.edition != _settings.mushafEdition) ||
+        currentEditionCount++ < 24).toList(growable: false);
     _rebuildContentCaches();
     _publishContentChange();
     await _repository.saveBookmarks(_bookmarks);
@@ -1563,7 +1726,9 @@ class QuranReaderController extends ChangeNotifier {
 
   Future<void> removeBookmark(int pageNumber) async {
     _bookmarks = _bookmarks
-        .where((entry) => entry.pageNumber != pageNumber)
+        .where((entry) => entry.pageNumber != pageNumber ||
+            entry.preferImageMode != _settings.preferImageMode ||
+            (entry.preferImageMode && entry.edition != _settings.mushafEdition))
         .toList(growable: false);
     _rebuildContentCaches();
     _publishContentChange();
@@ -1610,27 +1775,182 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   String buildStateBackupJson() {
-    final payload = <String, dynamic>{
+    return const JsonEncoder.withIndent('  ').convert({
+      ..._buildSyncSnapshot().toJson(),
+      'formatVersion': 2,
       'exportedAtIso': DateTime.now().toUtc().toIso8601String(),
       'currentPageNumber': _currentPageNumber,
-      'settings': <String, dynamic>{
-        'mushafEdition': _settings.mushafEdition.storageValue,
-        'nightMode': _settings.nightMode,
-        'pageNightMode': _settings.pageNightMode,
-        'preferImageMode': _settings.preferImageMode,
+    });
+  }
+
+  Future<void> restoreStateBackupJson(String source) async {
+    if (source.length > 10000000) throw const FormatException('Backup is too large.');
+    final decoded = json.decode(source);
+    if (decoded is! Map<String, dynamic>) throw const FormatException('Backup must be a JSON object.');
+    final data = decoded;
+    Never invalid(String field) => throw FormatException('Invalid backup field: $field');
+    Map<String, dynamic> object(Object? value, String field) {
+      if (value is! Map<String, dynamic>) invalid(field);
+      return value;
+    }
+    List<dynamic> array(Object? value, String field) {
+      if (value is! List<dynamic>) invalid(field);
+      return value;
+    }
+    void number(Object? value, String field, num min, num max, {bool integer = true}) {
+      if (value is! num || !value.isFinite || value < min || value > max ||
+          (integer && value % 1 != 0)) {
+        invalid(field);
+      }
+    }
+    void date(Object? value, String field, {bool allowEmpty = false}) {
+      if (value is! String || (!allowEmpty || value.isNotEmpty) && DateTime.tryParse(value) == null) invalid(field);
+    }
+    void edition(Object? value, String field) {
+      if (value is! String || !RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(value)) invalid(field);
+    }
+    void notes(Object? value, String field) {
+      for (final entry in object(value, field).entries) {
+        final page = int.tryParse(entry.key);
+        if (page == null) invalid(field);
+        number(page, field, 1, 10000);
+        if (entry.value is! String) invalid(field);
+      }
+    }
+    void favorites(Object? value, String field) {
+      for (final page in array(value, field)) {
+        number(page, field, 1, 10000);
+      }
+    }
+    if (!data.containsKey('settings') ||
+        (!data.containsKey('currentPageNumber') && !data.containsKey('lastPageNumber'))) {
+      throw const FormatException('This is not a Quran Reader backup.');
+    }
+    if (data.containsKey('formatVersion')) number(data['formatVersion'], 'formatVersion', 1, 2);
+    final settings = object(data['settings'], 'settings');
+    edition(settings['mushafEdition'], 'settings.mushafEdition');
+    for (final key in ['fullscreenReading', 'showPageNumbers', 'preferImageMode',
+      'customBrightnessEnabled', 'nightMode', 'pageNightMode', 'pagePresetEnabled',
+      'pageOverlayEnabled', 'pageReflectionEnabled', 'lowMemoryMode',
+      'hifzFocusMode', 'hifzRevealOnHold']) {
+      if (settings.containsKey(key) && settings[key] is! bool) invalid('settings.$key');
+    }
+    if (settings.containsKey('pageBrightness')) number(settings['pageBrightness'], 'settings.pageBrightness', .7, 1.25, integer: false);
+    if (settings.containsKey('hifzMaskHeightFactor')) number(settings['hifzMaskHeightFactor'], 'settings.hifzMaskHeightFactor', .18, .7, integer: false);
+    if (settings.containsKey('pagePreset') && !PagePreset.values.any((preset) => preset.storageValue == settings['pagePreset'])) invalid('settings.pagePreset');
+    if (data.containsKey('currentPageNumber')) number(data['currentPageNumber'], 'currentPageNumber', 1, 10000);
+    if (data.containsKey('aiSettings')) {
+      final ai = object(data['aiSettings'], 'aiSettings');
+      if (ai.containsKey('responseLanguage') && !AiResponseLanguage.values.any((value) => value.storageValue == ai['responseLanguage'])) invalid('aiSettings.responseLanguage');
+      if (ai.containsKey('responseDepth') && !AiResponseDepth.values.any((value) => value.storageValue == ai['responseDepth'])) invalid('aiSettings.responseDepth');
+    }
+    final page = data['lastPageNumber'] ?? data['currentPageNumber'];
+    number(page, 'lastPageNumber', 1, 10000);
+    if (data.containsKey('pageNotes')) notes(data['pageNotes'], 'pageNotes');
+    if (data.containsKey('favoritePages')) favorites(data['favoritePages'], 'favoritePages');
+    for (final key in ['editionPageNotes', 'editionFavoritePages']) {
+      if (!data.containsKey(key)) continue;
+      for (final entry in object(data[key], key).entries) {
+        if (entry.key != '__canonical_text__') edition(entry.key, key);
+        if (key == 'editionPageNotes') {
+          notes(entry.value, key);
+        } else {
+          favorites(entry.value, key);
+        }
+      }
+    }
+    for (final key in ['bookmarks', 'readingHistory', 'hifzRevisionEntries']) {
+      if (!data.containsKey(key)) continue;
+      for (final item in array(data[key], key)) {
+        final record = object(item, key);
+        number(record['pageNumber'], '$key.pageNumber', 1, 10000);
+        if (record.containsKey('edition')) edition(record['edition'], '$key.edition');
+        if (record.containsKey('preferImageMode') && record['preferImageMode'] is! bool) invalid(key);
+        if (key == 'bookmarks') {
+          if (record['label'] is! String || record.containsKey('folder') && record['folder'] is! String) invalid(key);
+          date(record['createdAtIso'], '$key.createdAtIso');
+        } else if (key == 'readingHistory') {
+          date(record['viewedAtIso'], '$key.viewedAtIso');
+        } else {
+          if (!HifzPageStrength.values.any((strength) => strength.storageValue == record['strength'])) invalid(key);
+          date(record['updatedAtIso'], '$key.updatedAtIso', allowEmpty: true);
+          number(record['reviewCount'], '$key.reviewCount', 0, 1000000);
+        }
+      }
+    }
+    if (data.containsKey('dailyTargetPages')) number(data['dailyTargetPages'], 'dailyTargetPages', 1, 40);
+    if (data.containsKey('readingPlan')) {
+      final plan = object(data['readingPlan'], 'readingPlan');
+      if (!ReadingGoalPreset.values.any((preset) => preset.storageValue == plan['preset'])) invalid('readingPlan.preset');
+      number(plan['targetDays'], 'readingPlan.targetDays', 1, 365);
+      number(plan['customPagesPerDay'], 'readingPlan.customPagesPerDay', 1, 40);
+      date(plan['createdAtIso'], 'readingPlan.createdAtIso', allowEmpty: true);
+    }
+    if (data.containsKey('dailyProgressState')) {
+      final progress = object(data['dailyProgressState'], 'dailyProgressState');
+      date(progress['dateKey'], 'dailyProgressState.dateKey', allowEmpty: true);
+      number(progress['startPage'], 'dailyProgressState.startPage', 1, 10000);
+    }
+    if (data.containsKey('readingStreak')) {
+      final streak = object(data['readingStreak'], 'readingStreak');
+      number(streak['count'], 'readingStreak.count', 0, 1000000);
+      if (streak['lastDateKey'] != null) date(streak['lastDateKey'], 'readingStreak.lastDateKey');
+    }
+    if (data.containsKey('audio')) {
+      final audio = object(data['audio'], 'audio');
+      for (final key in ['chapterId', 'reciterId']) {
+        if (audio[key] != null) number(audio[key], 'audio.$key', 1, key == 'chapterId' ? 114 : 100000);
+      }
+      number(audio['positionMillis'], 'audio.positionMillis', 0, 0x80000000);
+      if (audio['repeatEnabled'] is! bool) invalid('audio.repeatEnabled');
+    }
+    if (data.containsKey('experienceSettings')) {
+      final experience = object(data['experienceSettings'], 'experienceSettings');
+      for (final key in ['largerTextMode', 'highContrastMode', 'reducedMotion',
+        'tajweedMode', 'recitationSyncEnabled']) {
+        if (experience.containsKey(key) && experience[key] is! bool) invalid('experienceSettings.$key');
+      }
+      if (experience.containsKey('syncMode') && !ReaderSyncMode.values.any((mode) => mode.storageValue == experience['syncMode'])) invalid('experienceSettings.syncMode');
+    }
+    final current = _buildSyncSnapshot().toJson();
+    final editionKey = settings['preferImageMode'] == false
+        ? '__canonical_text__' : settings['mushafEdition'] as String;
+    final merged = <String, dynamic>{
+      ...current,
+      ...data,
+      'deviceId': _syncClientId,
+      'lastPageNumber': page,
+      'settings': {...current['settings'] as Map<String, dynamic>, ...settings},
+      'editionPageNotes': data['editionPageNotes'] ?? {
+        ...current['editionPageNotes'] as Map<String, dynamic>,
+        if (data.containsKey('pageNotes')) editionKey: data['pageNotes'],
       },
-      'readingPlan': _readingPlan.toJson(),
-      'experienceSettings': _experienceSettings.toJson(),
-      'hifzRevisionEntries': _hifzReviewEntries
-          .map((entry) => entry.toJson())
-          .toList(growable: false),
-      'favoritePages': _favoritePages,
-      'bookmarks': _bookmarks.map((entry) => entry.toJson()).toList(),
-      'pageNotes': _pageNotes.map(
-        (key, value) => MapEntry('$key', value),
-      ),
+      'editionFavoritePages': data['editionFavoritePages'] ?? {
+        ...current['editionFavoritePages'] as Map<String, dynamic>,
+        if (data.containsKey('favoritePages')) editionKey: data['favoritePages'],
+      },
     };
-    return const JsonEncoder.withIndent('  ').convert(payload);
+    final ReaderSyncSnapshot snapshot;
+    try {
+      final parsed = ReaderSyncSnapshot.fromJson(merged);
+      if (parsed == null) invalid('snapshot');
+      snapshot = parsed;
+    } catch (_) {
+      throw const FormatException('Backup contains invalid reader data.');
+    }
+    final maximum = _repository.hasAssetsForEdition(snapshot.settings.mushafEdition)
+        ? _repository.totalPagesForEdition(snapshot.settings.mushafEdition) : 10000;
+    number(snapshot.lastPageNumber, 'lastPageNumber', 1, snapshot.settings.preferImageMode ? maximum : 604);
+    _pagePersistenceTimer?.cancel();
+    _notesPersistenceTimer?.cancel();
+    _cloudSyncTimer?.cancel();
+    _invalidateReaderSyncContext();
+    final context = _syncContextGeneration;
+    final generation = _localChangeGeneration;
+    final applied = await _applyRemoteSyncSnapshot(snapshot,
+        syncContext: context, expectedGeneration: generation, requireCloud: false);
+    if (!applied) throw StateError('Reader state changed while the backup was being restored. Try again.');
+    _scheduleCloudSyncPush();
   }
 
   Future<String?> loadCurrentChapterInfo() {
@@ -1660,7 +1980,9 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> selectReciter(QuranReciter reciter) async {
+    if (_audioState.selectedReciter?.id != reciter.id) _currentRecitationVerseKey = null;
     _setAudioState(_audioState.copyWith(selectedReciter: reciter));
+    _markReaderSyncDirty();
     await _repository.savePreferredReciterId(reciter.id);
     _scheduleCloudSyncPush();
     if (_audioState.isPlaying && selectedAudioChapter != null) {
@@ -1675,9 +1997,10 @@ class QuranReaderController extends ChangeNotifier {
       return;
     }
 
-    if (_audioState.isPlaying || _audioState.durationMillis > 0) {
-      await _audioService.stop();
-    }
+    _currentRecitationVerseKey = null;
+    _savedAudioPositionMillis = 0;
+    _markReaderSyncDirty();
+    await _audioService.resetPlayback();
 
     _setAudioState(
       _audioState.copyWith(
@@ -1704,7 +2027,8 @@ class QuranReaderController extends ChangeNotifier {
       return;
     }
 
-    final isSameChapter = _audioState.currentChapterId == chapter.id;
+    final isSameChapter = _audioService.loadedChapterId == chapter.id &&
+        _audioService.loadedReciterId == reciter.id;
     if (isSameChapter && !forceReload && _audioState.isPlaying) {
       await pauseAudio();
       return;
@@ -1717,6 +2041,7 @@ class QuranReaderController extends ChangeNotifier {
       return;
     }
 
+    _currentRecitationVerseKey = null;
     _setAudioState(
       _audioState.copyWith(
         isLoading: true,
@@ -1796,6 +2121,13 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> resumeAudio() async {
+    if (_audioService.isPlaybackCompleted) {
+      _savedAudioPositionMillis = 0;
+      _currentRecitationVerseKey = null;
+      _setAudioState(_audioState.copyWith(positionMillis: 0));
+      _markReaderSyncDirty();
+      await _repository.saveAudioPositionMillis(0);
+    }
     await _audioService.resume();
     _setAudioState(
       _audioState.copyWith(
@@ -1807,8 +2139,10 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> stopAudio() async {
-    await _audioService.stop();
+    _currentRecitationVerseKey = null;
     _savedAudioPositionMillis = 0;
+    _markReaderSyncDirty();
+    await _audioService.resetPlayback();
     await _repository.saveAudioPositionMillis(0);
     _scheduleCloudSyncPush();
     _setAudioState(
@@ -1832,6 +2166,7 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> toggleAudioRepeat(bool enabled) async {
+    _markReaderSyncDirty();
     await _audioService.setRepeatEnabled(enabled);
     _setAudioState(_audioState.copyWith(repeatEnabled: enabled));
     await _repository.saveAudioRepeatEnabled(enabled);
@@ -1906,6 +2241,7 @@ class QuranReaderController extends ChangeNotifier {
       return;
     }
     _pageNotifier.value = _currentPageNumber;
+    _scheduleCloudSyncPush();
   }
 
   void _schedulePageUiRefresh({bool immediate = false}) {
@@ -1947,12 +2283,12 @@ class QuranReaderController extends ChangeNotifier {
     _viewportNotifier.value = _viewportNotifier.value + 1;
   }
 
-  void _publishContentChange() {
+  void _publishContentChange({bool localChange = true}) {
     if (_isDisposed) {
       return;
     }
     _contentNotifier.value = _contentNotifier.value + 1;
-    _scheduleCloudSyncPush();
+    _scheduleCloudSyncPush(markDirty: localChange);
   }
 
   Future<void> _persistSettings() {
@@ -1996,7 +2332,7 @@ class QuranReaderController extends ChangeNotifier {
   void _scheduleNotesPersistence() {
     _notesPersistenceTimer?.cancel();
     _notesPersistenceTimer = Timer(_notesPersistenceDebounce, () {
-      unawaited(_repository.savePageNotes(_pageNotes));
+      unawaited(_repository.savePageNotesByEdition(_editionPageNotes));
     });
   }
 
@@ -2031,10 +2367,16 @@ class QuranReaderController extends ChangeNotifier {
     _playerStateSubscription?.cancel();
     _positionSubscription?.cancel();
     _durationSubscription?.cancel();
+    _playbackErrorSubscription?.cancel();
 
     _playerStateSubscription = _audioService.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.idle ||
+          state.processingState == ProcessingState.loading ||
+          state.processingState == ProcessingState.completed) {
+        _currentRecitationVerseKey = null;
+      }
       final nextState = _audioState.copyWith(
-        isPlaying: state.playing,
+        isPlaying: state.playing && state.processingState != ProcessingState.completed,
         isBuffering: state.processingState == ProcessingState.buffering ||
             state.processingState == ProcessingState.loading,
         isLoading: state.processingState == ProcessingState.loading,
@@ -2049,10 +2391,33 @@ class QuranReaderController extends ChangeNotifier {
       }
     });
 
+    _playbackErrorSubscription = _audioService.playbackErrors.listen((error) {
+      if (_isDisposed) return;
+      _currentRecitationVerseKey = null;
+      _setAudioState(_audioState.copyWith(
+        isPlaying: false, isLoading: false, isBuffering: false, errorMessage: error,
+      ));
+    });
+
     _positionSubscription = _audioService.positionStream.listen((position) {
       final millis = position.inMilliseconds;
+      if (millis != _savedAudioPositionMillis &&
+          (!_readerSyncDirty || _syncPushGeneration == _localChangeGeneration)) {
+        _markReaderSyncDirty();
+      }
       _savedAudioPositionMillis = millis;
       _audioState = _audioState.copyWith(positionMillis: millis);
+      if (_experienceSettings.recitationSyncEnabled && _audioState.isPlaying) {
+        final verseKey = _audioService.verseKeyAtPosition(position);
+        if (verseKey != _currentRecitationVerseKey) {
+          _currentRecitationVerseKey = verseKey;
+          if (verseKey != null && !isStudySurahScoped) {
+            final page = _repository.canonicalPageForVerse(verseKey);
+            if (page != null && page != _currentPageNumber) unawaited(jumpToPage(page));
+          }
+          _publishAudioState();
+        }
+      }
 
       final shouldNotify = _lastNotifiedAudioPositionMillis < 0 ||
           (millis - _lastNotifiedAudioPositionMillis).abs() >=
@@ -2099,6 +2464,7 @@ class QuranReaderController extends ChangeNotifier {
         dateKey: todayKey,
         startPage: _currentPageNumber,
       );
+      _markReaderSyncDirty();
       await _repository.saveDailyProgressState(_dailyProgressState);
       contentChanged = true;
     }
@@ -2114,6 +2480,8 @@ class QuranReaderController extends ChangeNotifier {
     final shouldSkipHistoryInsert = _lastRecordedHistoryPageNumber ==
             _currentPageNumber &&
         _lastRecordedHistoryDateKey == todayKey &&
+        _lastRecordedHistoryEdition == _settings.mushafEdition &&
+        _lastRecordedHistoryPreferImageMode == _settings.preferImageMode &&
         _lastRecordedHistoryAt != null &&
         now.difference(_lastRecordedHistoryAt!) < const Duration(seconds: 18);
     if (shouldSkipHistoryInsert) {
@@ -2127,15 +2495,23 @@ class QuranReaderController extends ChangeNotifier {
     final nextHistory = <ReaderHistoryEntry>[
       ReaderHistoryEntry(
         pageNumber: _currentPageNumber,
+        edition: _settings.mushafEdition,
+        preferImageMode: _settings.preferImageMode,
         viewedAtIso: now.toUtc().toIso8601String(),
       ),
       ..._readingHistory
-          .where((entry) => entry.pageNumber != _currentPageNumber),
+          .where((entry) => entry.pageNumber != _currentPageNumber ||
+              entry.preferImageMode != _settings.preferImageMode ||
+              (entry.preferImageMode && entry.edition != _settings.mushafEdition) ||
+              _dateKeyFromIso(entry.viewedAtIso) != todayKey),
     ];
-    _readingHistory = nextHistory.take(180).toList(growable: false);
+    _readingHistory = nextHistory;
+    _markReaderSyncDirty();
     _rebuildContentCaches();
     _lastRecordedHistoryPageNumber = _currentPageNumber;
     _lastRecordedHistoryDateKey = todayKey;
+    _lastRecordedHistoryEdition = _settings.mushafEdition;
+    _lastRecordedHistoryPreferImageMode = _settings.preferImageMode;
     _lastRecordedHistoryAt = now;
     await _repository.saveReadingHistory(_readingHistory);
     _publishContentChange();
@@ -2162,6 +2538,7 @@ class QuranReaderController extends ChangeNotifier {
     }
 
     _readingStreakLastDate = todayKey;
+    _markReaderSyncDirty();
     await _repository.saveReadingStreakCount(_readingStreakCount);
     await _repository.saveReadingStreakLastDate(_readingStreakLastDate);
   }
@@ -2231,7 +2608,7 @@ class QuranReaderController extends ChangeNotifier {
           _audioState.selectedReciter?.id ?? preferredReciterId;
       _reciters = reciters;
       _downloadedAudioKeys = downloadedAudioKeys;
-      _publishContentChange();
+      _publishContentChange(localChange: false);
       _setAudioState(
         _audioState.copyWith(
           selectedReciter: _resolveSelectedReciter(selectedReciterId),
@@ -2270,7 +2647,7 @@ class QuranReaderController extends ChangeNotifier {
       tafsirExcerpt: tafsirExcerpt,
       translationUr: insight?.translationUr ?? '',
       translationEn: insight?.translationEn ?? '',
-      arabicLines: textPage.lines
+      arabicLines: (isStudySurahScoped ? const <QuranPageLine>[] : textPage.lines)
           .where((line) => line.text.trim().isNotEmpty)
           .map(
             (line) => QuranAiArabicLine(
@@ -2293,6 +2670,11 @@ class QuranReaderController extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    for (final token in _offlinePackCancelTokens.values) {
+      if (!token.isCancelled) token.cancel(QuranPackDownloadStop.pause);
+    }
+    _downloadNetworkSubscription?.cancel();
+    _invalidateReaderSyncContext();
     _controlsTimer?.cancel();
     _pagePersistenceTimer?.cancel();
     _pageUiRefreshTimer?.cancel();
@@ -2302,9 +2684,10 @@ class QuranReaderController extends ChangeNotifier {
     _playerStateSubscription?.cancel();
     _positionSubscription?.cancel();
     _durationSubscription?.cancel();
+    _playbackErrorSubscription?.cancel();
     unawaited(_persistAudioState());
     if (shouldFlushNotes) {
-      unawaited(_repository.savePageNotes(_pageNotes));
+      unawaited(_repository.savePageNotesByEdition(_editionPageNotes));
     }
     _pageNotifier.dispose();
     _controlsNotifier.dispose();
@@ -2341,12 +2724,18 @@ class QuranReaderController extends ChangeNotifier {
     );
   }
 
+  void _activateEditionAnnotations() {
+    final key = _annotationKey;
+    _pageNotes = _editionPageNotes[key] ?? const {};
+    _favoritePages = _editionFavoritePages[key] ?? const [];
+  }
+
   void _rebuildContentCaches() {
     _favoritePageSet = _favoritePages.toSet();
 
     final bookmarkFolders = <String>{
       ..._bookmarkFolderPresets,
-      ..._bookmarks.map((bookmark) => bookmark.folder),
+      ...bookmarks.map((bookmark) => bookmark.folder),
     }.toList(growable: false);
     _bookmarkFoldersCache = bookmarkFolders;
 
@@ -2355,7 +2744,7 @@ class QuranReaderController extends ChangeNotifier {
     for (final folder in bookmarkFolders) {
       groupedBookmarks[folder] = <ReaderBookmark>[];
     }
-    for (final bookmark in _bookmarks) {
+    for (final bookmark in bookmarks) {
       bookmarkByPage[bookmark.pageNumber] = bookmark;
       groupedBookmarks.putIfAbsent(bookmark.folder, () => []);
       groupedBookmarks[bookmark.folder]!.add(bookmark);
@@ -2446,12 +2835,6 @@ class QuranReaderController extends ChangeNotifier {
     _syncCurrentAiSettingsWithAdminConfig();
     await _refreshOfflinePackAvailability();
     await _applyAdminEditionVisibilityRules();
-    if (!_settings.preferImageMode &&
-        _repository.hasAssetsForEdition(_settings.mushafEdition)) {
-      _settings = _settings.copyWith(preferImageMode: true);
-      _publishSettings();
-      unawaited(_persistSettings());
-    }
     _rebuildNavigationCaches();
     _refreshCurrentCaches();
     _publishContentChange();
@@ -2461,51 +2844,248 @@ class QuranReaderController extends ChangeNotifier {
     }
   }
 
-  Future<bool> pushReaderSyncToCloud() async {
-    if (_syncClientId.trim().isEmpty || adminSyncBaseUrl.trim().isEmpty) {
+  bool _readerSyncContextIsCurrent(int context, {bool requireCloud = true}) {
+    if (_isDisposed || context != _syncContextGeneration || _syncBaseUrl.isEmpty ||
+        _syncClientId.isEmpty || _syncToken.isEmpty ||
+        (requireCloud && _experienceSettings.syncMode != ReaderSyncMode.cloudReady)) {
       return false;
     }
-    return _readerSyncService.pushSnapshot(
-      baseUrl: adminSyncBaseUrl,
-      deviceId: _syncClientId,
-      snapshot: _buildSyncSnapshot(),
-    );
+    try {
+      return ReaderPreferences.normalizeSyncBaseUrl(adminSyncBaseUrl) == _syncBaseUrl;
+    } catch (_) {
+      return false;
+    }
   }
 
-  Future<bool> pullReaderSyncFromCloud() async {
-    if (_syncClientId.trim().isEmpty || adminSyncBaseUrl.trim().isEmpty) {
+  void _invalidateReaderSyncContext() {
+    _syncContextGeneration++;
+    _cloudSyncTimer?.cancel();
+    _readerSyncService.cancelPending();
+  }
+
+  Future<void> _persistReaderSyncLocalState() {
+    final baseUrl = _syncBaseUrl;
+    if (baseUrl.isEmpty) return Future<void>.value();
+    final context = _syncContextGeneration;
+    final generation = _localChangeGeneration;
+    final dirty = _readerSyncDirty;
+    _syncStateWrites = _syncStateWrites.then((_) async {
+      try {
+        await _preferences.saveReaderSyncLocalState(baseUrl, generation: generation, dirty: dirty);
+        if (context == _syncContextGeneration) _syncStateWriteFailed = false;
+      } catch (_) {
+        if (context == _syncContextGeneration) {
+          _syncStateWriteFailed = true;
+          _readerSyncStatus = 'Local sync state could not be saved. Cloud sync is paused.';
+        }
+      }
+    });
+    return _syncStateWrites;
+  }
+
+  void _markReaderSyncDirty() {
+    if (_isDisposed || _isLoading || _suppressSyncDirty) return;
+    _localChangeGeneration++;
+    _readerSyncDirty = true;
+    unawaited(_persistReaderSyncLocalState());
+  }
+
+  Future<bool> _bindReaderSyncIdentity() async {
+    final rawBase = adminSyncBaseUrl.trim();
+    if (rawBase.isEmpty) {
+      _invalidateReaderSyncContext();
+      _syncBaseUrl = '';
+      _syncClientId = '';
+      _syncToken = '';
       return false;
     }
-    final snapshot = await _readerSyncService.pullSnapshot(
-      baseUrl: adminSyncBaseUrl,
-      deviceId: _syncClientId,
-    );
-    if (snapshot == null) {
+    final String normalized;
+    try {
+      normalized = ReaderPreferences.normalizeSyncBaseUrl(rawBase);
+    } catch (_) {
+      _invalidateReaderSyncContext();
+      _syncBaseUrl = '';
+      _syncClientId = '';
+      _syncToken = '';
+      _readerSyncStatus = 'The reader sync URL is invalid.';
       return false;
     }
-    await _applyRemoteSyncSnapshot(snapshot);
-    _publishSettings();
-    _publishAiSettings();
-    _publishExperienceSettings();
-    _publishAudioState();
-    _publishCurrentPage();
-    _publishContentChange();
-    notifyListeners();
+    if (_syncBaseUrl == normalized && _syncToken.isNotEmpty) return true;
+    final pending = _syncIdentityBinding;
+    if (pending != null && _syncBindingBaseUrl == normalized &&
+        _syncBindingContext == _syncContextGeneration) {
+      return pending;
+    }
+    final previousBase = _syncBaseUrl;
+    final generationBeforeBinding = _localChangeGeneration;
+    _invalidateReaderSyncContext();
+    final context = _syncContextGeneration;
+    _syncBindingBaseUrl = normalized;
+    _syncBindingContext = context;
+    final operation = () async {
+      await _syncStateWrites;
+      if (_isDisposed || context != _syncContextGeneration) return false;
+      final identity = await _preferences.loadOrCreateSyncIdentity(normalized);
+      if (_isDisposed || context != _syncContextGeneration) return false;
+      final state = await _preferences.loadReaderSyncLocalState(normalized);
+      if (_isDisposed || context != _syncContextGeneration) return false;
+      _syncBaseUrl = normalized;
+      _syncClientId = identity.deviceId;
+      _syncToken = identity.token;
+      _syncUsesFreshBackup = state == null;
+      final changedWhileBinding = generationBeforeBinding != _localChangeGeneration;
+      final changedBackend = previousBase.isNotEmpty && previousBase != normalized;
+      _localChangeGeneration = (state?.generation ?? 0) +
+          (changedWhileBinding || changedBackend ? 1 : 0);
+      _readerSyncDirty = changedWhileBinding || changedBackend || (state?.dirty ?? true);
+      _syncStateWriteFailed = false;
+      await _persistReaderSyncLocalState();
+      return !_isDisposed && context == _syncContextGeneration && !_syncStateWriteFailed;
+    }();
+    _syncIdentityBinding = operation;
+    try {
+      return await operation;
+    } catch (_) {
+      if (!_isDisposed && context == _syncContextGeneration) {
+        _readerSyncStatus = 'Cloud sync could not load its private identity. Local data is unchanged.';
+      }
+      return false;
+    } finally {
+      if (identical(_syncIdentityBinding, operation)) _syncIdentityBinding = null;
+    }
+  }
+
+  Future<bool> _queueReaderSync(int context, Future<bool> Function() operation) {
+    final result = Completer<bool>();
+    _syncOperationQueue = _syncOperationQueue.then((_) async {
+      if (!_readerSyncContextIsCurrent(context)) {
+        result.complete(false);
+        return;
+      }
+      try {
+        result.complete(await operation());
+      } catch (_) {
+        if (_readerSyncContextIsCurrent(context)) {
+          _readerSyncStatus = 'Cloud sync failed. Unsynced changes remain on this device.';
+        }
+        result.complete(false);
+      }
+    });
+    return result.future;
+  }
+
+  void _reportReaderSyncFailure(ReaderSyncStatus status) {
+    _readerSyncStatus = switch (status) {
+      ReaderSyncStatus.unauthorized || ReaderSyncStatus.forbidden =>
+        'Cloud sync was not authorized. Local data is unchanged.',
+      ReaderSyncStatus.cancelled => 'Cloud sync was cancelled.',
+      ReaderSyncStatus.networkError => 'Cloud sync is unavailable. Changes remain on this device.',
+      _ => 'The cloud sync response was invalid. Local data is unchanged.',
+    };
+    if (!_isDisposed) notifyListeners();
+  }
+
+  Future<bool> _pushReaderSnapshot(int context) async {
+    if (!_readerSyncContextIsCurrent(context)) return false;
+    await _persistReaderSyncLocalState();
+    if (!_readerSyncContextIsCurrent(context) || _syncStateWriteFailed) return false;
+    final generation = _localChangeGeneration;
+    final snapshot = _buildSyncSnapshot();
+    _syncPushGeneration = generation;
+    final ReaderSyncPushResult result;
+    try {
+      result = await _readerSyncService.pushSnapshot(
+        baseUrl: _syncBaseUrl,
+        deviceId: _syncClientId,
+        token: _syncToken,
+        snapshot: snapshot,
+      );
+    } finally {
+      _syncPushGeneration = null;
+    }
+    if (!_readerSyncContextIsCurrent(context)) return false;
+    if (!result.success) {
+      _reportReaderSyncFailure(result.status);
+      return false;
+    }
+    if (generation == _localChangeGeneration) {
+      _readerSyncDirty = false;
+      await _persistReaderSyncLocalState();
+      if (!_readerSyncContextIsCurrent(context) || _syncStateWriteFailed) return false;
+    }
+    _readerSyncStatus = _readerSyncDirty ? 'Newer changes are waiting to sync.'
+        : _syncUsesFreshBackup
+            ? 'Synced to a new private backup. Older backups remain in admin restore.'
+            : 'Reader data is synced.';
+    if (!_isDisposed) notifyListeners();
     return true;
   }
 
-  Future<void> saveAdminSyncBaseUrl(String baseUrl) async {
-    await _preferences.saveAdminPublicBaseUrl(baseUrl);
-    await refreshAdminSync();
-    if (baseUrl.trim().isNotEmpty &&
-        _experienceSettings.syncMode == ReaderSyncMode.localOnly) {
-      _experienceSettings = _experienceSettings.copyWith(
-        syncMode: ReaderSyncMode.cloudReady,
-      );
-      _publishExperienceSettings();
-      await _repository.saveExperienceSettings(_experienceSettings);
+  Future<bool> pushReaderSyncToCloud() async {
+    if (_experienceSettings.syncMode != ReaderSyncMode.cloudReady) return false;
+    final ready = await _bindReaderSyncIdentity();
+    if (!ready || _experienceSettings.syncMode != ReaderSyncMode.cloudReady) return false;
+    final context = _syncContextGeneration;
+    return _queueReaderSync(context, () => _pushReaderSnapshot(context));
+  }
+
+  Future<bool> _pullReaderSnapshot(int context, {required bool seedWhenMissing}) async {
+    await _syncStateWrites;
+    if (!_readerSyncContextIsCurrent(context) || _syncStateWriteFailed) return false;
+    if (_readerSyncDirty) {
+      if (seedWhenMissing) return _pushReaderSnapshot(context);
+      _readerSyncStatus = 'Unsynced local changes were kept. Sync them before pulling a backup.';
+      return false;
     }
-    _scheduleCloudSyncPush();
+    final generation = _localChangeGeneration;
+    final result = await _readerSyncService.pullSnapshot(
+      baseUrl: _syncBaseUrl,
+      deviceId: _syncClientId,
+      token: _syncToken,
+    );
+    if (!_readerSyncContextIsCurrent(context) || generation != _localChangeGeneration) return false;
+    if (result.found) {
+      final applied = await _applyRemoteSyncSnapshot(
+        result.snapshot!, syncContext: context, expectedGeneration: generation,
+      );
+      if (!applied || !_readerSyncContextIsCurrent(context) ||
+          generation != _localChangeGeneration) {
+        return false;
+      }
+      _readerSyncDirty = false;
+      await _persistReaderSyncLocalState();
+      if (!_readerSyncContextIsCurrent(context)) return false;
+      _readerSyncStatus = 'Reader data is synced.';
+      return true;
+    }
+    if (result.status == ReaderSyncStatus.notFound && seedWhenMissing) {
+      return _pushReaderSnapshot(context);
+    }
+    _reportReaderSyncFailure(result.status);
+    return false;
+  }
+
+  Future<bool> pullReaderSyncFromCloud() async {
+    if (_experienceSettings.syncMode != ReaderSyncMode.cloudReady) return false;
+    final ready = await _bindReaderSyncIdentity();
+    if (!ready || _experienceSettings.syncMode != ReaderSyncMode.cloudReady) return false;
+    final context = _syncContextGeneration;
+    return _queueReaderSync(context, () => _pullReaderSnapshot(context, seedWhenMissing: false));
+  }
+
+  Future<void> saveAdminSyncBaseUrl(String baseUrl) async {
+    _invalidateReaderSyncContext();
+    final context = _syncContextGeneration;
+    await _syncStateWrites;
+    if (_isDisposed || context != _syncContextGeneration) return;
+    await _preferences.saveAdminPublicBaseUrl(baseUrl);
+    if (_isDisposed || context != _syncContextGeneration) return;
+    await refreshAdminSync();
+    if (_isDisposed) return;
+    final ready = await _bindReaderSyncIdentity();
+    if (!ready) return;
+    _markReaderSyncDirty();
+    _scheduleCloudSyncPush(markDirty: false);
   }
 
   ReaderRemoteAssetPack? remoteAssetPackForEdition(MushafEdition edition) {
@@ -2520,6 +3100,7 @@ class QuranReaderController extends ChangeNotifier {
       final progress = (offlinePackProgressForEdition(edition) * 100).round();
       return 'Downloading $progress%';
     }
+    if (isOfflinePackPaused(edition)) return 'Paused';
     if (isOfflinePackDownloaded(edition)) {
       return 'Available offline';
     }
@@ -2544,6 +3125,12 @@ class QuranReaderController extends ChangeNotifier {
           remotePack == null ? 'ZIP pack' : 'admin pack ${remotePack.version}';
       return '${edition.bestUseLabel}. Downloading $versionLabel for offline use ($progress%).';
     }
+    if (isOfflinePackPaused(edition)) {
+      final partial = _partialOfflinePacks[edition]!;
+      return partial.canResume
+          ? 'Download paused. Resume to continue from the saved data.'
+          : 'Download paused. This server requires a fresh transfer when resumed.';
+    }
     if (isOfflinePackDownloaded(edition)) {
       final versionLabel =
           remotePack == null ? 'ZIP pack' : 'admin pack ${remotePack.version}';
@@ -2564,8 +3151,13 @@ class QuranReaderController extends ChangeNotifier {
       return;
     }
 
+    if (!await _downloadPolicy.allowsDownload()) {
+      throw StateError('Wi-Fi-only downloads are enabled. Connect to Wi-Fi to continue.');
+    }
+    if (_isDisposed || _offlinePackProgress.containsKey(edition)) return;
     final cancelToken = CancelToken();
     _offlinePackCancelTokens[edition] = cancelToken;
+    _packTransferProgress.remove(edition);
     _offlinePackProgress = Map<MushafEdition, double>.from(_offlinePackProgress)
       ..[edition] = 0;
     notifyListeners();
@@ -2576,6 +3168,9 @@ class QuranReaderController extends ChangeNotifier {
       await _repository.downloadOfflinePack(
         edition,
         cancelToken: cancelToken,
+        onTransferProgress: (progress) {
+          if (!_isDisposed) _packTransferProgress[edition] = progress;
+        },
         onProgress: (progress) {
           if (_isDisposed) {
             return;
@@ -2597,18 +3192,38 @@ class QuranReaderController extends ChangeNotifier {
           notifyListeners();
         },
       );
+    } catch (error) {
+      if (cancelToken.cancelError?.error == QuranPackDownloadStop.pause) {
+        throw StateError('Download paused. Saved data is kept for resume.');
+      }
+      rethrow;
     } finally {
       _offlinePackCancelTokens.remove(edition);
       _offlinePackProgress =
           Map<MushafEdition, double>.from(_offlinePackProgress)
             ..remove(edition);
-      await _refreshOfflinePackAvailability();
-      _refreshCurrentCaches();
-      _publishContentChange();
       if (!_isDisposed) {
+        await _refreshOfflinePackAvailability();
+        _refreshCurrentCaches();
+        _publishContentChange();
         notifyListeners();
+        unawaited(refreshDownloadStorage().catchError((Object _) {}));
       }
     }
+  }
+
+  void pauseOfflineEditionPackDownload(MushafEdition edition) {
+    final token = _offlinePackCancelTokens[edition];
+    if (token != null && !token.isCancelled) token.cancel(QuranPackDownloadStop.pause);
+  }
+
+  Future<void> discardPausedOfflineEditionPack(MushafEdition edition) async {
+    if (isOfflinePackDownloading(edition)) return;
+    await _repository.discardPartialOfflinePack(edition);
+    _partialOfflinePacks.remove(edition);
+    _packTransferProgress.remove(edition);
+    if (!_isDisposed) notifyListeners();
+    await refreshDownloadStorage();
   }
 
   void cancelOfflineEditionPackDownload(MushafEdition edition) {
@@ -2616,14 +3231,14 @@ class QuranReaderController extends ChangeNotifier {
     if (token == null || token.isCancelled) {
       return;
     }
-    token.cancel('${edition.label} download cancelled.');
+    token.cancel(QuranPackDownloadStop.cancel);
   }
 
   void cancelAllOfflinePackDownloads() {
     final tokens = List<CancelToken>.from(_offlinePackCancelTokens.values);
     for (final token in tokens) {
       if (!token.isCancelled) {
-        token.cancel('All downloads cancelled.');
+        token.cancel(QuranPackDownloadStop.cancel);
       }
     }
   }
@@ -2653,25 +3268,12 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> _hydrateFromCloudIfNeeded() async {
-    if (_experienceSettings.syncMode != ReaderSyncMode.cloudReady ||
-        _syncClientId.trim().isEmpty ||
-        adminSyncBaseUrl.trim().isEmpty) {
-      return;
-    }
-    final snapshot = await _readerSyncService.pullSnapshot(
-      baseUrl: adminSyncBaseUrl,
-      deviceId: _syncClientId,
-    );
-    if (snapshot != null) {
-      await _applyRemoteSyncSnapshot(snapshot);
-      return;
-    }
-
-    await _readerSyncService.pushSnapshot(
-      baseUrl: adminSyncBaseUrl,
-      deviceId: _syncClientId,
-      snapshot: _buildSyncSnapshot(),
-    );
+    if (_experienceSettings.syncMode != ReaderSyncMode.cloudReady) return;
+    final ready = await _bindReaderSyncIdentity();
+    if (!ready || _experienceSettings.syncMode != ReaderSyncMode.cloudReady) return;
+    final context = _syncContextGeneration;
+    await _queueReaderSync(context,
+        () => _pullReaderSnapshot(context, seedWhenMissing: true));
   }
 
   ReaderSyncSnapshot _buildSyncSnapshot() {
@@ -2687,6 +3289,8 @@ class QuranReaderController extends ChangeNotifier {
       readingHistory: _readingHistory,
       pageNotes: _pageNotes,
       favoritePages: _favoritePages,
+      editionPageNotes: _editionPageNotes,
+      editionFavoritePages: _editionFavoritePages,
       bookmarks: _bookmarks,
       hifzReviewEntries: _hifzReviewEntries,
       streakState: ReaderSyncStreakState(
@@ -2705,17 +3309,52 @@ class QuranReaderController extends ChangeNotifier {
     );
   }
 
-  Future<void> _applyRemoteSyncSnapshot(ReaderSyncSnapshot snapshot) async {
-    _settings = snapshot.settings;
+  Future<bool> _applyRemoteSyncSnapshot(
+    ReaderSyncSnapshot snapshot, {
+    int? syncContext,
+    int? expectedGeneration,
+    bool requireCloud = true,
+  }) async {
+    bool isCurrent() => !_isDisposed &&
+        (syncContext == null || (requireCloud
+            ? _readerSyncContextIsCurrent(syncContext)
+            : syncContext == _syncContextGeneration)) &&
+        (expectedGeneration == null || expectedGeneration == _localChangeGeneration);
+    if (!isCurrent()) return false;
+    await _audioService.resetPlayback();
+    if (!isCurrent()) return false;
+    await _audioService.setRepeatEnabled(snapshot.audioState.repeatEnabled);
+    if (!isCurrent()) return false;
+    await _repository.setMushafEdition(snapshot.settings.mushafEdition);
+    if (!isCurrent()) {
+      await _repository.setMushafEdition(_settings.mushafEdition);
+      return false;
+    }
+
+    _pagePersistenceTimer?.cancel();
+    _notesPersistenceTimer?.cancel();
+    _currentRecitationVerseKey = null;
+    _lastPlayerState = null;
+    _lastNotifiedAudioPositionMillis = -1;
+    _lastNotifiedAudioDurationMillis = -1;
+    _settings = snapshot.settings.copyWith(preferImageMode: true);
     _aiSettings = snapshot.aiSettings;
     _syncCurrentAiSettingsWithAdminConfig();
     _readingPlan = snapshot.readingPlan;
-    _experienceSettings = snapshot.experienceSettings;
+    _experienceSettings = snapshot.experienceSettings.copyWith(
+      syncMode: _experienceSettings.syncMode,
+    );
     _dailyTargetPages = snapshot.dailyTargetPages;
     _dailyProgressState = snapshot.dailyProgressState;
     _readingHistory = snapshot.readingHistory;
-    _pageNotes = snapshot.pageNotes;
-    _favoritePages = snapshot.favoritePages;
+    _editionPageNotes = Map<String, Map<int, String>>.from(snapshot.editionPageNotes);
+    _editionFavoritePages = Map<String, List<int>>.from(snapshot.editionFavoritePages);
+    final sourceAnnotationKey = snapshot.settings.preferImageMode
+        ? snapshot.settings.mushafEdition.storageValue
+        : '__canonical_text__';
+    _editionPageNotes.putIfAbsent(sourceAnnotationKey, () => snapshot.pageNotes);
+    _editionFavoritePages.putIfAbsent(sourceAnnotationKey, () => snapshot.favoritePages);
+    _activateEditionAnnotations();
     _bookmarks = snapshot.bookmarks;
     _hifzReviewEntries = snapshot.hifzReviewEntries;
     _readingStreakCount = snapshot.streakState.count;
@@ -2730,17 +3369,37 @@ class QuranReaderController extends ChangeNotifier {
       currentChapterId: snapshot.audioState.chapterId,
       currentSurahName: snapshot.audioState.chapterName,
       positionMillis: snapshot.audioState.positionMillis,
+      durationMillis: 0,
+      isPlaying: false,
+      isLoading: false,
+      isBuffering: false,
+      isDownloading: false,
+      clearError: true,
       repeatEnabled: snapshot.audioState.repeatEnabled,
     );
-
-    await _repository.setMushafEdition(_settings.mushafEdition);
-    _currentPageNumber = _repository.clampPage(
-      snapshot.lastPageNumber,
-      preferImageMode: _settings.preferImageMode,
-    );
+    _currentPageNumber = snapshot.settings.preferImageMode
+        ? _repository.clampPage(snapshot.lastPageNumber, preferImageMode: true)
+        : _repository.navigationPageForStandardPage(
+            snapshot.lastPageNumber,
+            preferImageMode: true,
+          );
+    _lastPersistedPageNumber = null;
+    _lastRecordedHistoryPageNumber = null;
     _rebuildContentCaches();
     _rebuildNavigationCaches();
     _refreshCurrentCaches();
+    _suppressSyncDirty = true;
+    try {
+      _publishSettings();
+      _publishAiSettings();
+      _publishExperienceSettings();
+      _publishAudioState();
+      _publishCurrentPage();
+      _publishContentChange(localChange: false);
+    } finally {
+      _suppressSyncDirty = false;
+    }
+    if (!_isDisposed) notifyListeners();
 
     final persistenceTasks = <Future<void>>[
       _repository.saveSettings(_settings),
@@ -2750,8 +3409,8 @@ class QuranReaderController extends ChangeNotifier {
       _repository.saveDailyTargetPages(_dailyTargetPages),
       _repository.saveDailyProgressState(_dailyProgressState),
       _repository.saveReadingHistory(_readingHistory),
-      _repository.savePageNotes(_pageNotes),
-      _repository.saveFavoritePages(_favoritePages),
+      _repository.savePageNotesByEdition(_editionPageNotes),
+      _repository.saveFavoritePagesByEdition(_editionFavoritePages),
       _repository.saveBookmarks(_bookmarks),
       _repository.saveHifzRevisionEntries(_hifzReviewEntries),
       _repository.saveAudioChapterId(snapshot.audioState.chapterId),
@@ -2770,12 +3429,14 @@ class QuranReaderController extends ChangeNotifier {
       );
     }
     await Future.wait(persistenceTasks);
+    return isCurrent();
   }
 
-  void _scheduleCloudSyncPush() {
+  void _scheduleCloudSyncPush({bool markDirty = true}) {
+    if (_isDisposed || _isLoading || _suppressSyncDirty) return;
+    if (markDirty) _markReaderSyncDirty();
     if (_experienceSettings.syncMode != ReaderSyncMode.cloudReady ||
-        _syncClientId.trim().isEmpty ||
-        adminSyncBaseUrl.trim().isEmpty) {
+        !_readerSyncDirty || _syncClientId.isEmpty || _syncBaseUrl.isEmpty) {
       return;
     }
     _cloudSyncTimer?.cancel();
@@ -2794,7 +3455,7 @@ class QuranReaderController extends ChangeNotifier {
         .then((_) {
       _rebuildNavigationCaches();
       _refreshCurrentCaches();
-      _publishContentChange();
+      _publishContentChange(localChange: false);
       if (!_isDisposed) {
         notifyListeners();
       }
@@ -2822,8 +3483,7 @@ class QuranReaderController extends ChangeNotifier {
     final fallbackEdition = enabledEditions.isNotEmpty
         ? enabledEditions.first
         : _repository.resolveSupportedEdition(_settings.mushafEdition);
-    final nextPreferImageMode =
-        _repository.hasAssetsForEdition(fallbackEdition);
+    const nextPreferImageMode = true;
     final targetPage = _repository.navigationPageForCurrentReferenceInEdition(
       _currentPageNumber,
       sourceEdition: _settings.mushafEdition,
@@ -2835,7 +3495,10 @@ class QuranReaderController extends ChangeNotifier {
       mushafEdition: fallbackEdition,
       preferImageMode: nextPreferImageMode,
     );
+    _markReaderSyncDirty();
     await _repository.setMushafEdition(fallbackEdition);
+    _activateEditionAnnotations();
+    _rebuildContentCaches();
     _currentPageNumber = _repository.clampPage(
       targetPage,
       preferImageMode: _settings.preferImageMode,
@@ -2854,7 +3517,7 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> _refreshOfflinePackAvailability() async {
-    const editions = MushafEdition.values;
+    final editions = MushafEdition.values;
     final checks = await Future.wait(
       editions.map((edition) async {
         final hasOfflinePack =
@@ -2869,6 +3532,7 @@ class QuranReaderController extends ChangeNotifier {
       ...bundledEditions,
       ...checks.where((entry) => entry.value).map((entry) => entry.key),
     };
+    _partialOfflinePacks = await _repository.loadPartialOfflinePacks();
   }
 
   void _refreshZipPacksInBackground() {

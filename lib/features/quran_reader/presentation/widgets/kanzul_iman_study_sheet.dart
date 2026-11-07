@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../../../app/app_theme.dart';
 import '../../../../core/constants/quran_constants.dart';
 import '../../domain/models/quran_page.dart';
@@ -155,14 +157,14 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Kanzul Iman study mode',
+                        tr(context, 'Kanzul Iman study mode'),
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Read the Quran scan alongside Kanzul Iman translation and tafsir presentation.',
+                        tr(context, 'Read the Quran scan alongside Kanzul Iman translation and tafsir presentation.'),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -173,7 +175,7 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                         runSpacing: 8,
                         children: _StudyMode.values.map((mode) {
                           return ChoiceChip(
-                            label: Text(mode.label),
+                            label: Text(tr(context, mode.label)),
                             selected: _mode == mode,
                             onSelected: (_) {
                               setState(() {
@@ -195,7 +197,7 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                             )
                                 .map((edition) {
                               return ChoiceChip(
-                                label: Text(edition.label),
+                                label: Text(tr(context, edition.label)),
                                 selected: edition == _studyEdition,
                                 onSelected: (_) {
                                   setState(() {
@@ -206,8 +208,9 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                             }),
                             ActionChip(
                               avatar: const Icon(Icons.compare_arrows_rounded),
-                              label: const Text('Use in reader'),
+                              label: Text(tr(context, 'Use in reader')),
                               onPressed: () async {
+                                final confirmation = tr(context, '${_studyEdition.label} is now active in the reader.');
                                 final messenger = ScaffoldMessenger.of(context);
                                 await widget.controller
                                     .selectMushafEdition(_studyEdition);
@@ -217,7 +220,7 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                                 messenger.showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      '${_studyEdition.label} is now active in the reader.',
+                                      confirmation,
                                     ),
                                   ),
                                 );
@@ -238,7 +241,7 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                           child: _StudyPagePanel(
                             title: _studyEdition.label,
                             subtitle:
-                                '${_studyEdition.companyLabel} - Page ${quranPage.number}',
+                                tr(context, '${_studyEdition.companyLabel} - Page ${quranPage.number}'),
                             page: quranPage,
                             settings: readerSettings,
                           ),
@@ -247,9 +250,9 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                       if (showKanzul)
                         Expanded(
                           child: _StudyPagePanel(
-                            title: 'Kanzul Iman',
+                            title: tr(context, 'Kanzul Iman'),
                             subtitle:
-                                'Translation and tafsir - Page ${kanzulPage.number}',
+                                tr(context, 'Translation and tafsir - Page ${kanzulPage.number}'),
                             page: kanzulPage,
                             settings: readerSettings,
                           ),
@@ -261,16 +264,16 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                     _StudyPagePanel(
                       title: _studyEdition.label,
                       subtitle:
-                          '${_studyEdition.companyLabel} - Page ${quranPage.number}',
+                          tr(context, '${_studyEdition.companyLabel} - Page ${quranPage.number}'),
                       page: quranPage,
                       settings: readerSettings,
                     ),
                   if (showQuran && showKanzul) const SizedBox(height: 14),
                   if (showKanzul)
                     _StudyPagePanel(
-                      title: 'Kanzul Iman',
+                      title: tr(context, 'Kanzul Iman'),
                       subtitle:
-                          'Translation and tafsir - Page ${kanzulPage.number}',
+                          tr(context, 'Translation and tafsir - Page ${kanzulPage.number}'),
                       page: kanzulPage,
                       settings: readerSettings,
                     ),
@@ -281,16 +284,16 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Study notes',
+                        tr(context, 'Study notes'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        currentInsight?.translationUr.isNotEmpty == true
+                        tr(context, currentInsight?.translationUr.isNotEmpty == true
                             ? currentInsight!.translationUr
-                            : 'Bundled Urdu translation for this page is not available yet, but the scanned Kanzul Iman page above remains available for study.',
+                            : 'Bundled Urdu translation for this page is not available yet, but the scanned Kanzul Iman page above remains available for study.'),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                           height: 1.55,
@@ -332,14 +335,14 @@ class _StudyPagePanel extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            title,
+            tr(context, title),
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            subtitle,
+            tr(context, subtitle),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),

@@ -136,6 +136,7 @@ class DualPageSpread extends StatelessWidget {
                         ),
                       ),
                     Row(
+                      textDirection: TextDirection.ltr,
                       children: [
                         SizedBox(
                           width: pageWidth,

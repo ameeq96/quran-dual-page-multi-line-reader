@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../../../app/app_theme.dart';
 import '../../domain/models/quran_juz_navigation_entry.dart';
 import '../../domain/models/quran_surah_navigation_entry.dart';
@@ -42,18 +44,25 @@ class QuranSearchScreen extends StatelessWidget {
         builder: (context) {
           return Scaffold(
             resizeToAvoidBottomInset: false,
-            body: SafeArea(
-              child: ReaderSearchContent(
-                surahs: surahs,
-                juzs: juzs,
-                initialTab: initialTab,
-                showHandle: false,
-                showTabs: showTabs,
-                applyKeyboardInset: false,
-                surahPageResolver: surahPageResolver,
-                juzPageResolver: juzPageResolver,
-                surahSearch: surahSearch,
-                juzSearch: juzSearch,
+            appBar: AppBar(title: Text(tr(context, title))),
+            body: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 920),
+                child: SafeArea(
+                  child: ReaderSearchContent(
+                    surahs: surahs,
+                    juzs: juzs,
+                    initialTab: initialTab,
+                    showHandle: false,
+                    showTabs: showTabs,
+                    applyKeyboardInset: false,
+                    surahPageResolver: surahPageResolver,
+                    juzPageResolver: juzPageResolver,
+                    surahSearch: surahSearch,
+                    juzSearch: juzSearch,
+                  ),
+                ),
               ),
             ),
           );

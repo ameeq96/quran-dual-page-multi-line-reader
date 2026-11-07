@@ -210,6 +210,7 @@ class QuranAdminConfigService {
         if (edition == null) {
           continue;
         }
+        MushafEdition.register(edition.storageValue, label: item['label'] as String?);
         editions[edition] = ReaderAdminEdition(
           edition: edition,
           label: (item['label'] as String? ?? '').trim(),
@@ -288,7 +289,7 @@ class QuranAdminConfigService {
       '16_line' || '16_lines' || 'lines16' => MushafEdition.lines16,
       '17_line' || '17_lines' || 'lines17' => MushafEdition.lines17,
       'kanzul_iman' || 'kanzuliman' => MushafEdition.kanzulIman,
-      _ => null,
+      _ => MushafEdition.register(normalized),
     };
   }
 

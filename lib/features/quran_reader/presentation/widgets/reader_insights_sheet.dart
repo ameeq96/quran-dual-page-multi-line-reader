@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+import 'package:flutter/scheduler.dart';
+
 import '../../../../app/app_theme.dart';
 import '../../domain/models/reader_bookmark.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
 import 'reader_skeleton.dart';
 import 'reader_sheet_frame.dart';
+
+enum _StudySection { translation, tafsir, notes }
 
 enum _TranslationPane {
   english('English'),
@@ -93,13 +98,18 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
   late Future<String?> _chapterInfoFuture;
   late Future<String?> _tafsirFuture;
   late final TextEditingController _noteController;
+  late String _studyContextKey;
+  final Map<String, String> _noteDrafts = <String, String>{};
+  bool _contextRefreshScheduled = false;
   late double _dailyTargetDraft;
   String _selectedBookmarkFolder = 'General';
   _TranslationPane _pane = _TranslationPane.english;
+  _StudySection _section = _StudySection.translation;
 
   @override
   void initState() {
     super.initState();
+    _studyContextKey = _currentStudyContextKey;
     _chapterInfoFuture = widget.controller.loadCurrentChapterInfo();
     _tafsirFuture = widget.controller.loadCurrentTafsirExcerpt();
     _noteController = TextEditingController(
@@ -108,10 +118,81 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
               '',
     );
     _dailyTargetDraft = widget.controller.dailyTargetPages.toDouble();
+    _listenForContextChanges(widget.controller);
+  }
+
+  String get _currentStudyContextKey {
+    final controller = widget.controller;
+    final settings = controller.settings;
+    return '${settings.mushafEdition.storageValue}|${settings.preferImageMode}|${controller.currentPageNumber}';
+  }
+
+  void _listenForContextChanges(QuranReaderController controller) {
+    controller.pageListenable.addListener(_handleStudyContextChanged);
+    controller.settingsListenable.addListener(_handleStudyContextChanged);
+  }
+
+  void _stopListeningForContextChanges(QuranReaderController controller) {
+    controller.pageListenable.removeListener(_handleStudyContextChanged);
+    controller.settingsListenable.removeListener(_handleStudyContextChanged);
+  }
+
+  void _handleStudyContextChanged() {
+    if (!mounted) return;
+    if (WidgetsBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      if (_contextRefreshScheduled) return;
+      _contextRefreshScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _contextRefreshScheduled = false;
+        _refreshStudyContext();
+      });
+      return;
+    }
+    _refreshStudyContext();
+  }
+
+  void _refreshStudyContext() {
+    if (!mounted) return;
+    final nextKey = _currentStudyContextKey;
+    if (nextKey == _studyContextKey) return;
+    _noteDrafts[_studyContextKey] = _noteController.text;
+    setState(() {
+      _studyContextKey = nextKey;
+      _chapterInfoFuture = widget.controller.loadCurrentChapterInfo();
+      _tafsirFuture = widget.controller.loadCurrentTafsirExcerpt();
+      _noteController.text = _noteDrafts[nextKey] ??
+          widget.controller.noteForPage(widget.controller.currentPageNumber) ?? '';
+    });
+  }
+
+  Future<void> _saveCurrentNote() async {
+    if (_studyContextKey != _currentStudyContextKey) {
+      _handleStudyContextChanged();
+      return;
+    }
+    _noteDrafts[_studyContextKey] = _noteController.text;
+    await widget.controller.saveNoteForCurrentPage(_noteController.text);
+  }
+
+  @override
+  void didUpdateWidget(covariant ReaderInsightsContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      _stopListeningForContextChanges(oldWidget.controller);
+      _noteDrafts.clear();
+      _studyContextKey = _currentStudyContextKey;
+      _chapterInfoFuture = widget.controller.loadCurrentChapterInfo();
+      _tafsirFuture = widget.controller.loadCurrentTafsirExcerpt();
+      _noteController.text =
+          widget.controller.noteForPage(widget.controller.currentPageNumber) ?? '';
+      _dailyTargetDraft = widget.controller.dailyTargetPages.toDouble();
+      _listenForContextChanges(widget.controller);
+    }
   }
 
   @override
   void dispose() {
+    _stopListeningForContextChanges(widget.controller);
     _noteController.dispose();
     super.dispose();
   }
@@ -164,69 +245,26 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                   ),
                   SizedBox(height: sectionGap),
                 ],
+                _SectionCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(tr(context, chapter?.nameSimple ?? 'Reading insights'), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  Text(tr(context, controller.studyScopeLabel), style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  if (controller.isStudySurahScoped) ...[const SizedBox(height: 8), Text(tr(context, controller.scanMappingNotice), style: theme.textTheme.bodySmall)],
+                ])),
+                const SizedBox(height: 14),
+                SegmentedButton<_StudySection>(showSelectedIcon: false, segments: [
+                  ButtonSegment(value: _StudySection.translation, label: Text(tr(context, 'Translation'))),
+                  ButtonSegment(value: _StudySection.tafsir, label: Text(tr(context, 'Tafsir'))),
+                  ButtonSegment(value: _StudySection.notes, label: Text(tr(context, 'Notes'))),
+                ], selected: {_section}, onSelectionChanged: (value) => setState(() { _section = value.first; })),
+                const SizedBox(height: 14),
+                if (_section == _StudySection.notes) ...[
                 _SectionCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        chapter?.nameSimple ?? 'Reading insights',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        chapter == null
-                            ? 'Page ${controller.currentPageNumber}'
-                            : '${chapter.nameArabic} | Page ${controller.currentPageNumber}',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: [
-                          _StatPill(
-                            label: 'Khatam',
-                            value:
-                                '${(controller.khatamProgress * 100).round()}%',
-                          ),
-                          _StatPill(
-                            label: 'Daily',
-                            value: controller.dailyProgressSummaryLabel,
-                          ),
-                          _StatPill(
-                            label: 'Streak',
-                            value: '${controller.readingStreakCount} days',
-                          ),
-                          _StatPill(
-                            label: 'Remaining',
-                            value: '${controller.remainingPages} pages',
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        controller.dailyProgressStatusLabel,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: controller.isDailyTargetComplete
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: sectionGap),
-                _SectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Current page actions',
+                        tr(context, 'Current page actions'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
@@ -246,9 +284,9 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                                   : Icons.favorite_border_rounded,
                             ),
                             label: Text(
-                              controller.isCurrentPageFavorite
+                              tr(context, controller.isCurrentPageFavorite
                                   ? 'Favorited page'
-                                  : 'Favorite page',
+                                  : 'Favorite page'),
                             ),
                           ),
                           FilledButton.tonalIcon(
@@ -263,9 +301,9 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                                   : Icons.bookmark_add_outlined,
                             ),
                             label: Text(
-                              controller.isCurrentPageBookmarked
+                              tr(context, controller.isCurrentPageBookmarked
                                   ? 'Bookmarked page'
-                                  : 'Bookmark page',
+                                  : 'Bookmark page'),
                             ),
                           ),
                           if (controller.hasActiveAudioSelection)
@@ -275,18 +313,18 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                                 size: 18,
                               ),
                               label: Text(
-                                controller.hasAudioResumePoint
+                                tr(context, controller.hasAudioResumePoint
                                     ? 'Resume audio at ${_formatMillis(controller.audioResumePositionMillis)}'
-                                    : 'Audio ready for this recitation',
+                                    : 'Audio ready for this recitation'),
                               ),
                             ),
                         ],
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        currentBookmark == null
+                        tr(context, currentBookmark == null
                             ? 'Bookmark shelf'
-                            : 'Saved in ${currentBookmark.folder}',
+                            : 'Saved in ${currentBookmark.folder}'),
                         style: theme.textTheme.labelLarge,
                       ),
                       const SizedBox(height: 8),
@@ -314,14 +352,14 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Daily reading target',
+                        tr(context, 'Daily reading target'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Set your target, then use the khatam plans below to pace your reading.',
+                        tr(context, 'Set your target, then use the khatam plans below to pace your reading.'),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -331,7 +369,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                         min: 1,
                         max: 40,
                         divisions: 39,
-                        label: '${_dailyTargetDraft.round()} pages',
+                        label: tr(context, '${_dailyTargetDraft.round()} pages'),
                         onChanged: (value) {
                           setState(() {
                             _dailyTargetDraft = value;
@@ -362,7 +400,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Mushaf markers',
+                          tr(context, controller.isStudySurahScoped ? 'Surah markers' : 'Mushaf markers'),
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -373,22 +411,22 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                           runSpacing: 8,
                           children: [
                             ...insight.juzNumbers.map(
-                              (value) => _MarkerChip(label: 'Juz $value'),
+                              (value) => _MarkerChip(label: tr(context, 'Juz $value')),
                             ),
                             ...insight.hizbNumbers.map(
-                              (value) => _MarkerChip(label: 'Hizb $value'),
+                              (value) => _MarkerChip(label: tr(context, 'Hizb $value')),
                             ),
                             ...insight.rubElHizbNumbers.map(
-                              (value) => _MarkerChip(label: 'Rub $value'),
+                              (value) => _MarkerChip(label: tr(context, 'Rub $value')),
                             ),
                             ...insight.rukuNumbers.map(
-                              (value) => _MarkerChip(label: 'Ruku $value'),
+                              (value) => _MarkerChip(label: tr(context, 'Ruku $value')),
                             ),
                             ...insight.manzilNumbers.map(
-                              (value) => _MarkerChip(label: 'Manzil $value'),
+                              (value) => _MarkerChip(label: tr(context, 'Manzil $value')),
                             ),
                             if (insight.hasSajdah)
-                              const _MarkerChip(label: 'Sajdah ayah'),
+                              _MarkerChip(label: tr(context, 'Sajdah ayah')),
                           ],
                         ),
                       ],
@@ -400,21 +438,21 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Saved pages',
+                        tr(context, 'Saved pages'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Bookmarks and favorite pages stay available across sessions.',
+                        tr(context, 'Bookmarks and favorite pages stay available across sessions.'),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                       const SizedBox(height: 12),
                       _SavedGroup(
-                        title: 'Bookmarks',
+                        title: tr(context, 'Bookmarks'),
                         emptyLabel: 'No bookmarks added yet.',
                         children: controller.bookmarksByFolder.entries
                             .where((entry) => entry.value.isNotEmpty)
@@ -429,11 +467,11 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                       ),
                       const SizedBox(height: 12),
                       _SavedGroup(
-                        title: 'Favorites',
+                        title: tr(context, 'Favorites'),
                         emptyLabel: 'No favorite pages yet.',
                         children: controller.favoritePages.map((pageNumber) {
                           return InputChip(
-                            label: Text('Page $pageNumber'),
+                            label: Text(tr(context, 'Page $pageNumber')),
                             onPressed: () => _openPage(pageNumber),
                             onDeleted: () {
                               controller.toggleFavoritePage(pageNumber);
@@ -445,12 +483,14 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                   ),
                 ),
                 const SizedBox(height: 14),
+                ],
+                if (_section == _StudySection.translation) ...[
                 _SectionCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Translation',
+                        tr(context, controller.isStudySurahScoped ? 'Surah translation' : 'Page translation'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
@@ -461,7 +501,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                             .map(
                               (value) => ButtonSegment<_TranslationPane>(
                                 value: value,
-                                label: Text(value.label),
+                                label: Text(tr(context, value.label)),
                               ),
                             )
                             .toList(growable: false),
@@ -474,31 +514,33 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                       ),
                       const SizedBox(height: 12),
                       SelectableText(
-                        translation.isEmpty
-                            ? 'Translation is unavailable for this page.'
-                            : translation,
+                        translation.isEmpty ? tr(context, 'Translation is unavailable for this selection.') : translation,
                         style: theme.textTheme.bodyMedium,
                       ),
                     ],
                   ),
                 ),
                 SizedBox(height: sectionGap),
+                ],
+                if (_section == _StudySection.tafsir) ...[
                 _FutureTextSection(
-                  title: 'Surah overview',
+                  title: tr(context, 'Surah overview'),
                   future: _chapterInfoFuture,
                 ),
                 SizedBox(height: sectionGap),
                 _FutureTextSection(
-                  title: 'Tafsir excerpt',
+                  title: tr(context, 'Tafsir excerpt'),
                   future: _tafsirFuture,
                 ),
                 SizedBox(height: sectionGap),
+                ],
+                if (_section == _StudySection.notes) ...[
                 _SectionCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Page note',
+                        tr(context, 'Page note'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
@@ -508,20 +550,17 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                         controller: _noteController,
                         minLines: 3,
                         maxLines: 5,
-                        decoration: const InputDecoration(
-                          hintText: 'Add a personal note for this page',
+                        decoration: InputDecoration(
+                          hintText: tr(context, 'Add a personal note for this page'),
                         ),
                       ),
                       const SizedBox(height: 12),
                       Align(
                         alignment: Alignment.centerRight,
                         child: FilledButton.icon(
-                          onPressed: () {
-                            widget.controller
-                                .saveNoteForCurrentPage(_noteController.text);
-                          },
+                          onPressed: _saveCurrentNote,
                           icon: const Icon(Icons.edit_note_rounded),
-                          label: const Text('Save note'),
+                          label: Text(tr(context, 'Save note')),
                         ),
                       ),
                     ],
@@ -533,7 +572,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Recent pages',
+                        tr(context, 'Recent pages'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
@@ -544,7 +583,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                         runSpacing: 8,
                         children: controller.readingHistory.map((entry) {
                           return ActionChip(
-                            label: Text('Page ${entry.pageNumber}'),
+                            label: Text(tr(context, 'Page ${entry.pageNumber}')),
                             onPressed: () => _openPage(entry.pageNumber),
                           );
                         }).toList(growable: false),
@@ -552,6 +591,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                     ],
                   ),
                 ),
+                ],
               ],
             ),
           ),
@@ -594,7 +634,7 @@ class _PlanChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Chip(
       label: Text(
-        '$days-day plan: $pagesPerDay pages/day',
+        tr(context, '$days-day plan: $pagesPerDay pages/day'),
       ),
     );
   }
@@ -619,7 +659,7 @@ class _SavedGroup extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          title,
+          tr(context, title),
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w700,
           ),
@@ -627,7 +667,7 @@ class _SavedGroup extends StatelessWidget {
         const SizedBox(height: 8),
         if (children.isEmpty)
           Text(
-            emptyLabel,
+            tr(context, emptyLabel),
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -719,7 +759,7 @@ class _FutureTextSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            title,
+            tr(context, title),
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
             ),
@@ -739,7 +779,7 @@ class _FutureTextSection extends StatelessWidget {
               final text = snapshot.data;
               if (text == null || text.trim().isEmpty) {
                 return Text(
-                  'No additional content is available right now.',
+                  tr(context, 'No additional content is available right now.'),
                   style: theme.textTheme.bodyMedium,
                 );
               }
@@ -782,50 +822,6 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-class _StatPill extends StatelessWidget {
-  const _StatPill({
-    required this.label,
-    required this.value,
-  });
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _MarkerChip extends StatelessWidget {
   const _MarkerChip({
     required this.label,
@@ -836,7 +832,7 @@ class _MarkerChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Chip(
-      label: Text(label),
+      label: Text(tr(context, label)),
       visualDensity: VisualDensity.compact,
     );
   }

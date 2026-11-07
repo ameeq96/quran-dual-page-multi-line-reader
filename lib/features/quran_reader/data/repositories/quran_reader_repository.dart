@@ -96,17 +96,25 @@ class QuranReaderRepository {
         settings = settings.copyWith(mushafEdition: enabledEditions.first);
       }
     }
-    final hasSelectedEditionAssets =
-        _assetResolver.hasAssetsForEdition(settings.mushafEdition);
-    final normalizedPreferImageMode = hasSelectedEditionAssets;
-    if (settings.preferImageMode != normalizedPreferImageMode) {
-      settings = settings.copyWith(
-        preferImageMode: normalizedPreferImageMode,
+    _assetResolver.setSelectedEdition(settings.mushafEdition);
+    var initialPageNumber = await initialPageNumberFuture;
+    if (!settings.preferImageMode) {
+      // Materialize legacy scopes before changing the saved reading mode.
+      await Future.wait<void>([
+        _preferences.loadReadingHistory().then(_preferences.saveReadingHistory),
+        _preferences.loadPageNotesByEdition().then(_preferences.savePageNotesByEdition),
+        _preferences.loadFavoritePagesByEdition().then(_preferences.saveFavoritePagesByEdition),
+        _preferences.loadBookmarks().then(_preferences.saveBookmarks),
+        _preferences.loadHifzRevisionEntries().then(_preferences.saveHifzRevisionEntries),
+      ]);
+      initialPageNumber = navigationPageForStandardPage(
+        initialPageNumber,
+        preferImageMode: true,
       );
+      settings = settings.copyWith(preferImageMode: true);
+      await _preferences.saveLastPageNumber(initialPageNumber);
       await _preferences.saveSettings(settings);
     }
-    _assetResolver.setSelectedEdition(settings.mushafEdition);
-    final initialPageNumber = await initialPageNumberFuture;
     return ReaderLaunchState(
       initialPageNumber: clampPage(
         initialPageNumber,
@@ -208,15 +216,26 @@ class QuranReaderRepository {
   Future<void> downloadOfflinePack(
     MushafEdition edition, {
     void Function(double progress)? onProgress,
+    void Function(QuranPackTransferProgress)? onTransferProgress,
     CancelToken? cancelToken,
   }) async {
     await _assetResolver.downloadOfflinePack(
       edition,
       onProgress: onProgress,
+      onTransferProgress: onTransferProgress,
       cancelToken: cancelToken,
     );
     _clearResolvedPageCaches();
   }
+
+  Future<Map<MushafEdition, QuranPartialAssetPack>> loadPartialOfflinePacks() =>
+      _assetResolver.loadPartialOfflinePacks();
+
+  Future<void> discardPartialOfflinePack(MushafEdition edition) =>
+      _assetResolver.discardPartialOfflinePack(edition);
+
+  Future<QuranPackStorageInfo> offlinePackStorageInfo() =>
+      _assetResolver.offlinePackStorageInfo();
 
   Future<void> removeOfflinePack(MushafEdition edition) async {
     await _assetResolver.removeOfflinePack(edition);
@@ -273,104 +292,35 @@ class QuranReaderRepository {
     required MushafEdition targetEdition,
     required bool preferImageMode,
   }) {
-    if (!preferImageMode ||
-        _assetResolver.imagePageCountForEdition(sourceEdition) == 0 ||
-        _assetResolver.imagePageCountForEdition(targetEdition) == 0) {
-      final standardPage = standardPageForNavigationPage(
-        currentPageNumber,
-        preferImageMode: preferImageMode,
-      );
-      return navigationPageForStandardPageInEdition(
-        standardPage,
-        edition: targetEdition,
-      );
-    }
-
-    final sourceEntries = _navigationDataSource.surahsForEdition(sourceEdition);
-    final targetEntries = _navigationDataSource.surahsForEdition(targetEdition);
-    if (sourceEntries.isEmpty || targetEntries.isEmpty) {
-      final standardPage = standardPageForNavigationPage(
-        currentPageNumber,
-        preferImageMode: true,
-      );
-      return navigationPageForStandardPageInEdition(
-        standardPage,
-        edition: targetEdition,
-      );
-    }
-
-    final sourceSurah = _surahEntryForImagePage(
-      currentPageNumber,
-      edition: sourceEdition,
-    );
-    if (sourceSurah == null) {
-      final standardPage = standardPageForNavigationPage(
-        currentPageNumber,
-        preferImageMode: true,
-      );
-      return navigationPageForStandardPageInEdition(
-        standardPage,
-        edition: targetEdition,
-      );
-    }
-
-    final sourceIndex =
-        sourceEntries.indexWhere((entry) => entry.id == sourceSurah.id);
-    final targetIndex =
-        targetEntries.indexWhere((entry) => entry.id == sourceSurah.id);
-    if (sourceIndex < 0 || targetIndex < 0) {
-      final standardPage = standardPageForNavigationPage(
-        currentPageNumber,
-        preferImageMode: true,
-      );
-      return navigationPageForStandardPageInEdition(
-        standardPage,
-        edition: targetEdition,
-      );
-    }
-
-    final sourceStartPage = _navigationAnchorPageForImportedPage(
-      sourceEdition,
-      sourceEntries[sourceIndex].tajScanStartPage,
-    );
-    final sourceEndPage = sourceIndex + 1 < sourceEntries.length
-        ? _navigationAnchorPageForImportedPage(
-              sourceEdition,
-              sourceEntries[sourceIndex + 1].tajScanStartPage,
-            ) -
-            1
-        : totalPagesForEdition(sourceEdition);
-    final normalizedSourcePage = QuranConstants.clampPage(
-      currentPageNumber,
-      totalPages: totalPagesForEdition(sourceEdition),
-    );
-    final sourceOffset =
-        normalizedSourcePage.clamp(sourceStartPage, sourceEndPage).toInt() -
-            sourceStartPage;
-
-    final targetStartPage = _navigationAnchorPageForImportedPage(
-      targetEdition,
-      targetEntries[targetIndex].tajScanStartPage,
-    );
-    final targetEndPage = targetIndex + 1 < targetEntries.length
-        ? _navigationAnchorPageForImportedPage(
-              targetEdition,
-              targetEntries[targetIndex + 1].tajScanStartPage,
-            ) -
-            1
-        : totalPagesForEdition(targetEdition);
-
-    final targetPage = targetStartPage + sourceOffset;
-    final clampedTargetPage = targetPage > targetEndPage
-        ? targetEndPage
-        : targetPage < targetStartPage
-            ? targetStartPage
-            : targetPage;
-    return QuranConstants.clampPage(
-      clampedTargetPage,
-      totalPages: totalPagesForEdition(targetEdition),
-    );
+    if (sourceEdition == targetEdition) return currentPageNumber;
+    final sourceSurah = preferImageMode
+        ? _surahEntryForImagePage(currentPageNumber, edition: sourceEdition)
+        : _standardSurahForPage(currentPageNumber);
+    if (sourceSurah == null) return 1;
+    return navigationPageForChapter(sourceSurah.id, edition: targetEdition);
   }
+
+  int navigationPageForChapter(int chapterId, {MushafEdition? edition}) {
+    final selected = edition ?? _assetResolver.selectedEdition;
+    for (final surah in _navigationDataSource.surahsForEdition(selected)) {
+      if (surah.id == chapterId) {
+        return _navigationAnchorPageForImportedPage(selected, surah.tajScanStartPage);
+      }
+    }
+    return 1;
+  }
+
+  QuranSurahNavigationEntry? _standardSurahForPage(int standardPage) {
+    QuranSurahNavigationEntry? match;
+    for (final surah in standardSurahs) {
+      if (surah.standardStartPage > standardPage) break;
+      match = surah;
+    }
+    return match;
+  }
+
+  int? canonicalPageForVerse(String verseKey) =>
+      _pageInsightsDataSource.canonicalPageForVerse(verseKey);
 
   QuranPage pageForCurrentReferenceInEdition(
     int currentPageNumber, {
@@ -397,6 +347,7 @@ class QuranReaderRepository {
     String category, {
     required bool preferImageMode,
   }) {
+    if (preferImageMode) return const [];
     final markersById = <int, QuranNavigationMarker>{};
 
     for (final page in _pageInsightsDataSource.pages) {
@@ -655,11 +606,11 @@ class QuranReaderRepository {
     int pageNumber, {
     required bool preferImageMode,
   }) {
-    final standardPage = standardPageForNavigationPage(
-      pageNumber,
-      preferImageMode: preferImageMode,
-    );
-    return _pageInsightsDataSource.pageForNumber(standardPage);
+    if (preferImageMode) {
+      final surah = _surahEntryForImagePage(pageNumber, edition: _assetResolver.selectedEdition);
+      return surah == null ? null : _pageInsightsDataSource.insightForChapter(surah.id);
+    }
+    return _pageInsightsDataSource.pageForNumber(pageNumber);
   }
 
   QuranChapterSummary? chapterSummaryForId(int chapterId) {
@@ -866,7 +817,19 @@ class QuranReaderRepository {
       }
     }
 
-    final frozenResults = List<QuranSearchResult>.unmodifiable(results);
+    final frozenResults = List<QuranSearchResult>.unmodifiable(results.map((result) {
+      if (!preferImageMode) return result;
+      final chapterId = int.tryParse(result.verseKey?.split(':').first ?? '');
+      return QuranSearchResult(
+        pageNumber: chapterId == null ? result.pageNumber : navigationPageForChapter(chapterId),
+        referencePageNumber: result.referencePageNumber,
+        title: result.title,
+        snippet: result.snippet,
+        category: result.category,
+        verseKey: result.verseKey,
+        navigationNote: 'Opens the Surah start. Exact verse-to-scan-page alignment is unavailable.',
+      );
+    }));
     _storeInBoundedCache(
       _pageSearchCache,
       cacheKey,
@@ -968,7 +931,19 @@ class QuranReaderRepository {
       }
     }
 
-    final frozenResults = List<QuranSearchResult>.unmodifiable(results);
+    final frozenResults = List<QuranSearchResult>.unmodifiable(results.map((result) {
+      if (!preferImageMode) return result;
+      final chapterId = int.tryParse(result.verseKey?.split(':').first ?? '');
+      return QuranSearchResult(
+        pageNumber: chapterId == null ? result.pageNumber : navigationPageForChapter(chapterId),
+        referencePageNumber: result.referencePageNumber,
+        title: result.title,
+        snippet: result.snippet,
+        category: result.category,
+        verseKey: result.verseKey,
+        navigationNote: 'Opens the Surah start. Exact verse-to-scan-page alignment is unavailable.',
+      );
+    }));
     _storeInBoundedCache(
       _ayahSearchCache,
       cacheKey,
@@ -1044,11 +1019,8 @@ class QuranReaderRepository {
     int pageNumber, {
     required bool preferImageMode,
   }) {
-    final standardPage = standardPageForNavigationPage(
-      pageNumber,
-      preferImageMode: preferImageMode,
-    );
-    return _remoteContentService.tafsirExcerptForPage(standardPage);
+    if (preferImageMode) return Future<String?>.value(null);
+    return _remoteContentService.tafsirExcerptForPage(pageNumber);
   }
 
   Future<void> saveLastPageNumber(
@@ -1097,6 +1069,12 @@ class QuranReaderRepository {
 
   Future<Map<int, String>> loadPageNotes() => _preferences.loadPageNotes();
 
+  Future<Map<String, Map<int, String>>> loadPageNotesByEdition() =>
+      _preferences.loadPageNotesByEdition();
+
+  Future<void> savePageNotesByEdition(Map<String, Map<int, String>> notes) =>
+      _preferences.savePageNotesByEdition(notes);
+
   Future<void> savePageNotes(Map<int, String> notes) {
     return _preferences.savePageNotes(notes);
   }
@@ -1109,6 +1087,12 @@ class QuranReaderRepository {
   }
 
   Future<List<int>> loadFavoritePages() => _preferences.loadFavoritePages();
+
+  Future<Map<String, List<int>>> loadFavoritePagesByEdition() =>
+      _preferences.loadFavoritePagesByEdition();
+
+  Future<void> saveFavoritePagesByEdition(Map<String, List<int>> pages) =>
+      _preferences.saveFavoritePagesByEdition(pages);
 
   Future<void> saveFavoritePages(List<int> pages) {
     return _preferences.saveFavoritePages(pages);
@@ -1263,7 +1247,7 @@ class QuranReaderRepository {
       '16_line' || '16_lines' || 'lines16' => MushafEdition.lines16,
       '17_line' || '17_lines' || 'lines17' => MushafEdition.lines17,
       'kanzul_iman' || 'kanzuliman' => MushafEdition.kanzulIman,
-      _ => null,
+      _ => MushafEdition.register(normalized),
     };
   }
 
@@ -1372,10 +1356,12 @@ class QuranReaderRepository {
       number: pageNumber,
       isLeftPage: isLeftPage,
       assetPath: assetPath,
-      lines: pageText?.lines ?? const [],
+      lines: preferImageMode ? const [] : pageText?.lines ?? const [],
       contentType: assetPath != null
           ? QuranPageContentType.image
-          : QuranPageContentType.placeholder,
+          : !preferImageMode && (pageText?.lines.isNotEmpty ?? false)
+              ? QuranPageContentType.text
+              : QuranPageContentType.placeholder,
     );
     _storeInBoundedCache(
       _pageCache,
@@ -1419,195 +1405,23 @@ class QuranReaderRepository {
   }
 
   Map<int, int> _buildStandardToNavigationPageCache(MushafEdition edition) {
-    final imagePageCount = _assetResolver.imagePageCountForEdition(edition);
-    if (imagePageCount == 0) {
-      return <int, int>{
-        for (var page = 1; page <= _standardTotalPages; page++) page: page,
-      };
-    }
-
-    final anchors = _buildNavigationAnchorsForEdition(edition);
-    if (anchors.length >= 2) {
-      return _buildAnchorStandardToNavigationPageCache(
-        edition: edition,
-        anchors: anchors,
-      );
-    }
-
-    return _buildRatioStandardToNavigationPageCache(edition);
+    return {for (var page = 1; page <= _standardTotalPages; page++)
+      page: navigationPageForChapter(
+        _pageInsightsDataSource.pageForNumber(page)?.primaryChapterId ??
+            _standardSurahForPage(page)?.id ?? 1, edition: edition)};
   }
 
   Map<int, int> _buildNavigationToStandardPageCache(MushafEdition edition) {
-    final forwardMap = _standardToNavigationPageCache.putIfAbsent(
-      _editionNavigationCacheKey(edition),
-      () => _buildStandardToNavigationPageCache(edition),
-    );
-    final totalPages = totalPagesForEdition(edition);
-    final inverseMap = <int, int>{};
-    var currentStandardPage = 1;
-
-    for (var navigationPage = 1;
-        navigationPage <= totalPages;
-        navigationPage++) {
-      while (currentStandardPage < _standardTotalPages &&
-          (forwardMap[currentStandardPage + 1] ?? _standardTotalPages) <=
-              navigationPage) {
-        currentStandardPage += 1;
-      }
-      inverseMap[navigationPage] = currentStandardPage;
-    }
-
-    return inverseMap;
+    return {for (var page = 1; page <= totalPagesForEdition(edition); page++)
+      page: _canonicalStartForScanPage(page, edition)};
   }
 
-  Map<int, int> _buildRatioStandardToNavigationPageCache(
-    MushafEdition edition,
-  ) {
-    final totalPages = totalPagesForEdition(edition);
-    final pageMap = <int, int>{};
-
-    for (var standardPage = 1;
-        standardPage <= _standardTotalPages;
-        standardPage++) {
-      final ratio = (standardPage - 1) / (_standardTotalPages - 1);
-      final estimatedPage = 1 + (ratio * (totalPages - 1)).round();
-      pageMap[standardPage] = QuranConstants.clampPage(
-        estimatedPage,
-        totalPages: totalPages,
-      );
+  int _canonicalStartForScanPage(int page, MushafEdition edition) {
+    final surah = _surahEntryForImagePage(page, edition: edition);
+    for (final standardSurah in standardSurahs) {
+      if (standardSurah.id == surah?.id) return standardSurah.standardStartPage;
     }
-
-    return pageMap;
-  }
-
-  Map<int, int> _buildAnchorStandardToNavigationPageCache({
-    required MushafEdition edition,
-    required List<({int standardPage, int navigationPage})> anchors,
-  }) {
-    final totalPages = totalPagesForEdition(edition);
-    final pageMap = <int, int>{};
-
-    for (var index = 0; index < anchors.length; index++) {
-      final current = anchors[index];
-      final next = index + 1 < anchors.length ? anchors[index + 1] : null;
-      final nextStandardPage = next?.standardPage ?? (_standardTotalPages + 1);
-      final nextNavigationPage = next?.navigationPage ?? totalPages;
-      final segmentLength = nextStandardPage - current.standardPage;
-
-      for (var standardPage = current.standardPage;
-          standardPage < nextStandardPage;
-          standardPage++) {
-        final progress = segmentLength <= 0
-            ? 0.0
-            : (standardPage - current.standardPage) / segmentLength;
-        final estimatedPage = current.navigationPage +
-            ((nextNavigationPage - current.navigationPage) * progress).round();
-        pageMap[standardPage] = QuranConstants.clampPage(
-          estimatedPage,
-          totalPages: totalPages,
-        );
-      }
-    }
-
-    pageMap.putIfAbsent(1, () => 1);
-    pageMap[_standardTotalPages] ??= totalPages;
-    return pageMap;
-  }
-
-  List<({int standardPage, int navigationPage})>
-      _buildNavigationAnchorsForEdition(
-    MushafEdition edition,
-  ) {
-    final totalPages = totalPagesForEdition(edition);
-    if (totalPages == 0) {
-      return const [];
-    }
-
-    final anchorsByStandardPage = <int, int>{
-      1: 1,
-      _standardTotalPages: totalPages,
-    };
-
-    final surahById = <int, QuranSurahNavigationEntry>{
-      for (final surah in _navigationDataSource.surahsForEdition(edition))
-        surah.id: surah,
-    };
-    for (final surah in standardSurahs) {
-      final editionSurah = surahById[surah.id];
-      if (editionSurah == null) {
-        continue;
-      }
-      final anchorPage = _navigationAnchorPageForImportedPage(
-        edition,
-        editionSurah.tajScanStartPage,
-      );
-      _storeEarliestAnchorPage(
-        anchorsByStandardPage,
-        surah.standardStartPage,
-        anchorPage,
-      );
-    }
-
-    final juzByNumber = <int, QuranJuzNavigationEntry>{
-      for (final juz in _navigationDataSource.juzsForEdition(edition))
-        juz.number: juz,
-    };
-    for (final juz in standardJuzs) {
-      final editionJuz = juzByNumber[juz.number];
-      if (editionJuz == null) {
-        continue;
-      }
-      final anchorPage = _navigationAnchorPageForImportedPage(
-        edition,
-        editionJuz.tajScanStartPage,
-      );
-      _storeEarliestAnchorPage(
-        anchorsByStandardPage,
-        juz.standardStartPage,
-        anchorPage,
-      );
-    }
-
-    final sortedAnchors = anchorsByStandardPage.entries
-        .map(
-          (entry) => (
-            standardPage: entry.key,
-            navigationPage: QuranConstants.clampPage(
-              entry.value,
-              totalPages: totalPages,
-            ),
-          ),
-        )
-        .toList(growable: false)
-      ..sort((left, right) => left.standardPage.compareTo(right.standardPage));
-
-    final normalizedAnchors = <({int standardPage, int navigationPage})>[];
-    var previousPage = 1;
-    for (final anchor in sortedAnchors) {
-      final navigationPage = anchor.navigationPage < previousPage
-          ? previousPage
-          : anchor.navigationPage;
-      normalizedAnchors.add(
-        (
-          standardPage: anchor.standardPage,
-          navigationPage: navigationPage,
-        ),
-      );
-      previousPage = navigationPage;
-    }
-
-    return normalizedAnchors;
-  }
-
-  void _storeEarliestAnchorPage(
-    Map<int, int> cache,
-    int standardPage,
-    int navigationPage,
-  ) {
-    final existingPage = cache[standardPage];
-    if (existingPage == null || navigationPage < existingPage) {
-      cache[standardPage] = navigationPage;
-    }
+    return 1;
   }
 
   int _navigationAnchorPageForImportedPage(
