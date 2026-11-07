@@ -3,13 +3,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'reader_extra_translations.dart';
 
-enum ReaderLanguage { english, urdu, romanUrdu }
+enum ReaderLanguage { english, urdu, romanUrdu, arabic }
 
 extension ReaderLanguageLabel on ReaderLanguage {
   String get label => switch (this) {
         ReaderLanguage.english => 'English',
         ReaderLanguage.urdu => 'اردو',
         ReaderLanguage.romanUrdu => 'Roman Urdu',
+        ReaderLanguage.arabic => 'العربية',
       };
 }
 
@@ -30,8 +31,13 @@ class ReaderLocalization extends ChangeNotifier {
   ReaderLanguage _language = ReaderLanguage.english;
 
   ReaderLanguage get language => _language;
-  Locale get locale => Locale(_language == ReaderLanguage.urdu ? 'ur' : 'en');
-  TextDirection get textDirection => _language == ReaderLanguage.urdu
+  Locale get locale => Locale(switch (_language) {
+        ReaderLanguage.urdu => 'ur',
+        ReaderLanguage.arabic => 'ar',
+        _ => 'en',
+      });
+  TextDirection get textDirection =>
+      _language == ReaderLanguage.urdu || _language == ReaderLanguage.arabic
       ? TextDirection.rtl
       : TextDirection.ltr;
 
@@ -62,8 +68,9 @@ class ReaderLocalization extends ChangeNotifier {
   String translate(String source, {Map<String, Object?> args = const {}}) {
     final english = _format(source, args);
     if (_language == ReaderLanguage.english) return english;
-    final direct = _allTranslations[source] ?? _allTranslations[english];
-    if (direct != null) return _format(_select(direct), args);
+    final directKey = _allTranslations.containsKey(source) ? source : english;
+    final direct = _allTranslations[directKey];
+    if (direct != null) return _format(_select(directKey, direct), args);
     if (!RegExp('[A-Za-z]').hasMatch(english)) return english;
     for (final template in _templates) {
       final match = template.pattern.firstMatch(english);
@@ -72,13 +79,16 @@ class ReaderLocalization extends ChangeNotifier {
         for (var i = 0; i < template.names.length; i++)
           template.names[i]: match.group(i + 1),
       };
-      return _format(_select(template.translation), values);
+      return _format(_select(template.source, template.translation), values);
     }
     return english;
   }
 
-  String _select((String, String) value) =>
-      _language == ReaderLanguage.urdu ? value.$1 : value.$2;
+  String _select(String source, (String, String) value) => switch (_language) {
+        ReaderLanguage.arabic => readerArabicTranslations[source] ?? source,
+        ReaderLanguage.urdu => value.$1,
+        _ => value.$2,
+      };
 
   static String _format(String value, Map<String, Object?> args) =>
       value.replaceAllMapped(RegExp(r'\{([^{}]+)\}'),
@@ -103,7 +113,7 @@ String tr(BuildContext context, String source,
     ReaderLocalizationScope.of(context).translate(source, args: args);
 
 class _TranslationTemplate {
-  _TranslationTemplate(String source, this.translation) {
+  _TranslationTemplate(this.source, this.translation) {
     final placeholders = RegExp(r'\{([^{}]+)\}').allMatches(source).toList();
     names = placeholders.map((match) => match[1]!).toList();
     var offset = 0;
@@ -120,6 +130,7 @@ class _TranslationTemplate {
     pattern = RegExp(patternText.toString());
   }
 
+  final String source;
   final (String, String) translation;
   late final RegExp pattern;
   late final List<String> names;
