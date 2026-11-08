@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 abstract final class AppTheme {
   static ThemeData light({
@@ -159,6 +160,10 @@ abstract final class AppTheme {
     return baseTheme.copyWith(
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
+        systemOverlayStyle: (isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
+            .copyWith(statusBarColor: Colors.transparent,
+                systemNavigationBarColor: Colors.transparent,
+                systemNavigationBarIconBrightness: isDark ? Brightness.light : Brightness.dark),
         backgroundColor: Colors.transparent,
         foregroundColor: colorScheme.onSurface,
         elevation: 0,

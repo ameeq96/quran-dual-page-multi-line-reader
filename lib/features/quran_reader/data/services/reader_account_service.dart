@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -30,6 +31,11 @@ class ReaderPairingCode {
   final String code;
   final DateTime expiresAt;
   bool get expired => !expiresAt.isAfter(DateTime.now().toUtc());
+}
+
+class ReaderAccountBackup extends MapView<String, dynamic> {
+  ReaderAccountBackup(super.map, {required this.syncRevision});
+  final int syncRevision;
 }
 
 class ReaderAccountService {
@@ -101,7 +107,9 @@ class ReaderAccountService {
     }
     final payload = data['payload'] as Map<String, dynamic>;
     if (payload['deviceId'] != identity.deviceId) _invalid();
-    return payload;
+    final revision = data.containsKey('syncRevision') ? data['syncRevision'] : 0;
+    if (revision is! int || revision < 0 || revision > 9007199254740991) _invalid();
+    return ReaderAccountBackup(payload, syncRevision: revision);
   }
 
   Future<Map<String, dynamic>> _request(String baseUrl, String path, Map<String, dynamic> body,

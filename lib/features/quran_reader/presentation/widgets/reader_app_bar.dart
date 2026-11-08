@@ -14,6 +14,7 @@ enum ReaderMoreAction {
   aiStudio,
   pageStrip,
   compare,
+  manualPins,
   kanzulStudy,
   settings,
 }
@@ -33,6 +34,7 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.onOpenCompare,
     required this.onOpenKanzulStudy,
     required this.onOpenSettings,
+    this.onOpenManualPins,
   });
 
   final QuranReaderController controller;
@@ -47,6 +49,7 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onOpenCompare;
   final VoidCallback onOpenKanzulStudy;
   final VoidCallback onOpenSettings;
+  final VoidCallback? onOpenManualPins;
 
   @override
   Size get preferredSize => Size.fromHeight(portraitMode ? 88 : 76);
@@ -203,6 +206,9 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                       case ReaderMoreAction.settings:
                         onOpenSettings();
                         break;
+                      case ReaderMoreAction.manualPins:
+                        onOpenManualPins?.call();
+                        break;
                     }
                   },
                   itemBuilder: (context) => [
@@ -269,6 +275,11 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                           label: tr(context, 'Kanzul study'),
                         ),
                       ),
+                    if (onOpenManualPins != null) PopupMenuItem(
+                      value: ReaderMoreAction.manualPins,
+                      child: _MenuRow(icon: Icons.add_location_alt_outlined,
+                          label: tr(context, 'Manual notes and mistake pins')),
+                    ),
                     PopupMenuItem(
                       value: ReaderMoreAction.settings,
                       child: _MenuRow(

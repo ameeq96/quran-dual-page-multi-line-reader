@@ -6,18 +6,20 @@ import 'package:http/http.dart' as http;
 import '../../../../core/storage/reader_preferences.dart';
 import '../../domain/models/reader_sync_snapshot.dart';
 
-enum ReaderSyncStatus { success, notFound, unauthorized, forbidden, networkError, cancelled, invalidResponse }
+enum ReaderSyncStatus { success, notFound, unauthorized, forbidden, conflict, networkError, cancelled, invalidResponse }
 
 class ReaderSyncPullResult {
-  const ReaderSyncPullResult({required this.status, this.snapshot});
+  const ReaderSyncPullResult({required this.status, this.snapshot, this.syncRevision});
   final ReaderSyncStatus status;
   final ReaderSyncSnapshot? snapshot;
+  final int? syncRevision;
   bool get found => status == ReaderSyncStatus.success && snapshot != null;
 }
 
 class ReaderSyncPushResult {
-  const ReaderSyncPushResult({required this.status});
+  const ReaderSyncPushResult({required this.status, this.syncRevision});
   final ReaderSyncStatus status;
+  final int? syncRevision;
   bool get success => status == ReaderSyncStatus.success;
 }
 
@@ -28,13 +30,22 @@ class QuranReaderSyncService {
   int _generation = 0;
 
   Future<ReaderSyncPushResult> pushSnapshot({required String baseUrl, required String deviceId,
-    required String token, required ReaderSyncSnapshot snapshot}) async {
+    required String token, required ReaderSyncSnapshot snapshot, int? baseRevision}) async {
+    if (baseRevision != null && (baseRevision < 0 || baseRevision > 9007199254740991)) {
+      return const ReaderSyncPushResult(status: ReaderSyncStatus.invalidResponse);
+    }
     final result = await _request('POST', baseUrl, deviceId, token, {
       'deviceId': deviceId, 'lastPageNumber': snapshot.lastPageNumber,
       'appVersion': '1.0', 'payload': snapshot.toJson(),
+      if (baseRevision != null) 'baseRevision': baseRevision,
     });
     if (result.status != ReaderSyncStatus.success) return ReaderSyncPushResult(status: result.status);
-    return ReaderSyncPushResult(status: result.body?['success'] == true ? ReaderSyncStatus.success : ReaderSyncStatus.invalidResponse);
+    final body = result.body;
+    final revision = body == null ? null : _readRevision(body);
+    if (body?['success'] != true || revision == null) {
+      return const ReaderSyncPushResult(status: ReaderSyncStatus.invalidResponse);
+    }
+    return ReaderSyncPushResult(status: ReaderSyncStatus.success, syncRevision: revision);
   }
 
   Future<ReaderSyncPullResult> pullSnapshot({required String baseUrl, required String deviceId, required String token}) async {
@@ -42,13 +53,17 @@ class QuranReaderSyncService {
     if (result.status != ReaderSyncStatus.success) return ReaderSyncPullResult(status: result.status);
     final body = result.body;
     if (body?['success'] != true || body?['found'] is! bool) return const ReaderSyncPullResult(status: ReaderSyncStatus.invalidResponse);
-    if (body!['found'] == false) return const ReaderSyncPullResult(status: ReaderSyncStatus.notFound);
+    final revision = _readRevision(body!);
+    if (revision == null || body['found'] == false && revision != 0) {
+      return const ReaderSyncPullResult(status: ReaderSyncStatus.invalidResponse);
+    }
+    if (body['found'] == false) return const ReaderSyncPullResult(status: ReaderSyncStatus.notFound, syncRevision: 0);
     try {
       final value = body['payload'];
       if (value is! Map<String, dynamic> || value['deviceId'] != deviceId || value['settings'] is! Map || value['lastPageNumber'] is! num) {
         return const ReaderSyncPullResult(status: ReaderSyncStatus.invalidResponse);
       }
-      return ReaderSyncPullResult(status: ReaderSyncStatus.success, snapshot: ReaderSyncSnapshot.fromJson(value));
+      return ReaderSyncPullResult(status: ReaderSyncStatus.success, snapshot: ReaderSyncSnapshot.fromJson(value), syncRevision: revision);
     } catch (_) { return const ReaderSyncPullResult(status: ReaderSyncStatus.invalidResponse); }
   }
 
@@ -76,6 +91,7 @@ class QuranReaderSyncService {
       if (generation != _generation) return const _SyncResponse(ReaderSyncStatus.cancelled);
       if (response.statusCode == 401) return const _SyncResponse(ReaderSyncStatus.unauthorized);
       if (response.statusCode == 403) return const _SyncResponse(ReaderSyncStatus.forbidden);
+      if (response.statusCode == 409) return const _SyncResponse(ReaderSyncStatus.conflict);
       if (response.statusCode != 200 && response.statusCode != 201) return const _SyncResponse(ReaderSyncStatus.networkError);
       final decoded = json.decode(response.body);
       if (decoded is! Map<String,dynamic>) return const _SyncResponse(ReaderSyncStatus.invalidResponse);
@@ -89,6 +105,12 @@ class QuranReaderSyncService {
       if (!abort.isCompleted) abort.complete();
       _pending.remove(abort);
     }
+  }
+
+  static int? _readRevision(Map<String, dynamic> body) {
+    if (!body.containsKey('syncRevision')) return 0;
+    final value = body['syncRevision'];
+    return value is int && value >= 0 && value <= 9007199254740991 ? value : null;
   }
 
   void cancelPending() {

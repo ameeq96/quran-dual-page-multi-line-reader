@@ -40,10 +40,19 @@ Future<String> fingerprintReaderScan(ui.Image image) async {
   return sha256.convert(utf8.encode('${image.width}:${image.height}:$pixels')).toString();
 }
 
+class ReaderPinEditingScope extends InheritedWidget {
+  const ReaderPinEditingScope({super.key, required super.child});
+  static bool enabled(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<ReaderPinEditingScope>() != null;
+  @override
+  bool updateShouldNotify(ReaderPinEditingScope oldWidget) => false;
+}
+
 class ReaderPagePinOverlay extends StatefulWidget {
   const ReaderPagePinOverlay({super.key, required this.child, required this.pageNumber,
     required this.edition, required this.sourceKey, required this.imageProvider,
-    required this.originalImageProvider});
+    required this.originalImageProvider, this.allowEditing = true});
+  final bool allowEditing;
   final Widget child;
   final int pageNumber;
   final String edition;
@@ -312,7 +321,7 @@ class _ReaderPagePinOverlayState extends State<ReaderPagePinOverlay> {
             style: IconButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.surface,
               foregroundColor: pin.kind == ReaderPagePinKind.note ? const Color(0xFF146C5E) : const Color(0xFFAD3030)),
             icon: Icon(pin.kind == ReaderPagePinKind.note ? Icons.sticky_note_2_outlined : Icons.flag_rounded, size: 19))))),
-      Positioned(top: 6, right: 6, child: Material(color: Theme.of(context).colorScheme.surface.withValues(alpha: .94),
+       if (widget.allowEditing) Positioned(top: 6, right: 6, child: Material(color: Theme.of(context).colorScheme.surface.withValues(alpha: .94),
         borderRadius: BorderRadius.circular(20), child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (!_editing) IconButton(visualDensity: VisualDensity.compact,
             tooltip: tr(context, 'Manual notes and mistake pins'), onPressed: _busy ? null : _startEditing,

@@ -253,7 +253,7 @@ class QuranGrowthHubScreen extends StatelessWidget {
                       _MetricGrid(
                         metrics: [
                           _MetricItem(
-                              label: tr(context, 'Target'), value: plan.preset.label),
+                              label: tr(context, 'Target'), value: tr(context, plan.preset.label)),
                           _MetricItem(label: tr(context, 'Days'), value: '$targetDays'),
                           _MetricItem(
                               label: tr(context, 'Pages/day'), value: '$planPagesPerDay'),
@@ -273,9 +273,9 @@ class QuranGrowthHubScreen extends StatelessWidget {
                         ),
                         Slider(
                           value: plan.targetDays.toDouble(),
-                          min: 7,
-                          max: 120,
-                          divisions: 113,
+                          min: 1,
+                          max: 365,
+                          divisions: 364,
                           label: tr(context, '${plan.targetDays.round()} days'),
                           onChanged: (value) {
                             controller.setCustomReadingPlan(
@@ -292,8 +292,8 @@ class QuranGrowthHubScreen extends StatelessWidget {
                         Slider(
                           value: plan.customPagesPerDay.toDouble(),
                           min: 1,
-                          max: 30,
-                          divisions: 29,
+                          max: 40,
+                          divisions: 39,
                           label: tr(context, '${plan.customPagesPerDay.round()} pages'),
                           onChanged: (value) {
                             controller.setCustomReadingPlan(

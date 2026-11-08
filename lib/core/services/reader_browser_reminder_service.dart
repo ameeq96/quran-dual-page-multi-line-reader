@@ -38,6 +38,7 @@ class ReaderBrowserReminderService extends ChangeNotifier {
   String? _publicKey;
   String? _instanceId;
   Future<void>? _loading;
+  ({int hour, int minute, String language})? _pendingTimeUpdate;
   bool get supported => _browser.supported;
   String get _key => ReaderProfileStore.keyFor('reader.push.${Uri.encodeComponent(baseUrl)}.v1', profileId);
 
@@ -87,7 +88,7 @@ class ReaderBrowserReminderService extends ChangeNotifier {
           await _request('POST', 'subscribe', identity: identity, body: {
             'deviceId': identity.deviceId, 'instanceId': _instanceId,
             'subscription': subscription, 'hour': hour, 'minute': minute,
-            'zone': _browser.timeZone, 'language': language,
+            'zone': _browser.timeZone, 'language': _languageCode(language),
           });
           await _persist(true);
           enabled = true;
@@ -101,11 +102,24 @@ class ReaderBrowserReminderService extends ChangeNotifier {
       error = value
           ? 'Background reminder could not be enabled. Check notification permission and try again.'
           : 'Background reminder could not be disabled. Try again.';
-    } finally { busy = false; notifyListeners(); }
+    } finally {
+      busy = false;
+      final pending = _pendingTimeUpdate;
+      _pendingTimeUpdate = null;
+      if (value && enabled && pending != null) {
+        unawaited(setEnabled(true, hour: pending.hour, minute: pending.minute,
+          language: pending.language, requestPermission: false));
+      }
+      notifyListeners();
+    }
   }
 
   Future<void> updateTime({required int hour, required int minute, required String language}) async {
-    if (!enabled || busy) return;
+    if (busy) {
+      _pendingTimeUpdate = (hour: hour, minute: minute, language: language);
+      return;
+    }
+    if (!enabled) return;
     await setEnabled(true, hour: hour, minute: minute, language: language, requestPermission: false);
   }
 
@@ -135,6 +149,11 @@ class ReaderBrowserReminderService extends ChangeNotifier {
       throw StateError('Background reminder settings could not be saved.');
     }
   }
+
+  String _languageCode(String value) => const <String, String>{
+    'en': 'en', 'english': 'en', 'ur': 'ur', 'urdu': 'ur',
+    'ar': 'ar', 'arabic': 'ar', 'romanUrdu': 'romanUrdu',
+  }[value] ?? 'en';
 
   Future<Map<String, dynamic>> _request(String method, String endpoint,
       {ReaderSyncIdentity? identity, Map<String, dynamic>? body}) async {

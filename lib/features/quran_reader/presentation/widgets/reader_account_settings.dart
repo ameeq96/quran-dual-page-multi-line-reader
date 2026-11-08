@@ -97,7 +97,7 @@ class _ReaderAccountSettingsState extends State<ReaderAccountSettings> {
     };
     setState(() { _busy = true; _message = null; });
     try {
-      await showDialog<void>(context: context, barrierDismissible: false,
+      final route = DialogRoute<void>(context: context, barrierDismissible: false,
         builder: (dialogContext) => StatefulBuilder(builder: (context, update) => PopScope(canPop: !busy, child: AlertDialog(
           title: Text(tr(context, title)),
           content: SizedBox(width: 460, child: SingleChildScrollView(child: AutofillGroup(child: Column(
@@ -163,6 +163,8 @@ class _ReaderAccountSettingsState extends State<ReaderAccountSettings> {
             }, child: Text(tr(context, busy ? 'Checking…' : action == _AccountAction.register ? 'Create account' : 'Continue'))),
           ],
         ))));
+      await Navigator.of(context, rootNavigator: true).push(route);
+      await route.completed;
     } finally {
       email.dispose(); password.dispose(); recovery.dispose(); code.dispose();
       if (mounted) setState(() => _busy = false);

@@ -6,6 +6,7 @@ import '../../../../app/reader_localization.dart';
 
 import '../../../../app/app_theme.dart';
 import '../../domain/models/reader_settings.dart';
+import '../../domain/models/quran_page.dart';
 import '../controllers/quran_reader_controller.dart';
 import '../widgets/bootstrap_splash.dart';
 import '../widgets/dual_page_spread.dart';
@@ -22,6 +23,8 @@ import '../widgets/reader_page_strip_sheet.dart';
 import '../widgets/reader_zoom_viewport.dart';
 import '../widgets/quran_page_image_provider.dart';
 import '../widgets/single_page_reader.dart';
+import '../widgets/mushaf_page_widget.dart';
+import '../widgets/reader_page_pin_overlay.dart';
 import 'quran_ai_studio_screen.dart';
 import 'quran_bookmarks_screen.dart';
 import 'quran_growth_hub_screen.dart';
@@ -414,6 +417,23 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     });
   }
 
+  Future<void> _openManualPins() async {
+    final controller = widget.controller;
+    final candidates = MediaQuery.orientationOf(context) == Orientation.landscape
+        ? [controller.currentSpread.rightPage, controller.currentSpread.leftPage]
+        : [controller.currentPage];
+    final pages = <int, QuranPage>{for (final page in candidates)
+      if (page.number > 0 && page.contentType == QuranPageContentType.image) page.number: page}.values.toList();
+    if (pages.isEmpty) return;
+    final settings = controller.settings.copyWith(hifzFocusMode: false);
+    final experience = controller.experienceSettings;
+    final theme = settings.nightMode
+        ? AppTheme.dark(highContrast: experience.highContrastMode, largerText: experience.largerTextMode)
+        : AppTheme.light(highContrast: experience.highContrastMode, largerText: experience.largerTextMode);
+    await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => Theme(data: theme,
+        child: _ReaderManualPinEditor(pages: pages, settings: settings))));
+  }
+
   Future<void> _openCompareSheet() {
     if (!widget.controller.isCompareEnabled) {
       _showUnavailablePackMessage(
@@ -669,6 +689,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                                         onOpenKanzulStudy:
                                             _openKanzulStudySheet,
                                         onOpenSettings: _openSettingsSheet,
+                                        onOpenManualPins: _openManualPins,
                                       )
                                     : null,
                                 body: DecoratedBox(
@@ -693,7 +714,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                                       ),
                                       SafeArea(
                                         top: !showAppBar,
-                                        bottom: false,
+                                        bottom: true,
                                         child: Stack(
                                           children: [
                                             AnimatedPadding(
@@ -912,6 +933,32 @@ class _PortraitPageReader extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ReaderManualPinEditor extends StatefulWidget {
+  const _ReaderManualPinEditor({required this.pages, required this.settings});
+  final List<QuranPage> pages;
+  final ReaderSettings settings;
+  @override
+  State<_ReaderManualPinEditor> createState() => _ReaderManualPinEditorState();
+}
+
+class _ReaderManualPinEditorState extends State<_ReaderManualPinEditor> {
+  int _selected = 0;
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(tr(context, 'Manual notes and mistake pins'))),
+    body: SafeArea(child: Column(children: [
+      if (widget.pages.length > 1) Padding(padding: const EdgeInsets.all(10), child: Wrap(
+        spacing: 10, runSpacing: 10, children: [for (var index = 0; index < widget.pages.length; index++)
+          ChoiceChip(label: Text(tr(context, 'Page {page}', args: {'page': widget.pages[index].number})),
+            selected: _selected == index, onSelected: (_) => setState(() => _selected = index)),
+        ])),
+      Expanded(child: ReaderZoomViewport(key: ValueKey(widget.pages[_selected].number),
+        onZoomChanged: (_) {}, child: ReaderPinEditingScope(child: MushafPageWidget(
+          page: widget.pages[_selected], settings: widget.settings, showPageNumbers: false)))),
+    ])),
+  );
 }
 
 class _ReaderBackdrop extends StatelessWidget {

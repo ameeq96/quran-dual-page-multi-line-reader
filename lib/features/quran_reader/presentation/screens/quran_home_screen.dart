@@ -486,7 +486,7 @@ class QuranHomeScreen extends StatelessWidget {
                   icon: Icons.menu_book_outlined,
                   title: tr(context, 'Word study & collections'),
                   subtitle: tr(context, 'Translation, notes and reflection'),
-                  onTap: () => Navigator.of(context).push(buildReaderPageRoute<void>(builder: (_) => const QuranStudyScreen())),
+                  onTap: () => Navigator.of(context).push(buildReaderPageRoute<void>(builder: (_) => QuranStudyScreen(controller: controller))),
                 ),
                 _HomeMenuTile(
                   icon: Icons.tune_rounded,

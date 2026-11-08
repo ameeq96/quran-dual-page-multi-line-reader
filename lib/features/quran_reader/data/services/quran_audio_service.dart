@@ -118,6 +118,10 @@ class QuranAudioService {
     }
   }
 
+  void cancelPendingLoad() {
+    ++_sourceGeneration;
+  }
+
   Future<void> playChapter({
     required int reciterId,
     required int chapterId,

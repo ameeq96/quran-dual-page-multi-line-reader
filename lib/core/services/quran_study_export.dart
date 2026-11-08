@@ -19,7 +19,7 @@ class QuranStudyCard {
 class QuranStudyExport {
   static Future<QuranStudyCard> render(QuranStudyVerse verse, {bool urdu = false,
       String notes = '', String noteLabel = 'Personal study note'}) async {
-    if (notes.length > 2000) throw const FormatException('Personal study notes are limited to 2000 characters.');
+    if (notes.characters.length > 2000) throw const FormatException('Personal study notes are limited to 2000 characters.');
     const width = 1080;
     const inset = 76.0;
     const textWidth = width - inset * 2;
@@ -41,7 +41,7 @@ class QuranStudyExport {
       'Translation: Quran.com resource ${urdu ? 97 : 84}. Full notices in the app.',
       20, const Color(0xFF6D634D));
     final height = math.max(700, (inset * 2 + title.height + arabic.height + translation.height + noteHeight + source.height + 160).ceil());
-    if (height > 8192) throw StateError('This Ayah is too long for a single card.');
+    if (height > 8192) throw StateError('This Ayah and note are too long for a single card.');
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     canvas.drawRect(Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()), Paint()..color = const Color(0xFFFCF8EE));

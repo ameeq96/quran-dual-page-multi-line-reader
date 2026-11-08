@@ -155,6 +155,7 @@ class _ReaderAudioPracticePanelState extends State<ReaderAudioPracticePanel> {
                   Row(children: [
                     Expanded(
                         child: DropdownButtonFormField<int>(
+                            isExpanded: true,
                             initialValue: _repeats,
                             decoration: InputDecoration(
                                 labelText: tr(context, 'Repeats')),
@@ -170,6 +171,7 @@ class _ReaderAudioPracticePanelState extends State<ReaderAudioPracticePanel> {
                     const SizedBox(width: 12),
                     Expanded(
                         child: DropdownButtonFormField<int>(
+                            isExpanded: true,
                             initialValue: _gapSeconds,
                             decoration: InputDecoration(
                                 labelText:
@@ -179,7 +181,8 @@ class _ReaderAudioPracticePanelState extends State<ReaderAudioPracticePanel> {
                                 DropdownMenuItem(
                                     value: value,
                                     child: Text(tr(context, '{seconds} seconds',
-                                        args: {'seconds': value})))
+                                        args: {'seconds': value}), maxLines: 1,
+                                        overflow: TextOverflow.ellipsis))
                             ],
                             onChanged: practice.active || practice.busy
                                 ? null
@@ -219,6 +222,7 @@ class _ReaderAudioPracticePanelState extends State<ReaderAudioPracticePanel> {
                   ],
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
+                      isExpanded: true,
                       initialValue: _sleepMinutes,
                       decoration: InputDecoration(
                           labelText: tr(context, 'Sleep timer')),

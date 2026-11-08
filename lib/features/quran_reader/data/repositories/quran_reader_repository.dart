@@ -571,11 +571,17 @@ class QuranReaderRepository {
         isLeftPage: false,
         preferImageMode: preferImageMode,
       ),
-      leftPage: _pageForNumber(
-        leftPageNumber,
-        isLeftPage: true,
-        preferImageMode: preferImageMode,
-      ),
+      leftPage: leftPageNumber == 0
+          ? const QuranPage(
+              number: 0,
+              isLeftPage: true,
+              contentType: QuranPageContentType.placeholder,
+            )
+          : _pageForNumber(
+              leftPageNumber,
+              isLeftPage: true,
+              preferImageMode: preferImageMode,
+            ),
     );
     _storeInBoundedCache(
       _spreadCache,
@@ -860,6 +866,7 @@ class QuranReaderRepository {
     }
 
     final lowerQuery = normalizedQuery.toLowerCase();
+    final isExactVerseReference = RegExp(r'^\d+:\d+$').hasMatch(lowerQuery);
     final results = <QuranSearchResult>[];
 
     for (final insight in _pageInsightsDataSource.pages) {
@@ -883,6 +890,9 @@ class QuranReaderRepository {
           targetPage,
         );
         final lowerVerseKey = verse.verseKey.toLowerCase();
+        if (isExactVerseReference && lowerVerseKey != lowerQuery) {
+          continue;
+        }
 
         if (lowerVerseKey == lowerQuery || lowerVerseKey.contains(lowerQuery)) {
           results.add(
@@ -1176,6 +1186,9 @@ class QuranReaderRepository {
     ReaderSettings settings, {
     ReaderAdminConfig? config,
   }) async {
+    if (await _preferences.hasSavedSettings()) {
+      return settings;
+    }
     final effectiveConfig = config ?? _adminConfigService.currentConfig;
     var nextSettings = settings;
 

@@ -41,12 +41,13 @@ import '../models/reader_audio_state.dart';
 
 class ReaderPreparedAccount {
   const ReaderPreparedAccount._({required this.account, required this.baseUrl,
-    required this.context, required this.generation, this.snapshot, this.alreadyConnected = false});
+    required this.context, required this.generation, this.snapshot, this.syncRevision, this.alreadyConnected = false});
   final ReaderAccountIdentity account;
   final String baseUrl;
   final int context;
   final int generation;
   final ReaderSyncSnapshot? snapshot;
+  final int? syncRevision;
   final bool alreadyConnected;
   bool get keepsCurrentData => snapshot == null;
 }
@@ -307,6 +308,8 @@ class QuranReaderController extends ChangeNotifier {
   int _syncContextGeneration = 0;
   int _localChangeGeneration = 0;
   int? _syncPushGeneration;
+  int? _readerSyncRevision;
+  bool _readerSyncConflict = false;
   bool _readerSyncDirty = true;
   bool _syncUsesFreshBackup = false;
   bool _suppressSyncDirty = false;
@@ -838,7 +841,7 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   bool smartHifzAppliesToPage(int pageNumber) {
-    if (!hasSmartHifzChallenge) {
+    if (pageNumber < 1 || !hasSmartHifzChallenge) {
       return false;
     }
     if (_settings.preferImageMode) {
@@ -1569,6 +1572,7 @@ class QuranReaderController extends ChangeNotifier {
 
   String get spreadLabel {
     final spread = currentSpread;
+    if (spread.leftPage.number == 0) return 'Page ${spread.rightPage.number}';
     return 'Pages ${spread.rightPage.number}-${spread.leftPage.number}';
   }
 
@@ -1852,7 +1856,20 @@ class QuranReaderController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> selectMushafEdition(MushafEdition edition) async {
+  Future<void> _mushafEditionChanges = Future<void>.value();
+
+  Future<void> selectMushafEdition(MushafEdition edition) {
+    final context = _syncContextGeneration;
+    final operation = _mushafEditionChanges.then<void>((_) async {
+      if (_isDisposed || context != _syncContextGeneration) return;
+      await _selectMushafEdition(edition);
+    });
+    _mushafEditionChanges = operation.then<void>((_) {}, onError: (Object error, StackTrace stack) {});
+    return operation;
+  }
+
+  Future<void> _selectMushafEdition(MushafEdition edition) async {
+    final context = _syncContextGeneration;
     if (!_repository.hasAssetsForEdition(edition)) {
       return;
     }
@@ -1870,12 +1887,17 @@ class QuranReaderController extends ChangeNotifier {
       targetEdition: edition,
       preferImageMode: _settings.preferImageMode,
     );
+    await _repository.setMushafEdition(edition);
+    if (_isDisposed) return;
+    if (context != _syncContextGeneration) {
+      await _repository.setMushafEdition(_settings.mushafEdition);
+      return;
+    }
     _settings = _settings.copyWith(
       mushafEdition: edition,
       preferImageMode: nextPreferImageMode,
     );
     _markReaderSyncDirty();
-    await _repository.setMushafEdition(edition);
     _activateEditionAnnotations();
     _rebuildContentCaches();
     _currentPageNumber = _repository.clampPage(
@@ -2191,7 +2213,7 @@ class QuranReaderController extends ChangeNotifier {
         }
       }
     }
-    for (final key in ['bookmarks', 'readingHistory', 'hifzRevisionEntries']) {
+    for (final key in ['bookmarks', 'readingHistory', 'hifzReviewEntries', 'hifzRevisionEntries']) {
       if (!data.containsKey(key)) continue;
       for (final item in array(data[key], key)) {
         final record = object(item, key);
@@ -2278,17 +2300,33 @@ class QuranReaderController extends ChangeNotifier {
 
   Future<void> restoreStateBackupJson(String source) async {
     final snapshot = _validatedReaderBackup(source);
+    final previous = _buildSyncSnapshot();
+    final initialContext = _syncContextGeneration;
+    final generation = _localChangeGeneration;
     await saveRestorePoint('Before restoring backup', force: true);
+    if (_isDisposed || initialContext != _syncContextGeneration || generation != _localChangeGeneration) {
+      throw StateError('Reader state changed while the backup was being restored. Try again.');
+    }
     _backupHistoryTimer?.cancel();
     _pagePersistenceTimer?.cancel();
     _notesPersistenceTimer?.cancel();
     _cloudSyncTimer?.cancel();
     _invalidateReaderSyncContext();
     final context = _syncContextGeneration;
-    final generation = _localChangeGeneration;
-    final applied = await _applyRemoteSyncSnapshot(snapshot,
-        syncContext: context, expectedGeneration: generation, requireCloud: false);
-    if (!applied) throw StateError('Reader state changed while the backup was being restored. Try again.');
+    try {
+      final applied = await _applyRemoteSyncSnapshot(snapshot,
+          syncContext: context, expectedGeneration: generation, requireCloud: false);
+      if (!applied) throw StateError('Reader state changed while the backup was being restored. Try again.');
+    } catch (_) {
+      if (!_isDisposed && context == _syncContextGeneration && generation == _localChangeGeneration) {
+        try {
+          await _applyRemoteSyncSnapshot(previous,
+              syncContext: context, expectedGeneration: generation, requireCloud: false,
+              createRestorePoint: false);
+        } catch (_) { /* The previous in-memory state remains usable if storage is unavailable. */ }
+      }
+      rethrow;
+    }
     _scheduleCloudSyncPush();
   }
 
@@ -2319,14 +2357,18 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> selectReciter(QuranReciter reciter) async {
-    ++_audioLoadGeneration;
-    if (_audioState.selectedReciter?.id != reciter.id) await _audioService.practice.cancel();
-    if (_audioState.selectedReciter?.id != reciter.id) _currentRecitationVerseKey = null;
-    _setAudioState(_audioState.copyWith(selectedReciter: reciter));
+    if (_audioState.selectedReciter?.id == reciter.id) return;
+    final wasPlaying = _audioState.isPlaying;
+    final generation = ++_audioLoadGeneration;
+    _audioService.cancelPendingLoad();
+    await _audioService.practice.cancel();
+    if (_isDisposed || generation != _audioLoadGeneration) return;
+    _currentRecitationVerseKey = null;
+    _setAudioState(_audioState.copyWith(selectedReciter: reciter, isLoading: false, isBuffering: false));
     _markReaderSyncDirty();
     await _repository.savePreferredReciterId(reciter.id);
     _scheduleCloudSyncPush();
-    if (_audioState.isPlaying && selectedAudioChapter != null) {
+    if (!_isDisposed && generation == _audioLoadGeneration && wasPlaying && selectedAudioChapter != null) {
       await playSelectedSurah(forceReload: true);
     }
   }
@@ -2879,7 +2921,8 @@ class QuranReaderController extends ChangeNotifier {
     } else {
       final today = DateTime.parse(todayKey);
       final last = DateTime.tryParse(_readingStreakLastDate!);
-      final difference = last == null ? 999 : today.difference(last).inDays;
+      final difference = last == null ? 999 : DateTime.utc(today.year, today.month, today.day)
+          .difference(DateTime.utc(last.year, last.month, last.day)).inDays;
       if (difference == 1) {
         _readingStreakCount += 1;
       } else if (difference == 0) {
@@ -3306,9 +3349,13 @@ class QuranReaderController extends ChangeNotifier {
       if (_isDisposed || context != _syncContextGeneration) return false;
       final state = await _preferences.loadReaderSyncLocalState(normalized);
       if (_isDisposed || context != _syncContextGeneration) return false;
+      final revision = await _preferences.loadReaderSyncRevision(normalized, identity);
+      if (_isDisposed || context != _syncContextGeneration) return false;
       _syncBaseUrl = normalized;
       _syncClientId = identity.deviceId;
       _syncToken = identity.token;
+      _readerSyncRevision = revision;
+      _readerSyncConflict = false;
       _syncUsesFreshBackup = state == null;
       final changedWhileBinding = generationBeforeBinding != _localChangeGeneration;
       final changedBackend = previousBase.isNotEmpty && previousBase != normalized;
@@ -3352,7 +3399,10 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   void _reportReaderSyncFailure(ReaderSyncStatus status) {
+    if (status == ReaderSyncStatus.conflict) _readerSyncConflict = true;
     _readerSyncStatus = switch (status) {
+      ReaderSyncStatus.conflict =>
+        'Cloud data changed on another device. Your local changes are safe. Export a backup, then sign in or pair again to review the cloud copy.',
       ReaderSyncStatus.unauthorized || ReaderSyncStatus.forbidden =>
         'Cloud sync was not authorized. Local data is unchanged.',
       ReaderSyncStatus.cancelled => 'Cloud sync was cancelled.',
@@ -3364,6 +3414,10 @@ class QuranReaderController extends ChangeNotifier {
 
   Future<bool> _pushReaderSnapshot(int context) async {
     if (!_readerSyncContextIsCurrent(context)) return false;
+    if (_readerSyncConflict) {
+      _reportReaderSyncFailure(ReaderSyncStatus.conflict);
+      return false;
+    }
     await _persistReaderSyncLocalState();
     if (!_readerSyncContextIsCurrent(context) || _syncStateWriteFailed) return false;
     final generation = _localChangeGeneration;
@@ -3376,6 +3430,7 @@ class QuranReaderController extends ChangeNotifier {
         deviceId: _syncClientId,
         token: _syncToken,
         snapshot: snapshot,
+        baseRevision: _readerSyncRevision,
       );
     } finally {
       _syncPushGeneration = null;
@@ -3385,6 +3440,7 @@ class QuranReaderController extends ChangeNotifier {
       _reportReaderSyncFailure(result.status);
       return false;
     }
+    if (!await _acknowledgeReaderSyncRevision(result.syncRevision, context)) return false;
     if (generation == _localChangeGeneration) {
       _readerSyncDirty = false;
       await _persistReaderSyncLocalState();
@@ -3429,6 +3485,7 @@ class QuranReaderController extends ChangeNotifier {
           generation != _localChangeGeneration) {
         return false;
       }
+      if (!await _acknowledgeReaderSyncRevision(result.syncRevision, context)) return false;
       _readerSyncDirty = false;
       await _persistReaderSyncLocalState();
       if (!_readerSyncContextIsCurrent(context)) return false;
@@ -3436,6 +3493,7 @@ class QuranReaderController extends ChangeNotifier {
       return true;
     }
     if (result.status == ReaderSyncStatus.notFound && seedWhenMissing) {
+      if (!await _acknowledgeReaderSyncRevision(result.syncRevision, context)) return false;
       return _pushReaderSnapshot(context);
     }
     _reportReaderSyncFailure(result.status);
@@ -3448,6 +3506,31 @@ class QuranReaderController extends ChangeNotifier {
     if (!ready || _experienceSettings.syncMode != ReaderSyncMode.cloudReady) return false;
     final context = _syncContextGeneration;
     return _queueReaderSync(context, () => _pullReaderSnapshot(context, seedWhenMissing: false));
+  }
+
+  Future<bool> _acknowledgeReaderSyncRevision(int? revision, int context, {bool forAccount = false}) async {
+    bool current() => forAccount
+        ? !_isDisposed && _readerAccountBusy && context == _syncContextGeneration &&
+            _syncBaseUrl == ReaderPreferences.normalizeSyncBaseUrl(adminSyncBaseUrl)
+        : _readerSyncContextIsCurrent(context);
+    if (!current()) return false;
+    if (revision == null) return true;
+    final identity = ReaderSyncIdentity(deviceId: _syncClientId, token: _syncToken);
+    try {
+      await _preferences.saveReaderSyncRevision(_syncBaseUrl, identity, revision);
+    } catch (_) {
+      if (current()) {
+        _syncStateWriteFailed = true;
+        _readerSyncDirty = true;
+        _readerSyncStatus = 'Local sync state could not be saved. Cloud sync is paused.';
+        notifyListeners();
+      }
+      return false;
+    }
+    if (!current()) return false;
+    _readerSyncRevision = revision;
+    _readerSyncConflict = false;
+    return true;
   }
 
   Future<void> saveAdminSyncBaseUrl(String baseUrl) async {
@@ -3521,16 +3604,23 @@ class QuranReaderController extends ChangeNotifier {
       required String password, bool register = false, String? recoveryKey, String? pairingCode,
       Future<void> Function(String key)? onRecoveryKey}) async {
     final source = await _beginReaderAccountTransition();
+    var sourceRevision = _readerSyncRevision;
     bool current() => !_isDisposed && source.context == _syncContextGeneration &&
         source.generation == _localChangeGeneration &&
         ReaderPreferences.normalizeSyncBaseUrl(adminSyncBaseUrl) == source.baseUrl;
     try {
       if (register) {
         final uploaded = await _readerSyncService.pushSnapshot(baseUrl: source.baseUrl,
-            deviceId: source.identity.deviceId, token: source.identity.token, snapshot: _buildSyncSnapshot());
+            deviceId: source.identity.deviceId, token: source.identity.token, snapshot: _buildSyncSnapshot(),
+            baseRevision: _readerSyncRevision);
         if (!uploaded.success || !current()) {
+          if (current() && uploaded.status == ReaderSyncStatus.conflict) _reportReaderSyncFailure(uploaded.status);
           throw const ReaderAccountFailure('Your reader backup could not be saved. Account creation was stopped.');
         }
+        if (!await _acknowledgeReaderSyncRevision(uploaded.syncRevision, source.context, forAccount: true) || !current()) {
+          throw const ReaderAccountFailure('Your reader backup could not be saved. Account creation was stopped.');
+        }
+        sourceRevision = uploaded.syncRevision ?? sourceRevision;
       }
       final ReaderAccountIdentity account;
       if (pairingCode != null) {
@@ -3548,6 +3638,11 @@ class QuranReaderController extends ChangeNotifier {
       final rotatesCurrentIdentity = register ||
           (recoveryKey != null && account.identity.deviceId == source.identity.deviceId);
       if (rotatesCurrentIdentity) {
+        if (sourceRevision != null) {
+          try {
+            await _preferences.saveReaderSyncRevision(source.baseUrl, account.identity, sourceRevision);
+          } catch (_) { sourceRevision = null; }
+        }
         try {
           await detachReaderBrowserReminders(baseUrl: source.baseUrl, identity: source.identity);
         } catch (_) { /* A rotated credential must survive a reminder cleanup failure. */ }
@@ -3562,6 +3657,7 @@ class QuranReaderController extends ChangeNotifier {
         if (ownsTransition) {
           _syncClientId = account.identity.deviceId;
           _syncToken = account.identity.token;
+          _readerSyncRevision = sourceRevision;
           _readerAccountEmail = account.email;
           _readerSyncDirty = register ? source.generation != _localChangeGeneration : _readerSyncDirty;
           await _persistReaderSyncLocalState();
@@ -3584,8 +3680,10 @@ class QuranReaderController extends ChangeNotifier {
       if (account.recoveryKey != null && onRecoveryKey != null) await onRecoveryKey(account.recoveryKey!);
       if (!current()) throw const ReaderAccountFailure('Reader data changed during the request. Try again.');
       ReaderSyncSnapshot? snapshot;
+      int? syncRevision;
       if (!register) {
         final payload = await _readerAccountService.fetchBackup(source.baseUrl, account.identity);
+        syncRevision = payload is ReaderAccountBackup ? payload.syncRevision : null;
         if (!current()) throw const ReaderAccountFailure('Reader data changed during the request. Try again.');
         final required = _buildSyncSnapshot().toJson();
         if (required.keys.any((key) => !payload.containsKey(key)) ||
@@ -3600,7 +3698,7 @@ class QuranReaderController extends ChangeNotifier {
         }), deviceId: account.identity.deviceId);
       }
       final prepared = ReaderPreparedAccount._(account: account, baseUrl: source.baseUrl,
-          context: source.context, generation: source.generation, snapshot: snapshot);
+          context: source.context, generation: source.generation, snapshot: snapshot, syncRevision: syncRevision);
       _preparedReaderAccount = prepared;
       return prepared;
     } catch (error) {
@@ -3625,6 +3723,8 @@ class QuranReaderController extends ChangeNotifier {
     final previousIdentity = ReaderSyncIdentity(deviceId: _syncClientId, token: _syncToken);
     final previousEmail = _readerAccountEmail;
     final previousDirty = _readerSyncDirty;
+    final previousRevision = _readerSyncRevision;
+    final previousConflict = _readerSyncConflict;
     var dataApplied = false;
     var identitySaved = false;
     _readerAccountAdopting = true;
@@ -3643,6 +3743,12 @@ class QuranReaderController extends ChangeNotifier {
       _syncClientId = prepared.account.identity.deviceId;
       _syncToken = prepared.account.identity.token;
       _readerAccountEmail = prepared.account.email;
+      if (prepared.syncRevision != null) {
+        await _preferences.saveReaderSyncRevision(prepared.baseUrl, prepared.account.identity, prepared.syncRevision!);
+        if (!current()) throw const ReaderAccountFailure('Reader data changed during the request. Try again.');
+      }
+      _readerSyncRevision = prepared.syncRevision;
+      _readerSyncConflict = false;
       _syncUsesFreshBackup = false;
       _localChangeGeneration++;
       expectedGeneration = _localChangeGeneration;
@@ -3667,10 +3773,13 @@ class QuranReaderController extends ChangeNotifier {
           _syncClientId = previousIdentity.deviceId;
           _syncToken = previousIdentity.token;
           _readerAccountEmail = previousEmail;
+          _readerSyncRevision = previousRevision;
+          _readerSyncConflict = previousConflict;
           if (dataApplied && expectedGeneration == _localChangeGeneration) {
             try {
               await _applyRemoteSyncSnapshot(previous, syncContext: prepared.context,
-                  expectedGeneration: expectedGeneration, requireCloud: false);
+                  expectedGeneration: expectedGeneration, requireCloud: false,
+                  createRestorePoint: false);
             } catch (_) { /* In-memory rollback remains usable if persistence fails. */ }
           }
           if (sameContext()) {
@@ -3690,8 +3799,14 @@ class QuranReaderController extends ChangeNotifier {
     final source = await _beginReaderAccountTransition();
     try {
       final uploaded = await _readerSyncService.pushSnapshot(baseUrl: source.baseUrl,
-          deviceId: source.identity.deviceId, token: source.identity.token, snapshot: _buildSyncSnapshot());
+          deviceId: source.identity.deviceId, token: source.identity.token, snapshot: _buildSyncSnapshot(),
+          baseRevision: _readerSyncRevision);
       if (!uploaded.success || source.context != _syncContextGeneration || source.generation != _localChangeGeneration) {
+        if (source.context == _syncContextGeneration && uploaded.status == ReaderSyncStatus.conflict) _reportReaderSyncFailure(uploaded.status);
+        throw const ReaderAccountFailure('Your reader backup could not be saved. Pairing was stopped.');
+      }
+      if (!await _acknowledgeReaderSyncRevision(uploaded.syncRevision, source.context, forAccount: true) ||
+          source.generation != _localChangeGeneration) {
         throw const ReaderAccountFailure('Your reader backup could not be saved. Pairing was stopped.');
       }
       return await _readerAccountService.createPairing(source.baseUrl, source.identity);
@@ -3921,6 +4036,7 @@ class QuranReaderController extends ChangeNotifier {
     int? syncContext,
     int? expectedGeneration,
     bool requireCloud = true,
+    bool createRestorePoint = true,
   }) async {
     bool isCurrent() => !_isDisposed &&
         (syncContext == null || (requireCloud
@@ -3928,8 +4044,9 @@ class QuranReaderController extends ChangeNotifier {
             : syncContext == _syncContextGeneration)) &&
         (expectedGeneration == null || expectedGeneration == _localChangeGeneration);
     if (!isCurrent()) return false;
-    await saveRestorePoint('Before replacing reader data');
+    if (createRestorePoint) await saveRestorePoint('Before replacing reader data');
     if (!isCurrent()) return false;
+    ++_audioLoadGeneration;
     await _audioService.resetPlayback();
     if (!isCurrent()) return false;
     await _audioService.setRepeatEnabled(snapshot.audioState.repeatEnabled);
@@ -4044,7 +4161,7 @@ class QuranReaderController extends ChangeNotifier {
   void _scheduleCloudSyncPush({bool markDirty = true}) {
     if (_isDisposed || _isLoading || _suppressSyncDirty) return;
     if (markDirty) _markReaderSyncDirty();
-    if (_readerAccountBusy || _experienceSettings.syncMode != ReaderSyncMode.cloudReady ||
+    if (_readerAccountBusy || _readerSyncConflict || _experienceSettings.syncMode != ReaderSyncMode.cloudReady ||
         !_readerSyncDirty || _syncClientId.isEmpty || _syncBaseUrl.isEmpty) {
       return;
     }

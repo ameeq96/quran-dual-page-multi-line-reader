@@ -48,6 +48,10 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
   int _minutesPerDay = 10;
   bool _isSaving = false;
   final List<_StudyChatTurn> _chatTurns = [];
+  int? _savedRecordingRevision;
+  bool _recordingDecisionPending = false;
+  bool _allowExit = false;
+  int _toolSelectionRevision = 0;
 
   @override
   void initState() {
@@ -100,6 +104,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
 
   Future<void> _startVoiceCapture() async {
     if (_isRunning || _voiceCapture.isBusy) return;
+    if (!await _keepOrSaveRecording() || !mounted) return;
     _voiceBaseInput = _inputController.text.trimRight();
     _lastVoiceTranscript = '';
     _voiceInputSession = true;
@@ -107,6 +112,72 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
       language: _voiceLanguage,
       transcribe: false,
     );
+  }
+
+  bool get _hasUnsavedRecording => _voiceCapture.hasRecording &&
+      _savedRecordingRevision != _voiceCapture.recordingRevision;
+
+  Future<bool> _keepOrSaveRecording() async {
+    if (_recordingDecisionPending) return false;
+    if (!_voiceCapture.isBusy && !_hasUnsavedRecording) return true;
+    setState(() => _recordingDecisionPending = true);
+    try {
+      if (_voiceCapture.phase == ReaderVoiceCapturePhase.recording ||
+          _voiceCapture.phase == ReaderVoiceCapturePhase.stopping) {
+        await _voiceCapture.stop();
+      } else if (_voiceCapture.isBusy) {
+        _cancelVoiceCapture();
+      }
+      if (!mounted) return false;
+      if (!_hasUnsavedRecording) return true;
+      final choice = await showDialog<String>(context: context, barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(_suiteTr(context, 'Unsaved recording')),
+          content: Text(_suiteTr(context, 'Save this recording before continuing, or choose Discard to remove it.')),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, 'cancel'),
+                child: Text(tr(dialogContext, 'Cancel'))),
+            TextButton(onPressed: () => Navigator.pop(dialogContext, 'discard'),
+                child: Text(_suiteTr(context, 'Discard recording'))),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, 'save'),
+                child: Text(tr(dialogContext, 'Save recording'))),
+          ],
+        ));
+      if (!mounted || choice == null || choice == 'cancel') return false;
+      if (choice == 'discard') {
+        _cancelVoiceCapture();
+        return true;
+      }
+      final saved = await saveReaderRecording(context, capture: _voiceCapture,
+          chapterId: widget.controller.currentChapterSummary?.id,
+          chapterName: widget.controller.currentChapterSummary?.nameSimple);
+      if (saved == null || !mounted) return false;
+      _savedRecordingRevision = saved;
+      return !_hasUnsavedRecording;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(_suiteTr(context, 'The recording could not be saved. Your clip is still here.'))));
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _recordingDecisionPending = false);
+    }
+  }
+
+  Future<void> _selectTool(QuranAiTool tool) async {
+    if (tool == _selectedTool || _isRunning || _recordingDecisionPending) return;
+    final accepted = await _keepOrSaveRecording();
+    if (!mounted) return;
+    if (!accepted) {
+      setState(() => _toolSelectionRevision++);
+      return;
+    }
+    _cancelVoiceCapture();
+    setState(() {
+      _selectedTool = tool; _result = null; _aiErrorMessage = null;
+      _formattedResultBlocks = const [];
+    });
   }
 
   void _cancelVoiceCapture() {
@@ -275,6 +346,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
   }
 
   Future<void> _openCurrentPageInReader() async {
+    if (!await _keepOrSaveRecording() || !mounted) return;
     final pageNumber = widget.controller.currentPageNumber;
     if (!mounted) {
       return;
@@ -283,6 +355,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
   }
 
   Future<void> _openSearchResult(QuranSearchResult result) async {
+    if (!await _keepOrSaveRecording() || !mounted) return;
     await widget.controller.jumpToPage(result.pageNumber);
     if (!mounted) {
       return;
@@ -343,7 +416,14 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
 
         return Theme(
           data: themeData,
-          child: Scaffold(
+          child: PopScope<Object?>(
+            canPop: _allowExit || (!_recordingDecisionPending && !_voiceCapture.isBusy && !_hasUnsavedRecording),
+            onPopInvokedWithResult: (didPop, result) async {
+              if (didPop || !await _keepOrSaveRecording() || !mounted || !context.mounted) return;
+              setState(() => _allowExit = true);
+              Navigator.of(context).pop(result);
+            },
+            child: Scaffold(
             backgroundColor: themeData.scaffoldBackgroundColor,
             appBar: AppBar(
               title: Text(tr(context, 'AI Studio')),
@@ -371,7 +451,8 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
                 const SizedBox(height: 14),
                 _ToolPicker(
                   selectedTool: _selectedTool,
-                  enabled: !_isRunning && !_voiceCapture.isBusy,
+                  selectionRevision: _toolSelectionRevision,
+                  enabled: !_isRunning && !_voiceCapture.isBusy && !_recordingDecisionPending,
                   aiSettings: aiSettings,
                   languageLocked: widget.controller.isAiLanguageManagedByAdmin,
                   depthLocked: widget.controller.isAiDepthManagedByAdmin,
@@ -379,15 +460,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
                       widget.controller.hasAdminAiConfiguration,
                   onSelectLanguage: widget.controller.setAiResponseLanguage,
                   onSelectDepth: widget.controller.setAiResponseDepth,
-                  onSelected: (tool) {
-                    _cancelVoiceCapture();
-                    setState(() {
-                      _selectedTool = tool;
-                      _result = null;
-                      _aiErrorMessage = null;
-                      _formattedResultBlocks = const <_AiOutputBlock>[];
-                    });
-                  },
+                  onSelected: (tool) => unawaited(_selectTool(tool)),
                 ),
                 const SizedBox(height: 14),
                 if (_selectedTool != QuranAiTool.smartSearch) ...[
@@ -426,6 +499,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
                   ),
                   const SizedBox(height: 10),
                   ReaderRecordingSaveControls(capture: _voiceCapture,
+                    onSaved: (revision) => setState(() => _savedRecordingRevision = revision),
                     chapterId: widget.controller.currentChapterSummary?.id,
                     chapterName: widget.controller.currentChapterSummary?.nameSimple),
                 ],
@@ -545,7 +619,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
                 ],
               ],
             ),
-          ),
+          )),
         );
       },
     );
@@ -627,6 +701,10 @@ IconData _toolIcon(QuranAiTool tool) {
 String _suiteTr(BuildContext context, String label) {
   const labels = <String, (String, String, String)>{
     'AI study chat': ('AI mutala guftagu', 'AI مطالعہ گفتگو', 'محادثة الدراسة'),
+    'Unsaved recording': ('Ghair mehfooz recording', 'غیر محفوظ ریکارڈنگ', 'تسجيل غير محفوظ'),
+    'Save this recording before continuing, or choose Discard to remove it.': ('Aage barhne se pehle recording mehfooz karein, ya mitane ke liye Discard chunein.', 'آگے بڑھنے سے پہلے ریکارڈنگ محفوظ کریں، یا مٹانے کے لیے Discard چنیں۔', 'احفظ التسجيل قبل المتابعة، أو اختر تجاهله لإزالته.'),
+    'Discard recording': ('Recording mita dein', 'ریکارڈنگ مٹا دیں', 'تجاهل التسجيل'),
+    'The recording could not be saved. Your clip is still here.': ('Recording mehfooz nahin hui. Aap ka clip abhi yahan hai.', 'ریکارڈنگ محفوظ نہیں ہوئی۔ آپ کا کلپ ابھی یہاں ہے۔', 'تعذر حفظ التسجيل. ما زال المقطع موجودًا.'),
     'Quran quiz': ('Quran sawalat', 'قرآن سوالات', 'اختبار القرآن'),
     'Quran flashcards': ('Quran yaaddasht cards', 'قرآن یادداشت کارڈز', 'بطاقات القرآن'),
     'AI revision plan': ('AI dohrayi mansuba', 'AI دہرائی منصوبہ', 'خطة المراجعة'),
@@ -1114,6 +1192,7 @@ class _OverviewCard extends StatelessWidget {
 class _ToolPicker extends StatelessWidget {
   const _ToolPicker({
     required this.selectedTool,
+    this.selectionRevision = 0,
     this.enabled = true,
     required this.aiSettings,
     required this.languageLocked,
@@ -1125,6 +1204,7 @@ class _ToolPicker extends StatelessWidget {
   });
 
   final QuranAiTool selectedTool;
+  final int selectionRevision;
   final bool enabled;
   final ReaderAiSettings aiSettings;
   final bool languageLocked;
@@ -1220,7 +1300,7 @@ class _ToolPicker extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           DropdownButtonFormField<QuranAiTool>(
-            key: ValueKey<QuranAiTool>(selectedTool),
+            key: ValueKey('${selectedTool.name}:$selectionRevision'),
             initialValue: selectedTool,
             isExpanded: true,
             menuMaxHeight: 420,

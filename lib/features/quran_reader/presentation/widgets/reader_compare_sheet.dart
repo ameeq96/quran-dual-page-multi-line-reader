@@ -92,7 +92,7 @@ class _QuranCompareScreenState extends State<QuranCompareScreen> {
                       edition: edition,
                       page: page,
                       navigationPage: navigationPage,
-                      settings: previewSettings,
+                      settings: previewSettings.copyWith(mushafEdition: edition),
                       isActive: edition == activeEdition,
                       onUseEdition: () => _useEdition(edition),
                     ),

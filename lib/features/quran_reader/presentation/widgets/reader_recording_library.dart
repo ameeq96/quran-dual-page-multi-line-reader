@@ -7,6 +7,36 @@ import '../../../../core/services/reader_recording_store.dart';
 import '../../../../core/services/reader_voice_capture.dart';
 import '../../../../core/storage/reader_profile_store.dart';
 
+Future<int?> saveReaderRecording(BuildContext context, {
+  required ReaderVoiceCapture capture,
+  String? profileId, int? chapterId, String? chapterName,
+  ReaderRecordingStore? store,
+}) async {
+  if (capture.isBusy || !capture.hasRecording) return null;
+  final profile = profileId ?? ReaderProfileStore.instance.activeId;
+  final recordingStore = store ?? ReaderRecordingStore(profileId: profile);
+  final revision = capture.recordingRevision;
+  try {
+    if (recordingStore.profileId != profile || !recordingStore.supported) {
+      throw const ReaderRecordingFailure('Recordings are unavailable on this device.');
+    }
+    final details = await showDialog<({String label, String reference})>(context: context,
+        builder: (_) => _RecordingSaveDialog(initialReference: chapterName ?? ''));
+    if (details == null || !context.mounted) return null;
+    final bytes = await capture.readRecordingBytes();
+    if (!context.mounted || capture.recordingRevision != revision ||
+        ReaderProfileStore.instance.activeId != profile) {
+      throw const ReaderRecordingFailure('The recording changed before it could be saved.');
+    }
+    await recordingStore.save(bytes: bytes, mimeType: capture.recordingMimeType,
+        duration: capture.elapsed, label: details.label, reference: details.reference,
+        chapterId: details.reference.trim() == chapterName?.trim() ? chapterId : null);
+    return revision;
+  } finally {
+    if (store == null) recordingStore.dispose();
+  }
+}
+
 class ReaderRecordingSaveControls extends StatefulWidget {
   const ReaderRecordingSaveControls(
       {super.key,
@@ -14,11 +44,13 @@ class ReaderRecordingSaveControls extends StatefulWidget {
       this.profileId,
       this.chapterId,
       this.chapterName,
+      this.onSaved,
       this.store});
   final ReaderVoiceCapture capture;
   final String? profileId;
   final int? chapterId;
   final String? chapterName;
+  final ValueChanged<int>? onSaved;
   final ReaderRecordingStore? store;
   @override
   State<ReaderRecordingSaveControls> createState() =>
@@ -31,6 +63,7 @@ class _ReaderRecordingSaveControlsState
   late final ReaderRecordingStore _store;
   bool _saving = false;
   int? _savedRevision;
+  int? _messageRevision;
   String? _message;
   @override
   void initState() {
@@ -52,34 +85,17 @@ class _ReaderRecordingSaveControlsState
     if (_saving || widget.capture.isBusy || !widget.capture.hasRecording) {
       return;
     }
-    final capture = widget.capture;
-    final revision = capture.recordingRevision;
     setState(() {
       _saving = true;
       _message = null;
+      _messageRevision = widget.capture.recordingRevision;
     });
     try {
-      final details = await showDialog<({String label, String reference})>(
-          context: context,
-          builder: (_) =>
-              _RecordingSaveDialog(initialReference: widget.chapterName ?? ''));
-      if (details == null || !mounted) return;
-      final bytes = await capture.readRecordingBytes();
-      if (!mounted ||
-          capture.recordingRevision != revision ||
-          ReaderProfileStore.instance.activeId != _profileId) {
-        throw const ReaderRecordingFailure(
-            'The recording changed before it could be saved.');
-      }
-      await _store.save(
-          bytes: bytes,
-          mimeType: capture.recordingMimeType,
-          duration: capture.elapsed,
-          label: details.label,
-          reference: details.reference,
-          chapterId: details.reference.trim() == widget.chapterName?.trim()
-              ? widget.chapterId
-              : null);
+      final revision = await saveReaderRecording(context, capture: widget.capture,
+          profileId: _profileId, chapterId: widget.chapterId,
+          chapterName: widget.chapterName, store: _store);
+      if (revision == null || !mounted) return;
+      widget.onSaved?.call(revision);
       if (mounted) {
         setState(() {
           _savedRevision = revision;
@@ -129,7 +145,8 @@ class _ReaderRecordingSaveControlsState
                 icon: const Icon(Icons.library_music_outlined),
                 label: Text(tr(context, 'My recordings'))),
           ]),
-          if (_message != null)
+          if (_message != null && _messageRevision == widget.capture.recordingRevision &&
+              widget.capture.hasRecording)
             Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Text(tr(context, _message!))),

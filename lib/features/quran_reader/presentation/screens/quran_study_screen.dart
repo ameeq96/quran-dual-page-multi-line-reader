@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show MaxLengthEnforcement;
 
 import '../../../../app/reader_localization.dart';
+import '../../../../app/app_theme.dart';
 import '../../../../core/services/quran_study_binary_export.dart';
 import '../../../../core/services/quran_study_export.dart';
 import '../../data/services/quran_study_data_source.dart';
 import '../../domain/models/quran_study_models.dart';
+import '../controllers/quran_reader_controller.dart';
 
 class QuranStudyScreen extends StatefulWidget {
-  const QuranStudyScreen({super.key, this.initialVerseKey = '1:1'});
+  const QuranStudyScreen({super.key, this.initialVerseKey = '1:1', this.controller});
   final String initialVerseKey;
+  final QuranReaderController? controller;
   @override
   State<QuranStudyScreen> createState() => _QuranStudyScreenState();
 }
@@ -98,6 +101,10 @@ class _QuranStudyScreenState extends State<QuranStudyScreen> {
         bytes: pdf ? QuranStudyExport.pdf(cards) : cards.single.png,
         mimeType: pdf ? 'application/pdf' : 'image/png');
       _notice('Study export is ready.');
+    } on StateError catch (error) {
+      _notice(error.message == 'This Ayah and note are too long for a single card.'
+          ? 'This Ayah and note do not fit on one card. Shorten the note or reduce line breaks. Your note is still here.'
+          : 'Study export could not be saved. Try again.');
     } catch (_) { _notice('Study export could not be saved. Try again.'); }
     finally { if (mounted) setState(() => _exporting = false); }
   }
@@ -128,6 +135,20 @@ class _QuranStudyScreenState extends State<QuranStudyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
+    if (controller == null) return _buildStudy(context);
+    return AnimatedBuilder(animation: Listenable.merge([
+      controller.settingsListenable, controller.experienceListenable,
+    ]), builder: (context, _) {
+      final experience = controller.experienceSettings;
+      final theme = controller.settings.nightMode
+          ? AppTheme.dark(highContrast: experience.highContrastMode, largerText: experience.largerTextMode)
+          : AppTheme.light(highContrast: experience.highContrastMode, largerText: experience.largerTextMode);
+      return Theme(data: theme, child: Builder(builder: _buildStudy));
+    });
+  }
+
+  Widget _buildStudy(BuildContext context) {
     final theme = Theme.of(context);
     final verse = _verse;
     return Scaffold(
@@ -172,7 +193,8 @@ class _QuranStudyScreenState extends State<QuranStudyScreen> {
                   Text('${verse.chapterName} · ${verse.reference}', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 18),
                   SelectableText(verse.arabic, textDirection: TextDirection.rtl, textAlign: TextAlign.right,
-                    style: theme.textTheme.headlineSmall?.copyWith(fontSize: 30, height: 1.9)),
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                        fontSize: (theme.textTheme.headlineSmall?.fontSize ?? 24) * 1.25, height: 1.9)),
                   const Divider(height: 32),
                   Wrap(spacing: 8, children: [
                     ChoiceChip(label: Text(tr(context, 'English')), selected: !_urdu, onSelected: (_) => setState(() => _urdu = false)),

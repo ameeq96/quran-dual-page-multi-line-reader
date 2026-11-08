@@ -5,6 +5,7 @@ import 'reader_profile_store.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:crypto/crypto.dart';
 
 import '../../features/quran_reader/domain/models/reader_daily_progress_state.dart';
 import '../../features/quran_reader/domain/models/reader_bookmark.dart';
@@ -88,6 +89,17 @@ class ReaderPreferences {
     }
 
     return 1;
+  }
+
+  Future<bool> hasSavedSettings() async {
+    final prefs = await _prefs;
+    return const [
+      _mushafEditionKey, _fullscreenKey, _showPageNumbersKey, _preferImageModeKey,
+      _customBrightnessEnabledKey, _pageBrightnessKey, _nightModeKey,
+      _pageNightModeKey, _pagePresetEnabledKey, _pagePresetKey,
+      _pageOverlayEnabledKey, _pageReflectionEnabledKey, _lowMemoryModeKey,
+      _hifzFocusModeKey, _hifzMaskHeightFactorKey, _hifzRevealOnHoldKey,
+    ].any((key) => prefs.prefs.containsKey(prefs.key(key)));
   }
 
   Future<ReaderSettings> loadSettings() async {
@@ -562,6 +574,26 @@ class ReaderPreferences {
       throw StateError('Unable to save the local reader sync state.');
     }
   }
+
+  Future<int?> loadReaderSyncRevision(String baseUrl, ReaderSyncIdentity identity) async {
+    final prefs = await _prefs;
+    final revision = prefs.getInt(_readerSyncRevisionKey(baseUrl, identity));
+    return revision != null && revision >= 0 && revision <= 9007199254740991 ? revision : null;
+  }
+
+  Future<void> saveReaderSyncRevision(String baseUrl, ReaderSyncIdentity identity, int revision) async {
+    if (!isValidSyncIdentity(identity) || revision < 0 || revision > 9007199254740991) {
+      throw const FormatException('Invalid reader sync revision.');
+    }
+    final prefs = await _prefs;
+    if (!await prefs.setInt(_readerSyncRevisionKey(baseUrl, identity), revision)) {
+      throw StateError('Unable to save the reader sync revision.');
+    }
+  }
+
+  String _readerSyncRevisionKey(String baseUrl, ReaderSyncIdentity identity) =>
+      'reader.sync.revision.${Uri.encodeComponent(normalizeSyncBaseUrl(baseUrl))}.'
+      '${identity.deviceId}.${sha256.convert(utf8.encode(identity.token))}';
 
   Future<String> loadOrCreateSyncClientId() async {
     final prefs = await _prefs;

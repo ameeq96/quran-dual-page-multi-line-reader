@@ -627,6 +627,7 @@ class _ImagePageContent extends StatelessWidget {
           ],
         );
         return ReaderPagePinOverlay(
+          allowEditing: ReaderPinEditingScope.enabled(context),
           pageNumber: page.number,
           edition: edition,
           sourceKey: page.assetPath ?? '',

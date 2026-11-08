@@ -337,7 +337,7 @@ class _Sync implements QuranReaderSyncService {
           {required String baseUrl,
           required String deviceId,
           required String token,
-          required ReaderSyncSnapshot snapshot}) async =>
+          required ReaderSyncSnapshot snapshot, int? baseRevision}) async =>
       const ReaderSyncPushResult(status: ReaderSyncStatus.success);
   @override
   void cancelPending() {}
