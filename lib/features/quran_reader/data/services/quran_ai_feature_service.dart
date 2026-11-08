@@ -30,6 +30,322 @@ class QuranAiFeatureService {
     }
   }
 
+  Future<QuranAiStudyMaterial> prepareStudy({
+    required QuranAiTool tool,
+    required ReaderAiSettings settings,
+    required String userInput,
+    String referenceSelection = '',
+    List<String> historyReferences = const [],
+    required List<QuranSearchResult> Function(String) ayahSearch,
+    required List<String> defaultReferences,
+  }) async {
+    if (userInput.length > 4000) throw const FormatException('Use at most 4000 characters.');
+    final index = await _searchIndex();
+    final defaults = _validateStudyKeys(defaultReferences, index);
+    final history = _validateStudyKeys(historyReferences, index);
+    final query = userInput.trim();
+    final writtenPractice = tool == QuranAiTool.hifzCoach || tool == QuranAiTool.recitationFollow;
+    if (writtenPractice && referenceSelection.trim().isEmpty) {
+      throw const FormatException('Select an explicit Ayah or range for written-text practice.');
+    }
+    List<String> keys;
+    var navigation = <QuranSearchResult>[];
+    final referenceInput = _studyDigits(query);
+    if (referenceSelection.trim().isNotEmpty) {
+      keys = _parseStudySelection(referenceSelection, index);
+    } else if (RegExp(r'^\s*\d+\s*:').hasMatch(referenceInput)) {
+      keys = _parseStudySelection(query, index);
+    } else if (query.isEmpty || _studyFollowups.contains(_normalizeAiSearch(query))) {
+      keys = query.isNotEmpty && history.isNotEmpty ? history : defaults;
+      if (keys.isEmpty) throw const FormatException('Select an Ayah or enter a study topic.');
+    } else {
+      final found = await _runSmartSearch(tool: QuranAiTool.smartSearch,
+        settings: settings, context: _studyLookupContext, userInput: query,
+        pageSearch: (_) => const [], ayahSearch: ayahSearch);
+      navigation = List.of(found.searchResults);
+      keys = navigation.map((hit) => hit.verseKey!).toList(growable: false);
+    }
+    final candidates = keys.map((key) => index[key]!.canonical).toList(growable: false);
+    if (navigation.isEmpty) {
+      for (final key in keys) {
+        final matches = ayahSearch(key).where((hit) => hit.verseKey == key);
+        if (matches.isNotEmpty) navigation.add(matches.first);
+      }
+    }
+    QuranAiTextComparison? comparison;
+    if (writtenPractice) {
+      if (!RegExp(r'[\u0621-\u064A\u0671\u06A9\u06CC]').hasMatch(query)) {
+        throw const FormatException('Paste the Arabic text you want to compare.');
+      }
+      if (tool == QuranAiTool.hifzCoach) {
+        comparison = _compareStudyText(candidates.first.verseKey,
+          candidates.map((verse) => verse.arabic).join('\n'), query,
+          verseKeys: keys);
+      } else {
+        for (final verse in candidates) {
+          final current = _compareStudyText(verse.verseKey, verse.arabic, query,
+            verseKeys: [verse.verseKey]);
+          if (current.matchedWordCount > 0 && (comparison == null ||
+              current.matchedWordCount > comparison.matchedWordCount ||
+              (current.matchedWordCount == comparison.matchedWordCount &&
+                current.expectedWordCount < comparison.expectedWordCount))) {
+            comparison = current;
+          }
+        }
+      }
+    }
+    return QuranAiStudyMaterial(selectionLabel: keys.join(', '),
+      candidates: List.unmodifiable(candidates),
+      searchResults: List.unmodifiable(navigation), textComparison: comparison);
+  }
+
+  Future<QuranAiToolResult> finishStudy({
+    required QuranAiStudyMaterial material,
+    required List<String> selectedKeys,
+    required QuranAiTool tool,
+    required ReaderAiSettings settings,
+    int quizCount = 5,
+    int revisionDays = 7,
+    int minutesPerDay = 10,
+  }) async {
+    if (quizCount < 1 || quizCount > 8 || revisionDays < 1 || revisionDays > 30 ||
+        minutesPerDay < 5 || minutesPerDay > 120) {
+      throw const FormatException('Use 1–8 quiz questions, 1–30 days, and 5–120 minutes.');
+    }
+    final index = await _searchIndex();
+    final allowed = material.candidates.map((verse) => verse.verseKey).toSet();
+    if (allowed.length != material.candidates.length || allowed.length > 12 ||
+        allowed.any((key) => !index.containsKey(key)) ||
+        selectedKeys.length > 12 || selectedKeys.toSet().length != selectedKeys.length ||
+        selectedKeys.any((key) => !allowed.contains(key) || !index.containsKey(key)) ||
+        (allowed.isNotEmpty && selectedKeys.isEmpty)) {
+      throw const FormatException('Choose unique references from the supplied verified sources.');
+    }
+    final completeSelection = tool != QuranAiTool.smartSearch && tool != QuranAiTool.studyChat;
+    final remaining = allowed.where((key) => !selectedKeys.contains(key)).toList()
+      ..sort((a, b) {
+        final aa = a.split(':').map(int.parse).toList();
+        final bb = b.split(':').map(int.parse).toList();
+        return aa[0] != bb[0] ? aa[0].compareTo(bb[0]) : aa[1].compareTo(bb[1]);
+      });
+    final resultKeys = [ ...selectedKeys, if (completeSelection) ...remaining ];
+    final verses = resultKeys.map((key) => index[key]!.canonical).toList(growable: false);
+    final hits = <QuranSearchResult>[];
+    for (final verse in verses) {
+      final matches = material.searchResults.where((hit) => hit.verseKey == verse.verseKey);
+      if (matches.isEmpty) continue;
+      final hit = matches.first;
+      hits.add(QuranSearchResult(pageNumber: hit.pageNumber,
+        referencePageNumber: hit.referencePageNumber,
+        title: '${verse.verseKey} - ${verse.chapterName}',
+        snippet: verse.translationFor(settings.responseLanguage),
+        category: 'Ayah translation', verseKey: verse.verseKey,
+        navigationNote: hit.navigationNote));
+    }
+    final notes = <String>[
+      QuranStudyDataSource.corpusNotice,
+      QuranStudyDataSource.translationNotice,
+      'Sources are selected Ayahs, not verified positions on the original Mushaf scans. Navigation opens the Surah start where exact alignment is unavailable.',
+    ];
+    final questions = <QuranAiQuizQuestion>[];
+    final days = <QuranAiRevisionDay>[];
+    QuranAiBookmarkSuggestion? bookmark;
+    QuranAiTextComparison? comparison;
+    final preparedComparison = material.textComparison;
+    if (preparedComparison != null &&
+        (tool == QuranAiTool.hifzCoach || tool == QuranAiTool.recitationFollow)) {
+      final keys = preparedComparison.verseKeys.isEmpty
+          ? [preparedComparison.verseKey] : preparedComparison.verseKeys;
+      if (keys.any((key) => !allowed.contains(key))) {
+        throw const FormatException('Written comparison must use the selected verified sources.');
+      }
+      comparison = _compareStudyText(keys.first,
+        keys.map((key) => index[key]!.arabic).join('\n'), preparedComparison.recalled,
+        verseKeys: keys);
+    }
+    var output = _localize(settings,
+      urdu: 'منتخب آیات اور مستند تراجم نیچے پڑھیں۔ اپنی سمجھ اپنے الفاظ میں لکھیں اور غیر واضح بات استاد سے پوچھیں۔',
+      english: 'Read the selected Ayahs and their verified translations below. Write your understanding in your own words and ask a teacher about anything unclear.');
+    if (verses.isEmpty) {
+      output = _localize(settings, urdu: 'اس درخواست کے لیے مستند آیت نہیں ملی۔ موضوع یا حوالہ بدل کر کوشش کریں۔',
+        english: 'No verified Ayah sources matched this request. Try another topic or reference.');
+    } else if (tool == QuranAiTool.quranQuiz) {
+      final pool = index.values.toList()..shuffle();
+      for (final verse in verses.take(quizCount)) {
+        final correct = verse.translationFor(settings.responseLanguage);
+        final seen = {_normalizeAiSearch(correct)};
+        final options = <QuranAiQuizOption>[
+          QuranAiQuizOption(verseKey: verse.verseKey, translation: correct),
+        ];
+        for (final candidate in pool) {
+          if (candidate.reference == verse.verseKey ||
+              _normalizeAiSearch(candidate.arabic) == _normalizeAiSearch(verse.arabic)) {
+            continue;
+          }
+          final translation = candidate.canonical.translationFor(settings.responseLanguage);
+          if (!seen.add(_normalizeAiSearch(translation))) continue;
+          options.add(QuranAiQuizOption(verseKey: candidate.reference, translation: translation));
+          if (options.length == 4) break;
+        }
+        if (options.length != 4) throw StateError('Not enough distinct verified quiz options.');
+        options.shuffle();
+        questions.add(QuranAiQuizQuestion(verseKey: verse.verseKey, arabic: verse.arabic,
+          options: List.unmodifiable(options),
+          correctOptionIndex: options.indexWhere((option) => option.verseKey == verse.verseKey)));
+      }
+      output = _localize(settings, urdu: 'اصل عربی کے مطابق اسی آیت کا مستند ترجمہ منتخب کریں۔ جواب دینے کے بعد اصل ماخذ دیکھیں۔',
+        english: 'Choose the recorded translation for the original Arabic Ayah. Check the verified source after answering.');
+      notes.add('Quiz options are real bundled translations. Similar meanings can occur elsewhere; the correct option is the recorded translation of this reference.');
+    } else if (tool == QuranAiTool.revisionPlan) {
+      final orderedKeys = material.candidates.map((verse) => verse.verseKey).toList()
+        ..sort((a, b) {
+          final aa = a.split(':').map(int.parse).toList();
+          final bb = b.split(':').map(int.parse).toList();
+          return aa[0] != bb[0] ? aa[0].compareTo(bb[0]) : aa[1].compareTo(bb[1]);
+        });
+      final suggestedDaily = minutesPerDay ~/ 5;
+      final minimumDaily = (orderedKeys.length / revisionDays).ceil();
+      var perDay = suggestedDaily > minimumDaily ? suggestedDaily : minimumDaily;
+      if (perDay > orderedKeys.length) perDay = orderedKeys.length;
+      final starts = <String, int>{for (var i = 0; i < orderedKeys.length; i++)
+        orderedKeys[i]: i ~/ perDay + 1};
+      for (var day = 1; day <= revisionDays; day++) {
+        final learn = orderedKeys.where((key) => starts[key] == day).toList();
+        final review = orderedKeys.where((key) => day > starts[key]! &&
+          (const {1, 3, 7, 14, 21}.contains(day - starts[key]!) || day == revisionDays)).toList();
+        if (learn.isEmpty && review.isEmpty) {
+          final introduced = orderedKeys.where((key) => starts[key]! < day).toList();
+          if (introduced.isNotEmpty) review.add(introduced[(day - 1) % introduced.length]);
+        }
+        days.add(QuranAiRevisionDay(day: day, minutes: minutesPerDay,
+          learnReferences: List.unmodifiable(learn), reviewReferences: List.unmodifiable(review)));
+      }
+      output = _localize(settings, urdu: 'ہر دن کے مقررہ وقت میں منتخب آیات پڑھیں، یاد کریں اور دہرائیں۔ اپنی رفتار کے مطابق وقفہ لیں۔',
+        english: 'Use each daily time budget to read, recall and review the selected Ayahs. Adjust the pace to your needs.');
+      notes.add('Minutes are a study budget, not a promised completion time. This preview does not create reminders or alter your saved reading plan.');
+      if (perDay > suggestedDaily) {
+        notes.add('This selection needs more new Ayahs per day than the suggested time budget. Choose more days or fewer Ayahs if the workload is too high.');
+      }
+    } else if (tool == QuranAiTool.flashcards) {
+      output = _localize(settings, urdu: 'پہلے اصل عربی پڑھیں، پھر کارڈ پلٹ کر مستند ترجمہ دیکھیں۔',
+        english: 'Read the original Arabic first, then reveal the verified translation on each card.');
+    } else if (tool == QuranAiTool.hifzCoach || tool == QuranAiTool.recitationFollow) {
+      output = comparison == null
+        ? _localize(settings, urdu: 'منتخب آیات میں لکھے ہوئے الفاظ کا واضح ملاپ نہیں ملا۔',
+            english: 'No written-word match was found within the selected Ayahs.')
+        : _localize(settings,
+            urdu: 'تحریری موازنہ: ${comparison.expectedWordCount} اصل الفاظ میں سے ${comparison.matchedWordCount} الفاظ ترتیب سے ملے۔ یہ تلفظ کی جانچ نہیں ہے۔',
+            english: 'Written-text comparison: ${comparison.matchedWordCount} of ${comparison.expectedWordCount} source words matched in order. This does not assess pronunciation.');
+      notes.add('Written matching ignores vowel marks and common Arabic/Urdu spelling variants. It is not a recitation, pronunciation or Tajweed score.');
+      if (tool == QuranAiTool.recitationFollow) notes.add('Closest typed phrase match within the selected Ayahs only. Unmatched surrounding words are not evidence of a recitation mistake; no audio or printed-line following is performed.');
+    } else if (tool == QuranAiTool.tajweedTutor) {
+      final text = verses.map((verse) => verse.arabic).join(' ');
+      final marks = <String>[
+        if (text.contains('\u0651')) 'shadda (ّ)',
+        if (text.contains('\u0652')) 'sukun (ْ)',
+        if (RegExp(r'[\u064B-\u064D]').hasMatch(text)) 'tanwin (ً ٍ ٌ)',
+        if (text.contains('\u0653')) 'maddah (ٓ)',
+      ];
+      output = _localize(settings,
+        urdu: 'منتخب اصل عربی میں نظر آنے والی علامات: ${marks.isEmpty ? 'فہرست میں شامل کوئی علامت نہیں ملی' : marks.join('، ')}۔ ان کی قراءت استاد سے سیکھیں۔',
+        english: 'Visible marks in the selected original Arabic: ${marks.isEmpty ? 'none of the listed marks found' : marks.join(', ')}. Learn how to read them with a qualified teacher.');
+      notes.add('This is a visible-mark study checklist, not inferred Tajweed rules or acoustic analysis.');
+    } else if (tool == QuranAiTool.bookmarkAssistant) {
+      bookmark = QuranAiBookmarkSuggestion(folder: 'Review',
+        label: '${verses.first.chapterName} ${verses.first.verseKey}',
+        reason: 'Saves your current reading page; selected Ayah references are study context, not verified scan positions.');
+    } else if (tool == QuranAiTool.tafsirAssistant) {
+      output = _localize(settings, urdu: 'یہ آیات اور تراجم ہیں، تفسیر نہیں۔ تفسیر صرف الگ مستند ماخذ سے پڑھی جائے۔',
+        english: 'These are original Ayahs and verified translations, not tafsir. Tafsir must come from a separately verified tafsir source.');
+    } else if (tool == QuranAiTool.translationSimplifier) {
+      output = _localize(settings, urdu: 'مستند ترجمہ بغیر تبدیلی دکھایا گیا ہے۔ ایک وقت میں ایک جملہ پڑھیں اور اصل عربی سے موازنہ کریں۔',
+        english: 'The verified translation is shown unchanged. Read one sentence at a time and compare it with the original Arabic.');
+      final layout = <String>[];
+      for (final verse in verses) {
+        final translations = [
+          if (settings.responseLanguage != AiResponseLanguage.urdu) verse.translationEn,
+          if (settings.responseLanguage != AiResponseLanguage.english) verse.translationUr,
+        ];
+        for (final translation in translations) {
+          final sentences = translation.split(RegExp(r'(?<=[.!?۔؟])\s+'));
+          layout.add('${verse.verseKey}\n${[for (var i = 0; i < sentences.length; i++) '${i + 1}. ${sentences[i]}'].join('\n')}');
+        }
+      }
+      output = '$output\n\n${layout.join('\n\n')}';
+      notes.add('This is a sentence-by-sentence reading layout of the recorded translation, not a new translation or generated paraphrase.');
+    } else if (tool == QuranAiTool.explainer || tool == QuranAiTool.studyNotes || tool == QuranAiTool.dailyLesson) {
+      final passages = verses.map((verse) => '${verse.verseKey} — ${verse.chapterName}\n${verse.translationFor(settings.responseLanguage)}').join('\n\n');
+      final steps = _localize(settings, urdu: 'مطالعے کے مراحل:\n1. اصل عربی پڑھیں۔\n2. مستند ترجمہ دیکھیں۔\n3. اپنی سمجھ اپنے الفاظ میں لکھیں۔\n4. ایک سوال نوٹ کریں اور آیات دہرائیں۔',
+        english: 'Study steps:\n1. Read the original Arabic.\n2. Check the verified translation.\n3. Write your understanding in your own words.\n4. Note one question and review the Ayahs.');
+      output = '$passages\n\n$steps';
+      notes.add('Passages are the recorded source translations. Reading and reflection prompts are study instructions, not new tafsir or factual claims.');
+    }
+    return QuranAiToolResult(tool: tool, output: output,
+      sourceLabel: 'Verified Quran study sources', usedOnlineModel: false,
+      searchResults: List.unmodifiable(hits), bookmarkSuggestion: bookmark,
+      canonicalVerses: List.unmodifiable(verses), quizQuestions: List.unmodifiable(questions),
+      revisionDays: List.unmodifiable(days), textComparison: comparison,
+      selectionLabel: completeSelection ? material.selectionLabel : resultKeys.join(', '),
+      sourceNotes: List.unmodifiable(notes));
+  }
+
+  List<String> _validateStudyKeys(List<String> input, Map<String, _AiSearchVerse> index) {
+    if (input.length > 12) throw const FormatException('Select at most 12 Ayahs.');
+    final keys = <String>[];
+    for (final raw in input) {
+      final parsed = _parseStudySelection(raw, index);
+      if (parsed.length != 1) throw const FormatException('History and defaults require single Ayah references.');
+      if (!keys.contains(parsed.single)) keys.add(parsed.single);
+    }
+    return keys;
+  }
+
+  List<String> _parseStudySelection(String selection, Map<String, _AiSearchVerse> index) {
+    final text = _studyDigits(selection).trim().replaceAll('–', '-').replaceAll('—', '-');
+    final match = RegExp(r'^(\d{1,3})\s*:\s*(\d{1,3})(?:\s*-\s*(?:(\d{1,3})\s*:\s*)?(\d{1,3}))?$').firstMatch(text);
+    if (match == null) throw const FormatException('Use a reference such as 2:255 or a same-Surah range such as 112:1-4.');
+    final chapter = int.parse(match[1]!);
+    final start = int.parse(match[2]!);
+    final end = int.parse(match[4] ?? match[2]!);
+    if ((match[3] != null && int.parse(match[3]!) != chapter) || end < start || end - start + 1 > 12) {
+      throw const FormatException('Use an ordered range of at most 12 Ayahs within one Surah.');
+    }
+    final keys = [for (var verse = start; verse <= end; verse++) '$chapter:$verse'];
+    if (keys.any((key) => !index.containsKey(key))) throw const FormatException('The selection contains an invalid Quran reference.');
+    return keys;
+  }
+
+  QuranAiTextComparison _compareStudyText(String key, String expected, String recalled,
+      {required List<String> verseKeys}) {
+    List<String> words(String value) => value.split(RegExp(r'[\s،؛,.:!?؟0-9٠-٩۰-۹]+'))
+        .where((word) => _normalizeAiSearch(word).isNotEmpty).toList();
+    final source = words(expected);
+    final input = words(recalled);
+    final a = source.map(_normalizeAiSearch).toList();
+    final b = input.map(_normalizeAiSearch).toList();
+    final table = List.generate(a.length + 1, (_) => List<int>.filled(b.length + 1, 0));
+    for (var i = a.length - 1; i >= 0; i--) {
+      for (var j = b.length - 1; j >= 0; j--) {
+        table[i][j] = a[i] == b[j] ? table[i + 1][j + 1] + 1
+          : table[i + 1][j] >= table[i][j + 1] ? table[i + 1][j] : table[i][j + 1];
+      }
+    }
+    final missing = <String>[];
+    final extra = <String>[];
+    var i = 0;
+    var j = 0;
+    while (i < a.length && j < b.length) {
+      if (a[i] == b[j]) { i++; j++; }
+      else if (table[i + 1][j] >= table[i][j + 1]) { missing.add(source[i++]); }
+      else { extra.add(input[j++]); }
+    }
+    missing.addAll(source.skip(i));
+    extra.addAll(input.skip(j));
+    return QuranAiTextComparison(verseKey: key, verseKeys: List.unmodifiable(verseKeys),
+      expected: expected, recalled: recalled, missingWords: List.unmodifiable(missing),
+      extraWords: List.unmodifiable(extra), matchedWordCount: table[0][0], expectedWordCount: source.length);
+  }
+
   Future<QuranAiToolResult> runTool({
     required QuranAiTool tool,
     required ReaderAiSettings settings,
@@ -41,6 +357,15 @@ class QuranAiFeatureService {
     final normalizedInput = userInput.trim();
 
     switch (tool) {
+      case QuranAiTool.studyChat:
+      case QuranAiTool.quranQuiz:
+      case QuranAiTool.flashcards:
+      case QuranAiTool.revisionPlan:
+        final material = await prepareStudy(tool: tool, settings: settings,
+          userInput: normalizedInput, ayahSearch: ayahSearch, defaultReferences: context.verseKeys);
+        return finishStudy(material: material,
+          selectedKeys: material.candidates.map((verse) => verse.verseKey).toList(),
+          tool: tool, settings: settings);
       case QuranAiTool.smartSearch:
         return _runSmartSearch(
           tool: tool,
@@ -886,17 +1211,35 @@ bool _hasAiSearchTerm(String text, String term) {
       .any((prefix) => ' $text '.contains(' $prefix$term '));
 }
 
+String _studyDigits(String value) => value.replaceAllMapped(RegExp(r'[٠-٩۰-۹]'), (match) {
+  final code = match[0]!.codeUnitAt(0);
+  return (code - (code >= 0x6f0 ? 0x6f0 : 0x660)).toString();
+});
+
+final _studyFollowups = const ['more', 'more detail', 'explain more', 'explain further',
+  'tell me more', 'continue', 'again', 'explain this', 'explain this ayah',
+  'aur batao', 'mazeed', 'مزید', 'مزید بتاؤ', 'اس کی وضاحت',
+  'المزيد', 'تابع', 'اشرح اكثر'].map(_normalizeAiSearch).toSet();
+
+const _studyLookupContext = QuranAiPageContext(pageNumber: 0, standardPageNumber: 0,
+  pageReference: '', mushafEditionLabel: '', chapterName: null, chapterSummary: '',
+  chapterInfo: '', tafsirExcerpt: '', translationUr: '', translationEn: '',
+  arabicLines: [], verseKeys: [], notes: '', dailyProgressSummary: '');
+
 final _aiArabicWord = RegExp(r'^[\u0621-\u064A]+$');
 
 class _AiSearchVerse {
   _AiSearchVerse(QuranStudyVerse verse, String Function(String) normalize)
       : reference = verse.reference, chapterName = verse.chapterName,
-        english = verse.english, urdu = verse.urdu,
+        english = verse.english, urdu = verse.urdu, arabic = verse.arabic,
         fields = [normalize(verse.english), normalize(verse.urdu), normalize(verse.arabic)];
   final String reference;
   final String chapterName;
   final String english;
   final String urdu;
+  final String arabic;
+  QuranAiCanonicalVerse get canonical => QuranAiCanonicalVerse(verseKey: reference,
+    chapterName: chapterName, arabic: arabic, translationEn: english, translationUr: urdu);
   final List<String> fields;
   late final Set<String> _tokens = fields.expand((text) => text.split(' ')).toSet();
   bool contains(String term) {

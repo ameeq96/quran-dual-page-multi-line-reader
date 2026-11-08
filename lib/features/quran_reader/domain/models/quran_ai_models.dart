@@ -85,6 +85,10 @@ enum QuranAiTool {
   bookmarkAssistant,
   voiceQna,
   recitationFollow,
+  studyChat,
+  quranQuiz,
+  flashcards,
+  revisionPlan,
 }
 
 extension QuranAiToolX on QuranAiTool {
@@ -101,6 +105,10 @@ extension QuranAiToolX on QuranAiTool {
         QuranAiTool.bookmarkAssistant => 'AI bookmarks assistant',
         QuranAiTool.voiceQna => 'AI voice Q&A',
         QuranAiTool.recitationFollow => 'Recitation follow mode',
+        QuranAiTool.studyChat => 'AI study chat',
+        QuranAiTool.quranQuiz => 'Quran quiz',
+        QuranAiTool.flashcards => 'Quran flashcards',
+        QuranAiTool.revisionPlan => 'AI revision plan',
       };
 
   String get subtitle => switch (this) {
@@ -128,6 +136,10 @@ extension QuranAiToolX on QuranAiTool {
           'Use a transcript or typed question for AI Q&A.',
         QuranAiTool.recitationFollow =>
           'Match a heard phrase to the closest line on the page.',
+        QuranAiTool.studyChat => 'Ask follow-up questions using verified Ayah sources.',
+        QuranAiTool.quranQuiz => 'Test your understanding with verified Quran text and translations.',
+        QuranAiTool.flashcards => 'Review original Arabic with verified translations.',
+        QuranAiTool.revisionPlan => 'Build a revision schedule for selected Ayahs.',
       };
 
   String get actionLabel => switch (this) {
@@ -143,6 +155,10 @@ extension QuranAiToolX on QuranAiTool {
         QuranAiTool.bookmarkAssistant => 'Suggest bookmark',
         QuranAiTool.voiceQna => 'Answer question',
         QuranAiTool.recitationFollow => 'Find current line',
+        QuranAiTool.studyChat => 'Find study sources',
+        QuranAiTool.quranQuiz => 'Create Quran quiz',
+        QuranAiTool.flashcards => 'Create flashcards',
+        QuranAiTool.revisionPlan => 'Create revision plan',
       };
 
   bool get expectsUserInput => switch (this) {
@@ -158,6 +174,10 @@ extension QuranAiToolX on QuranAiTool {
         QuranAiTool.bookmarkAssistant => true,
         QuranAiTool.voiceQna => true,
         QuranAiTool.recitationFollow => true,
+        QuranAiTool.studyChat => true,
+        QuranAiTool.quranQuiz => false,
+        QuranAiTool.flashcards => false,
+        QuranAiTool.revisionPlan => false,
       };
 
   String get inputLabel => switch (this) {
@@ -173,6 +193,10 @@ extension QuranAiToolX on QuranAiTool {
         QuranAiTool.bookmarkAssistant => 'Optional bookmark purpose',
         QuranAiTool.voiceQna => 'Paste voice transcript or type question',
         QuranAiTool.recitationFollow => 'Paste heard phrase',
+        QuranAiTool.studyChat => 'Study question or follow-up',
+        QuranAiTool.quranQuiz => 'Optional quiz topic',
+        QuranAiTool.flashcards => 'Optional flashcard topic',
+        QuranAiTool.revisionPlan => 'Optional revision focus',
       };
 
   String get inputHint => switch (this) {
@@ -195,6 +219,10 @@ extension QuranAiToolX on QuranAiTool {
           'Example: memorization review or dua folder',
         QuranAiTool.voiceQna => 'Example: what guidance is in this ayah?',
         QuranAiTool.recitationFollow => 'Example: والذين يؤمنون بما انزل اليك',
+        QuranAiTool.studyChat => 'Example: patience and prayer, then ask about these Ayahs',
+        QuranAiTool.quranQuiz => 'Example: prayer or forgiveness',
+        QuranAiTool.flashcards => 'Example: gratitude or trust in Allah',
+        QuranAiTool.revisionPlan => 'Example: review the selected Ayahs this week',
       };
 }
 
@@ -376,6 +404,14 @@ class QuranAiToolResult {
     this.bookmarkSuggestion,
     this.matchedLineNumber,
     this.matchedLineText,
+    this.canonicalVerses = const <QuranAiCanonicalVerse>[],
+    this.quizQuestions = const <QuranAiQuizQuestion>[],
+    this.revisionDays = const <QuranAiRevisionDay>[],
+    this.textComparison,
+    this.selectionLabel = '',
+    this.sourceNotes = const <String>[],
+    this.contextPageNumber,
+    this.contextScopeKey,
   });
 
   final QuranAiTool tool;
@@ -386,10 +422,81 @@ class QuranAiToolResult {
   final QuranAiBookmarkSuggestion? bookmarkSuggestion;
   final int? matchedLineNumber;
   final String? matchedLineText;
+  final List<QuranAiCanonicalVerse> canonicalVerses;
+  final List<QuranAiQuizQuestion> quizQuestions;
+  final List<QuranAiRevisionDay> revisionDays;
+  final QuranAiTextComparison? textComparison;
+  final String selectionLabel;
+  final List<String> sourceNotes;
+  final int? contextPageNumber;
+  final String? contextScopeKey;
 
   bool get hasSearchResults => searchResults.isNotEmpty;
   bool get hasBookmarkSuggestion => bookmarkSuggestion != null;
   bool get hasMatchedLine =>
       matchedLineNumber != null &&
       (matchedLineText?.trim().isNotEmpty ?? false);
+}
+
+class QuranAiCanonicalVerse {
+  const QuranAiCanonicalVerse({required this.verseKey, required this.chapterName,
+    required this.arabic, required this.translationEn, required this.translationUr});
+  final String verseKey;
+  final String chapterName;
+  final String arabic;
+  final String translationEn;
+  final String translationUr;
+  String translationFor(AiResponseLanguage language) => switch (language) {
+    AiResponseLanguage.english => translationEn,
+    AiResponseLanguage.urdu => translationUr,
+    AiResponseLanguage.bilingual => '$translationEn\n\n$translationUr',
+  };
+}
+
+class QuranAiStudyMaterial {
+  const QuranAiStudyMaterial({required this.selectionLabel, required this.candidates,
+    this.searchResults = const <QuranSearchResult>[], this.textComparison});
+  final String selectionLabel;
+  final List<QuranAiCanonicalVerse> candidates;
+  final List<QuranSearchResult> searchResults;
+  final QuranAiTextComparison? textComparison;
+}
+
+class QuranAiQuizOption {
+  const QuranAiQuizOption({required this.verseKey, required this.translation});
+  final String verseKey;
+  final String translation;
+}
+
+class QuranAiQuizQuestion {
+  const QuranAiQuizQuestion({required this.verseKey, required this.arabic,
+    required this.options, required this.correctOptionIndex});
+  final String verseKey;
+  final String arabic;
+  final List<QuranAiQuizOption> options;
+  final int correctOptionIndex;
+}
+
+class QuranAiRevisionDay {
+  const QuranAiRevisionDay({required this.day, required this.minutes,
+    required this.learnReferences, required this.reviewReferences});
+  final int day;
+  final int minutes;
+  final List<String> learnReferences;
+  final List<String> reviewReferences;
+}
+
+class QuranAiTextComparison {
+  const QuranAiTextComparison({required this.verseKey, required this.expected,
+    required this.recalled, required this.missingWords, required this.extraWords,
+    required this.matchedWordCount, required this.expectedWordCount,
+    this.verseKeys = const <String>[]});
+  final String verseKey;
+  final List<String> verseKeys;
+  final String expected;
+  final String recalled;
+  final List<String> missingWords;
+  final List<String> extraWords;
+  final int matchedWordCount;
+  final int expectedWordCount;
 }

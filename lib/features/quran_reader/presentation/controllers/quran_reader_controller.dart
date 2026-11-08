@@ -1284,7 +1284,22 @@ class QuranReaderController extends ChangeNotifier {
   Future<QuranAiToolResult> runAiTool(
     QuranAiTool tool, {
     String userInput = '',
+    String referenceSelection = '',
+    List<String> historyReferences = const [],
+    int quizCount = 5,
+    int revisionDays = 7,
+    int minutesPerDay = 10,
   }) async {
+    if (tool != QuranAiTool.smartSearch) {
+      return _runCanonicalStudyTool(tool,
+        userInput: userInput,
+        referenceSelection: referenceSelection,
+        historyReferences: historyReferences,
+        quizCount: quizCount,
+        revisionDays: revisionDays,
+        minutesPerDay: minutesPerDay,
+      );
+    }
     if (tool == QuranAiTool.smartSearch) {
       await _repository.warmSupplementalContent();
     }
@@ -1395,6 +1410,146 @@ class QuranReaderController extends ChangeNotifier {
       matchedLineNumber: groundedActions.matchedLineNumber,
       matchedLineText: groundedActions.matchedLineText,
     );
+  }
+
+  Future<QuranAiToolResult> _runCanonicalStudyTool(
+    QuranAiTool tool, {
+    required String userInput,
+    required String referenceSelection,
+    required List<String> historyReferences,
+    required int quizCount,
+    required int revisionDays,
+    required int minutesPerDay,
+  }) async {
+    await _repository.warmSupplementalContent();
+    final page = _currentPageNumber;
+    final scope = '${_preferences.profileId}|$_annotationKey';
+    final material = await _aiFeatureService.prepareStudy(
+      tool: tool,
+      settings: _aiSettings,
+      userInput: userInput,
+      referenceSelection: referenceSelection,
+      historyReferences: historyReferences.take(12).toList(growable: false),
+      defaultReferences: currentPageInsight?.verses.take(7)
+          .map((verse) => verse.verseKey).toList(growable: false) ?? const [],
+      ayahSearch: searchAyahsLocal,
+    );
+    final allowedKeys = material.candidates.map((verse) => verse.verseKey).toSet();
+    if (material.candidates.length > 12 ||
+        allowedKeys.length != material.candidates.length) {
+      throw const QuranAdminAiException('Select at most 12 distinct Ayahs.');
+    }
+    final passages = material.candidates.map((verse) =>
+        'Verse key: ${verse.verseKey}\n'
+        'Surah: ${verse.chapterName}\n'
+        'Verified translation:\n${verse.translationFor(_aiSettings.responseLanguage)}')
+        .join('\n\n');
+    if (passages.length > 7200) {
+      throw const QuranAdminAiException(
+          'This selection is too long. Choose a smaller Ayah range.');
+    }
+    final context = await _buildCurrentAiPageContext(forSearch: true);
+    final remote = await _adminAiProxyService.runTool(
+      baseUrl: adminSyncBaseUrl,
+      tool: tool,
+      settings: _aiSettings,
+      context: context,
+      userInput: userInput,
+      groundingContext: passages.isEmpty
+          ? 'No verified Ayah candidates were found.'
+          : 'Verified canonical study references. ${material.selectionLabel}\n\n$passages',
+    );
+    if (remote == null) {
+      throw const QuranAdminAiException('Ollama returned no study selection.');
+    }
+    late List<String> keys;
+    try {
+      final decision = json.decode(remote.output);
+      if (decision is! Map<String, dynamic> || decision.length != 1 ||
+          decision['matches'] is! List) {
+        throw const FormatException('Invalid study ranking.');
+      }
+      keys = List<String>.from(decision['matches'] as List);
+      if (keys.length > allowedKeys.length || keys.toSet().length != keys.length ||
+          (allowedKeys.isNotEmpty && keys.isEmpty) ||
+          keys.any((key) => !allowedKeys.contains(key))) {
+        throw const FormatException('Unverified study references.');
+      }
+    } catch (_) {
+      throw const QuranAdminAiException(
+          'Ollama returned an invalid study selection. Try again.');
+    }
+    final result = await _aiFeatureService.finishStudy(
+      material: material,
+      selectedKeys: keys,
+      tool: tool,
+      settings: _aiSettings,
+      quizCount: quizCount,
+      revisionDays: revisionDays,
+      minutesPerDay: minutesPerDay,
+    );
+    return QuranAiToolResult(
+      tool: result.tool,
+      output: remote.sourceNotes.isEmpty
+          ? result.output
+          : '${remote.sourceNotes.join('\n\n')}\n\n${result.output}',
+      sourceLabel: remote.sourceLabel,
+      usedOnlineModel: true,
+      searchResults: result.searchResults,
+      bookmarkSuggestion: result.bookmarkSuggestion,
+      matchedLineNumber: result.matchedLineNumber,
+      matchedLineText: result.matchedLineText,
+      canonicalVerses: result.canonicalVerses,
+      quizQuestions: result.quizQuestions,
+      revisionDays: result.revisionDays,
+      textComparison: result.textComparison,
+      selectionLabel: result.selectionLabel,
+      sourceNotes: [...result.sourceNotes, ...remote.sourceNotes],
+      contextPageNumber: page,
+      contextScopeKey: scope,
+    );
+  }
+
+  Future<void> saveAiStudyResultAsNote(QuranAiToolResult result) async {
+    final page = result.contextPageNumber;
+    final scope = '${_preferences.profileId}|$_annotationKey';
+    if (page == null || page != _currentPageNumber ||
+        result.contextScopeKey != scope || _isDisposed) {
+      throw StateError('Return to the original reading page and edition before saving this study.');
+    }
+    final block = StringBuffer()
+      ..writeln('[AI study: ${result.tool.title}]')
+      ..writeln(result.selectionLabel)
+      ..writeln(result.output);
+    for (final verse in result.canonicalVerses) {
+      block..writeln('\n${verse.verseKey} - ${verse.chapterName}')
+        ..writeln(verse.arabic)
+        ..writeln(verse.translationFor(_aiSettings.responseLanguage));
+    }
+    for (final day in result.revisionDays) {
+      block.writeln('Day ${day.day} (${day.minutes} min): '
+          'Study ${day.learnReferences.join(', ')}; review ${day.reviewReferences.join(', ')}');
+    }
+    if (result.textComparison case final comparison?) {
+      block..writeln('\nTyped recall: ${comparison.recalled}')
+        ..writeln('Missing words: ${comparison.missingWords.join(' ')}')
+        ..writeln('Extra words: ${comparison.extraWords.join(' ')}');
+    }
+    block.writeln(result.sourceNotes.join('\n'));
+    final text = block.toString().trim();
+    await saveRestorePoint('Before adding AI study note');
+    if (_isDisposed || page != _currentPageNumber ||
+        scope != '${_preferences.profileId}|$_annotationKey') {
+      throw StateError('The reading context changed. Run the study again before saving.');
+    }
+    final next = Map<int, String>.from(_editionPageNotes[_annotationKey] ?? {});
+    final previous = next[page] ?? '';
+    if (previous.contains(text)) return;
+    next[page] = previous.trim().isEmpty ? text : '${previous.trimRight()}\n\n$text';
+    _pageNotes = next;
+    _editionPageNotes[_annotationKey] = next;
+    _publishContentChange();
+    _scheduleNotesPersistence();
   }
 
   Future<void> applyAiBookmarkSuggestion(

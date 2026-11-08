@@ -38,6 +38,10 @@ class QuranAdminAiProxyService {
       case QuranAiTool.tajweedTutor:
       case QuranAiTool.bookmarkAssistant:
       case QuranAiTool.recitationFollow:
+      case QuranAiTool.studyChat:
+      case QuranAiTool.quranQuiz:
+      case QuranAiTool.flashcards:
+      case QuranAiTool.revisionPlan:
         return true;
     }
   }
@@ -71,12 +75,16 @@ class QuranAdminAiProxyService {
             '${groundingContext.trim().isEmpty
                 ? 'No verified Ayah hits were supplied for this query.'
                 : groundingContext.trim()}'
-        : 'The following context contains excerpts, '
-        'which may describe the Surah rather than exact scanned-page '
-        'Ayahs. Do not invent Quran text, references, page or line '
-        'anchors, or claim acoustic assessment. State when the '
-        'supplied context is insufficient.\n\n${context.toPromptBlock()}'
-        '${groundingContext.trim().isEmpty ? '' : '\n\n${groundingContext.trim()}'}';
+        : 'Rank the supplied verified Quran study references for this tool '
+            'and question. Return only {"matches":["supplied Ayah key"]}. '
+            'Use only supplied keys, without duplicates, and select at least '
+            'one when candidates exist. Return an empty array for no '
+            'candidates. The app builds lessons, quizzes, cards, plans and '
+            'text comparisons from the original source data; do not invent '
+            'facts, translations, pronunciation scores or scan positions.\n\n'
+            '${groundingContext.trim().isEmpty
+                ? 'No verified Ayah candidates were supplied.'
+                : groundingContext.trim()}';
     if (promptContext.length > 8000) {
       throw const QuranAdminAiException(
           'The Quran context is too large. Try a shorter query or another page.');
@@ -128,6 +136,13 @@ class QuranAdminAiProxyService {
         output: output,
         sourceLabel: 'Ollama $modelName',
         usedOnlineModel: true,
+        sourceNotes: payload['sourceNotes'] is List
+            ? (payload['sourceNotes'] as List)
+                .whereType<String>()
+                .where((note) => note.length <= 1800)
+                .take(4)
+                .toList(growable: false)
+            : const [],
       );
     } on QuranAdminAiException {
       rethrow;
@@ -145,32 +160,10 @@ class QuranAdminAiProxyService {
   }
 
   String _toolInstruction(QuranAiTool tool) {
-    switch (tool) {
-      case QuranAiTool.explainer:
-        return 'Explain the current Quran page simply with key themes and practical understanding.';
-      case QuranAiTool.tafsirAssistant:
-        return 'Give short tafsir or context help using only the supplied page context.';
-      case QuranAiTool.studyNotes:
-        return 'Generate study notes, reflection points, and class-ready summary points.';
-      case QuranAiTool.translationSimplifier:
-        return 'Rewrite the translation in simpler student-friendly language while keeping meaning faithful.';
-      case QuranAiTool.askCurrentPage:
-        return 'Answer the user question about the current page in a concise and grounded way.';
-      case QuranAiTool.dailyLesson:
-        return 'Create a short daily lesson with one reflection and one action point.';
-      case QuranAiTool.voiceQna:
-        return 'Answer the transcript or typed question in a clear, conversational way.';
-      case QuranAiTool.smartSearch:
-        return 'SEARCH_VERIFIED_KEYS_V1\nRank the supplied Ayah results by relevance to the query. Return only {"matches":["supplied Ayah key"]}. Use only supplied keys, with no duplicates. Select at least one supplied key when results exist; otherwise return {"matches":[]}. Do not generate translations or explanations.';
-      case QuranAiTool.hifzCoach:
-        return 'Coach the pasted memorization text using only supplied Arabic lines. State any missing context; do not claim to assess audio or invent missing Quran words.';
-      case QuranAiTool.tajweedTutor:
-        return 'Give text-based tajweed study guidance using only the supplied Quran context. Do not claim to assess recorded pronunciation or provide acoustic scores.';
-      case QuranAiTool.bookmarkAssistant:
-        return 'Explain a useful bookmark purpose for the current reading context. The actual bookmark action uses a separate deterministic label and folder.';
-      case QuranAiTool.recitationFollow:
-        return 'Discuss the pasted phrase against the supplied Arabic context only. Do not invent line numbers or claim live audio following; line actions use a separate text match.';
+    if (tool == QuranAiTool.smartSearch) {
+      return 'SEARCH_VERIFIED_KEYS_V1\nRank the supplied Ayah results by relevance to the query. Return only {"matches":["supplied Ayah key"]}. Use only supplied keys, with no duplicates. Select at least one supplied key when results exist; otherwise return {"matches":[]}. Do not generate translations or explanations.';
     }
+    return 'QURAN_STUDY_KEYS_V1\nRank the supplied verified Ayah references for ${tool.name}. Return only {"matches":["supplied Ayah key"]}. Use only supplied keys, with no duplicates. Select at least one supplied key when candidates exist, or an empty array for no candidates. Do not generate Quran text, translations, tafsir or audio assessments.';
   }
 
   String _normalizeBaseUrl(String value) {
