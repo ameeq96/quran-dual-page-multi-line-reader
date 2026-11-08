@@ -159,15 +159,27 @@ class QuranAiFeatureService {
         final localOnly = pureScope || structured.root != null || structured.pos != null;
         final queries = {if (local.isNotEmpty) local,
           if (!localOnly) ...retrieval.queries.map(_normalizeAiSearch)};
-        final scorers = queries.map(_AiDataQuery.new).toList(growable: false);
+        final rawScorer = local.isEmpty ? null : _AiDataQuery(local);
+        final plannedScorers = localOnly ? const <_AiDataQuery>[] : retrieval.queries
+          .map(_normalizeAiSearch).toSet().map((phrase) => _AiDataQuery(phrase, highRecall: true)).toList(growable: false);
         for (final verse in index.values) {
           if (!allowed(verse)) continue;
           if (pureScope && queries.isEmpty) {
             add(verse.reference, chapterIds.length > 1 ? 5000 - verse.verseNumber : 5000);
           }
-          for (final scorer in scorers) {
+          final rawScore = rawScorer?.score(verse) ?? 0;
+          if (rawScore > 0) add(verse.reference, rawScore);
+          var bestPlannedScore = 0;
+          var matchingPlannedQueries = 0;
+          for (final scorer in plannedScorers) {
             final score = scorer.score(verse);
-            if (score > 0) add(verse.reference, score);
+            if (score > 0) {
+              matchingPlannedQueries++;
+              if (score > bestPlannedScore) bestPlannedScore = score;
+            }
+          }
+          if (matchingPlannedQueries > 0) {
+            add(verse.reference, bestPlannedScore + (matchingPlannedQueries - 1) * 600);
           }
         }
         for (final key in localOnly ? const <String>[] : retrieval.references) {
@@ -1501,8 +1513,9 @@ String _aiLatinStem(String value) {
 }
 
 class _AiDataQuery {
-  _AiDataQuery(this.phrase);
+  _AiDataQuery(this.phrase, {this.highRecall = false});
   final String phrase;
+  final bool highRecall;
   late final Match? root = RegExp(r'^(?:arabic\s+)?(?:root|جذر|جذور|ماده)\s+(.+)$').firstMatch(phrase);
   late final Match? pos = RegExp(r'^(?:(?:pos|part of speech)\s+)?(nouns?|verbs?|adjectives?|pronouns?|prepositions?)$').firstMatch(phrase);
   late final List<_AiSearchTopic> topics = _aiSearchTopics.where((topic) => topic.mentions(phrase)).toList();
@@ -1535,7 +1548,7 @@ class _AiDataQuery {
       if (curatedHit) curated++;
     }
     matched += tokens.where(verse.containsData).length;
-    if (matched < (total == 1 ? 1 : (total * 0.67).ceil())) return 0;
+    if (matched < (highRecall || total == 1 ? 1 : (total * 0.67).ceil())) return 0;
     return matched * 10000 ~/ total + matched * 300 +
         (verse.containsData(phrase) ? 2000 : 0) + curated * 150;
   }
