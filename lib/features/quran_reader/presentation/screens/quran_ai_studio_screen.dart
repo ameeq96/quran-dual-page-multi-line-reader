@@ -32,7 +32,6 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
   late final TextEditingController _inputController;
   late final ReaderVoiceCapture _voiceCapture;
   String _voiceLanguage = 'ar-SA';
-  bool _useOnlineRecognition = false;
   bool _voiceInputSession = false;
   String _voiceBaseInput = '';
   String _lastVoiceTranscript = '';
@@ -40,6 +39,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
   QuranAiToolResult? _result;
   List<_AiOutputBlock> _formattedResultBlocks = const <_AiOutputBlock>[];
   bool _isRunning = false;
+  String? _aiErrorMessage;
 
   @override
   void initState() {
@@ -95,7 +95,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
     _voiceInputSession = true;
     await _voiceCapture.start(
       language: _voiceLanguage,
-      transcribe: _useOnlineRecognition,
+      transcribe: false,
     );
   }
 
@@ -116,8 +116,14 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
     }
 
     QuranAiToolResult? nextResult;
+    String? nextError;
     List<_AiOutputBlock> nextFormattedResultBlocks = const <_AiOutputBlock>[];
-    setState(() => _isRunning = true);
+    setState(() {
+      _isRunning = true;
+      _aiErrorMessage = null;
+      _result = null;
+      _formattedResultBlocks = const <_AiOutputBlock>[];
+    });
     try {
       nextResult = await widget.controller.runAiTool(
         _selectedTool,
@@ -127,10 +133,22 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
       if (!mounted) {
         return;
       }
+    } catch (_) {
+      nextError = switch (ReaderLocalization.instance.language) {
+        ReaderLanguage.urdu =>
+          'اولاما جواب نہیں دے سکا یا درخواست کا وقت ختم ہو گیا۔ دوبارہ کوشش کریں۔ کوئی دوسرا AI فراہم کنندہ استعمال نہیں ہوا۔',
+        ReaderLanguage.romanUrdu =>
+          'Ollama jawab nahi de saka ya request ka waqt khatam ho gaya. Dobara koshish karein. Koi doosra AI provider istemal nahi hua.',
+        ReaderLanguage.arabic =>
+          'تعذر الحصول على إجابة من Ollama أو انتهت مهلة الطلب. حاول مجددًا. لم يُستخدم أي مزود ذكاء اصطناعي آخر.',
+        ReaderLanguage.english =>
+          'Ollama could not answer or the request timed out. Try again. No other AI provider was used.',
+      };
     } finally {
       if (mounted) {
         setState(() {
           _isRunning = false;
+          _aiErrorMessage = nextError;
           if (nextResult != null) {
             _result = nextResult;
             _formattedResultBlocks = nextFormattedResultBlocks;
@@ -249,6 +267,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
                     setState(() {
                       _selectedTool = tool;
                       _result = null;
+                      _aiErrorMessage = null;
                       _formattedResultBlocks = const <_AiOutputBlock>[];
                     });
                   },
@@ -267,14 +286,12 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
                   _VoiceInputCard(
                     capture: _voiceCapture,
                     language: _voiceLanguage,
-                    onlineRecognition: _useOnlineRecognition,
+                    onlineRecognition: false,
                     enabled: !_isRunning,
                     onLanguageChanged: (language) {
                       setState(() => _voiceLanguage = language);
                     },
-                    onOnlineRecognitionChanged: (enabled) {
-                      setState(() => _useOnlineRecognition = enabled);
-                    },
+                    onOnlineRecognitionChanged: (_) {},
                     onStart: _startVoiceCapture,
                     onStop: _voiceCapture.stop,
                     onCancel: _cancelVoiceCapture,
@@ -300,6 +317,14 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
                   ),
                 ),
                 const SizedBox(height: 14),
+                if (_aiErrorMessage != null) ...[
+                  Semantics(
+                    liveRegion: true,
+                    child: Text(_aiErrorMessage!,
+                      style: TextStyle(color: themeData.colorScheme.error)),
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 if (_isRunning) ...[
                   const _AiStudioSkeletonCard(),
                 ] else if (_result != null) ...[
@@ -837,14 +862,20 @@ class _VoiceInputCard extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
             title: Text(tr(context, 'Use online speech recognition')),
-            value: onlineRecognition,
-            onChanged: enabled && !busy && capture.speechSupported
-                ? (value) => onOnlineRecognitionChanged(value ?? false)
-                : null,
+            value: false,
+            onChanged: null,
           ),
           Text(
-            tr(context,
-                'Online recognition sends microphone audio to your browser\'s speech provider. Review the transcript before using it.'),
+            switch (ReaderLocalization.instance.language) {
+              ReaderLanguage.urdu =>
+                'اولاما صرف متن استعمال کرتا ہے۔ ریکارڈنگ اس آلے پر رہتی ہے؛ اپنا متن خود لکھیں یا پیسٹ کریں۔',
+              ReaderLanguage.romanUrdu =>
+                'Ollama sirf matn istemal karta hai. Recording isi device par rehti hai; apna transcript likhein ya paste karein.',
+              ReaderLanguage.arabic =>
+                'يستخدم Ollama النص فقط. يبقى التسجيل على هذا الجهاز؛ اكتب النص أو الصقه بنفسك.',
+              ReaderLanguage.english =>
+                'Ollama uses text only. Recordings stay on this device; type or paste your transcript.',
+            },
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
               height: 1.5,
@@ -1081,6 +1112,23 @@ class _ResultCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
+          Text(
+            switch (ReaderLocalization.instance.language) {
+              ReaderLanguage.urdu =>
+                'AI کی مطالعاتی مدد میں غلطیاں ہو سکتی ہیں۔ قرآنی اقتباسات اصل مصحف اور مستند ترجمے سے ضرور ملائیں۔',
+              ReaderLanguage.romanUrdu =>
+                'AI ki study help mein ghaltiyan ho sakti hain. Quran ke quotes ko asal Mushaf aur mustanad tarjume se zaroor milayein.',
+              ReaderLanguage.arabic =>
+                'قد تحتوي المساعدة الدراسية بالذكاء الاصطناعي على أخطاء. راجع الاقتباسات القرآنية في المصحف الأصلي وترجمة موثوقة.',
+              ReaderLanguage.english =>
+                'AI study help can contain errors. Check Quran quotations against the original Mushaf and a verified translation.',
+            },
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
           SelectionArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

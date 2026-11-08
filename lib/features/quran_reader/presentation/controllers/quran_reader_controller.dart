@@ -400,26 +400,15 @@ class QuranReaderController extends ChangeNotifier {
       _adminAiDepthOverride != null;
   bool get isAiLanguageManagedByAdmin => _adminAiLanguageOverride != null;
   bool get isAiDepthManagedByAdmin => _adminAiDepthOverride != null;
-  String get adminAiProviderLabel => switch (_normalizedAdminAiProvider) {
-        'ollama' => 'Ollama',
-        'openai' => 'ChatGPT',
-        'custom' => 'Custom AI',
-        _ => 'Local assistant',
-      };
-  String get adminAiModelLabel => _normalizedAdminAiProvider == 'local'
-      ? 'Built-in local mode'
-      : (_adminAiModelSetting.isEmpty
-          ? 'Provider default model'
-          : _adminAiModelSetting);
-  String get adminAiEndpointLabel => _adminAiEndpointSetting;
-  String get adminAiStatusLabel => _adminAiStatusSetting.isEmpty
-      ? switch (_normalizedAdminAiProvider) {
-          'ollama' => 'Ollama is active from the admin dashboard.',
-          'openai' => 'ChatGPT is active from the admin dashboard.',
-          'custom' => 'Custom AI is active from the admin dashboard.',
-          _ => 'Local assistant is active in the app.',
-        }
-      : _adminAiStatusSetting;
+  String get adminAiProviderLabel => 'Ollama';
+  String get adminAiModelLabel => QuranAdminAiProxyService.modelName;
+  String get adminAiEndpointLabel => '$adminSyncBaseUrl/public/ai/run';
+  String get adminAiStatusLabel =>
+      _adminAiProviderSetting.toLowerCase() == 'ollama' &&
+              _adminAiModelSetting == QuranAdminAiProxyService.modelName &&
+              _adminAiStatusSetting.isNotEmpty
+          ? _adminAiStatusSetting
+          : 'Ollama qwen3:0.6b only';
   bool get isPlansPacksEnabled => _featureFlag(
         'feature_plans_packs',
         fallback: true,
@@ -495,21 +484,6 @@ class QuranReaderController extends ChangeNotifier {
 
   String get _adminAiProviderSetting =>
       _adminConfig.setting('ai_provider')?.trim() ?? '';
-
-  String get _normalizedAdminAiProvider {
-    final normalized = _adminAiProviderSetting.trim().toLowerCase();
-    switch (normalized) {
-      case 'ollama':
-        return 'ollama';
-      case 'openai':
-      case 'chatgpt':
-        return 'openai';
-      case 'custom':
-        return 'custom';
-      default:
-        return 'local';
-    }
-  }
 
   String get _adminAiModelSetting =>
       _adminConfig.setting('ai_model')?.trim() ?? '';
@@ -1312,25 +1286,71 @@ class QuranReaderController extends ChangeNotifier {
     String userInput = '',
   }) async {
     final context = await _buildCurrentAiPageContext();
-    if (_shouldUseAdminAiProxy(tool)) {
-      final remoteResult = await _adminAiProxyService.runTool(
-        baseUrl: adminSyncBaseUrl,
+    QuranAiToolResult? groundedActions;
+    var groundingContext = '';
+    if (tool == QuranAiTool.smartSearch ||
+        tool == QuranAiTool.bookmarkAssistant ||
+        tool == QuranAiTool.hifzCoach ||
+        tool == QuranAiTool.recitationFollow) {
+      groundedActions = await _aiFeatureService.runTool(
         tool: tool,
         settings: _aiSettings,
         context: context,
         userInput: userInput,
+        pageSearch: searchPagesLocal,
+        ayahSearch: searchAyahsLocal,
       );
-      if (remoteResult != null) {
-        return remoteResult;
+      if (tool == QuranAiTool.smartSearch) {
+        String excerpt(String text, int limit) {
+          final normalized = text.trim().replaceAll(RegExp(r'\s+'), ' ');
+          if (normalized.length <= limit) return normalized;
+          const suffix = ' [excerpt; continues]';
+          final prefix = normalized.substring(0, limit - suffix.length);
+          final boundary = prefix.lastIndexOf(' ');
+          return boundary > 0
+              ? '${prefix.substring(0, boundary)}$suffix'
+              : '[Excerpt omitted: no complete word fits.]';
+        }
+
+        final hits = groundedActions.searchResults
+            .where((hit) => hit.verseKey != null &&
+                RegExp(r'^\d{1,3}:\d{1,3}$').hasMatch(hit.verseKey!))
+            .take(3)
+            .toList(growable: false);
+        groundingContext = hits.isEmpty
+            ? 'Verified query-specific Quran lookup: no verified Ayah hits '
+                'were found in the local Quran data. Do not invent matching '
+                'references or treat the current page as a query match.'
+            : 'Verified query-specific Ayah hits from local Quran data. '
+                'Snippets are excerpts, not complete Ayahs. Use only these '
+                'references when explaining the search results:\n${hits.map((hit) =>
+                  'Verse key: ${hit.verseKey}\nTitle: ${excerpt(hit.title, 160)}\n'
+                  'Snippet excerpt: ${excerpt(hit.snippet, 400)}').join('\n\n')}';
       }
     }
-    return _aiFeatureService.runTool(
+    final remoteResult = await _adminAiProxyService.runTool(
+      baseUrl: adminSyncBaseUrl,
       tool: tool,
       settings: _aiSettings,
       context: context,
       userInput: userInput,
-      pageSearch: searchPagesLocal,
-      ayahSearch: searchAyahsLocal,
+      groundingContext: groundingContext,
+    );
+    if (remoteResult == null) {
+      throw const QuranAdminAiException('Ollama returned no answer.');
+    }
+    if (groundedActions == null) {
+      return remoteResult;
+    }
+    return QuranAiToolResult(
+      tool: tool,
+      output: remoteResult.output,
+      sourceLabel: remoteResult.sourceLabel,
+      usedOnlineModel: remoteResult.usedOnlineModel,
+      searchResults: groundedActions.searchResults,
+      bookmarkSuggestion: groundedActions.bookmarkSuggestion,
+      matchedLineNumber: groundedActions.matchedLineNumber,
+      matchedLineText: groundedActions.matchedLineText,
     );
   }
 
@@ -3634,16 +3654,6 @@ class QuranReaderController extends ChangeNotifier {
 
   bool _featureFlag(String key, {required bool fallback}) {
     return _adminConfig.isFeatureEnabled(key, fallback: fallback);
-  }
-
-  bool _shouldUseAdminAiProxy(QuranAiTool tool) {
-    if (adminSyncBaseUrl.trim().isEmpty) {
-      return false;
-    }
-    if (!QuranAdminAiProxyService.supportsRemoteTool(tool)) {
-      return false;
-    }
-    return _normalizedAdminAiProvider != 'local';
   }
 
   Future<void> _hydrateFromCloudIfNeeded() async {
