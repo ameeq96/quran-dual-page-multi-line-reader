@@ -166,19 +166,11 @@ const _installBrowserFakes = r'''
     },
     emitTranscript(text) {
       const event = new SpeechRecognitionEvent('result');
-      const alternative = Object.create(SpeechRecognitionAlternative.prototype);
-      Object.defineProperties(alternative, {
-        transcript: {value: text}, confidence: {value: 1},
-      });
-      const result = Object.create(SpeechRecognitionResult.prototype);
-      Object.defineProperties(result, {
-        length: {value: 1}, isFinal: {value: true},
-        0: {value: alternative}, item: {value: () => alternative},
-      });
-      const results = Object.create(SpeechRecognitionResultList.prototype);
-      Object.defineProperties(results, {
-        length: {value: 1}, 0: {value: result}, item: {value: () => result},
-      });
+      const alternative = {transcript: text, confidence: 1};
+      const result = {
+        length: 1, isFinal: true, 0: alternative, item: () => alternative,
+      };
+      const results = {length: 1, 0: result, item: () => result};
       Object.defineProperty(event, 'results', {value: results});
       this.lastRecognition.dispatchEvent(event);
     },

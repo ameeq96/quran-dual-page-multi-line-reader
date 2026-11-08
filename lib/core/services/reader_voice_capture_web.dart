@@ -7,6 +7,24 @@ import 'reader_voice_capture.dart';
 @JS('window.MediaRecorder')
 external JSFunction? get _mediaRecorderConstructor;
 
+extension type _VoiceSpeechEvent(JSObject _) implements JSObject {
+  external _VoiceSpeechResults? get results;
+}
+
+extension type _VoiceSpeechResults(JSObject _) implements JSObject {
+  external JSNumber get length;
+  external _VoiceSpeechResult? item(int index);
+}
+
+extension type _VoiceSpeechResult(JSObject _) implements JSObject {
+  external JSNumber get length;
+  external _VoiceSpeechAlternative? item(int index);
+}
+
+extension type _VoiceSpeechAlternative(JSObject _) implements JSObject {
+  external JSString? get transcript;
+}
+
 ReaderVoiceCapture createReaderVoiceCapture() => _BrowserVoiceCapture();
 
 class _BrowserVoiceCapture extends ReaderVoiceCapture {
@@ -182,13 +200,16 @@ class _BrowserVoiceCapture extends ReaderVoiceCapture {
       _isTranscribing = true;
       _speechSubscriptions.add(recognition.onResult.listen((event) {
         if (!_current(generation)) return;
-        final results = event.results;
+        final results = _VoiceSpeechEvent(event as JSObject).results;
         if (results == null) return;
-        _transcript = results
-            .where((result) => (result.length ?? 0) > 0)
-            .map((result) => result.item(0).transcript?.trim() ?? '')
-            .where((text) => text.isNotEmpty)
-            .join(' ');
+        final phrases = <String>[];
+        for (var index = 0; index < results.length.toDartInt; index++) {
+          final result = results.item(index);
+          if (result == null || result.length.toDartInt == 0) continue;
+          final text = result.item(0)?.transcript?.toDart.trim() ?? '';
+          if (text.isNotEmpty) phrases.add(text);
+        }
+        _transcript = phrases.join(' ');
         if (_transcript.length > 16000) {
           _transcript = _transcript.substring(0, 16000);
           unawaited(stop());
