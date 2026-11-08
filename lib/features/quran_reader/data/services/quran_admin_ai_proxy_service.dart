@@ -53,6 +53,7 @@ class QuranAdminAiProxyService {
     required QuranAiPageContext context,
     required String userInput,
     String groundingContext = '',
+    bool searchPlanning = false,
   }) async {
     if (!supportsRemoteTool(tool) || baseUrl.trim().isEmpty) {
       throw const QuranAdminAiException('Ollama is not configured.');
@@ -65,10 +66,29 @@ class QuranAdminAiProxyService {
       throw const QuranAdminAiException('The Ollama backend address is invalid.');
     }
 
-    final promptContext = tool == QuranAiTool.smartSearch
+    final planning = searchPlanning && tool == QuranAiTool.smartSearch;
+    final promptContext = planning
+        ? 'You translate a full-Quran search request into lookup parameters; '
+            'you do not answer it. Convert semantic, Hindi, Roman Urdu, Urdu or Arabic '
+            'input into up to 3 short English search queries. For a topical '
+            'request, supply useful query keywords even without a named Surah. '
+            'Examples of query translation: pani ki ahmiyat -> water; '
+            'insaf -> justice; how the sky was created -> heavens, creation. '
+            'Apply the actual user request, not the examples. '
+            'Return only {"surahIds":[],"queries":[],"references":[],"collectionIds":[]}. '
+            'Use up to 4 numeric Surah IDs from 1 to 114 only when the user '
+            'names a Surah filter; a bare Surah request has empty queries. '
+            'Use up to 4 valid Surah:Ayah candidate references and up to 4 '
+            'collection IDs listed in the catalogue. Use empty arrays for '
+            'uncertain references or filters. No answers, Quran quotations, '
+            'personal notes, extra fields or markdown. Catalogue:\n\n'
+            '${groundingContext.trim().isEmpty
+                ? 'No Surah or collection catalogue was supplied.'
+                : groundingContext.trim()}'
+        : tool == QuranAiTool.smartSearch
         ? 'Rank the following verified Ayah search results for the query. '
             'Return only a JSON object with a matches array of supplied '
-            'Ayah keys, best match first. Select at least one key when '
+            'Ayah keys, best match first, up to 12 supplied keys. Select at least one key when '
             'results are supplied, or an empty array when none are supplied. '
             'Do not write explanations, new references or Quran quotations. '
             'The app displays the original translations.\n\n'
@@ -105,7 +125,7 @@ class QuranAdminAiProxyService {
           <String, dynamic>{
             'tool': tool.name,
             'toolTitle': tool.title,
-            'toolInstruction': _toolInstruction(tool),
+            'toolInstruction': _toolInstruction(tool, searchPlanning: planning),
             'userInput': userInput.trim(),
             'responseLanguage': settings.responseLanguage.storageValue,
             'responseDepth': settings.responseDepth.storageValue,
@@ -159,9 +179,12 @@ class QuranAdminAiProxyService {
     }
   }
 
-  String _toolInstruction(QuranAiTool tool) {
+  String _toolInstruction(QuranAiTool tool, {bool searchPlanning = false}) {
+    if (searchPlanning && tool == QuranAiTool.smartSearch) {
+      return 'QURAN_QUERY_PLAN_V1\nTranslate the actual user search into lookup parameters, not an answer. Return only {"surahIds":[],"queries":[],"references":[],"collectionIds":[]}. Topical questions need up to 3 short English queries. Use at most 4 valid candidate references, 4 explicitly named Surah IDs and 4 exact catalogue collection IDs. A bare Surah request has empty queries. No markdown, quotations, personal notes or additional fields.';
+    }
     if (tool == QuranAiTool.smartSearch) {
-      return 'SEARCH_VERIFIED_KEYS_V1\nRank the supplied Ayah results by relevance to the query. Return only {"matches":["supplied Ayah key"]}. Use only supplied keys, with no duplicates. Select at least one supplied key when results exist; otherwise return {"matches":[]}. Do not generate translations or explanations.';
+      return 'QURAN_STUDY_KEYS_V1\nRank up to 12 supplied Ayah results by relevance to the query. Return only {"matches":["supplied Ayah key"]}. Use only supplied keys, with no duplicates. Select at least one supplied key when results exist; otherwise return {"matches":[]}. Do not generate translations or explanations.';
     }
     return 'QURAN_STUDY_KEYS_V1\nRank the supplied verified Ayah references for ${tool.name}. Return only {"matches":["supplied Ayah key"]}. Use only supplied keys, with no duplicates. Select at least one supplied key when candidates exist, or an empty array for no candidates. Do not generate Quran text, translations, tafsir or audio assessments.';
   }

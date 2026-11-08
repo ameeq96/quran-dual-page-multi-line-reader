@@ -1316,19 +1316,50 @@ class QuranReaderController extends ChangeNotifier {
         tool == QuranAiTool.bookmarkAssistant ||
         tool == QuranAiTool.hifzCoach ||
         tool == QuranAiTool.recitationFollow) {
-      groundedActions = await _aiFeatureService.runTool(
-        tool: tool,
+      Map<String, dynamic>? searchPlan;
+      if (await _aiFeatureService.needsSearchPlanning(userInput)) {
+        final planned = await _adminAiProxyService.runTool(
+          baseUrl: adminSyncBaseUrl,
+          tool: QuranAiTool.smartSearch,
+          settings: _aiSettings,
+          context: context,
+          userInput: userInput,
+          groundingContext: await _aiFeatureService.searchPlanningContext(userInput),
+          searchPlanning: true,
+        );
+        if (planned == null) {
+          throw const QuranAdminAiException('Ollama returned no search plan.');
+        }
+        try {
+          var text = planned.output.trim();
+          if (text.startsWith('```')) {
+            final fenced = RegExp(r'^```(?:json)?\s*([\s\S]*?)\s*```$',
+                caseSensitive: false).firstMatch(text);
+            if (fenced == null) throw const FormatException('Invalid search plan.');
+            text = fenced[1]!;
+          }
+          final decoded = json.decode(text);
+          if (decoded is! Map<String, dynamic>) {
+            throw const FormatException('Invalid search plan.');
+          }
+          searchPlan = decoded;
+        } catch (_) {
+          throw const QuranAdminAiException(
+              'Ollama could not understand this search. Try a clearer question.');
+        }
+      }
+      groundedActions = await _aiFeatureService.searchQuranData(
         settings: _aiSettings,
         context: context,
         userInput: userInput,
-        pageSearch: searchPagesLocal,
+        plan: searchPlan,
         ayahSearch: searchAyahsLocal,
       );
       if (tool == QuranAiTool.smartSearch) {
         final hits = groundedActions.searchResults
             .where((hit) => hit.verseKey != null &&
                 RegExp(r'^\d{1,3}:\d{1,3}$').hasMatch(hit.verseKey!))
-            .take(3)
+            .take(12)
             .toList(growable: false);
         final passages = <String>[];
         var passageLength = 0;
@@ -1409,6 +1440,8 @@ class QuranReaderController extends ChangeNotifier {
       sourceLabel: remoteResult.sourceLabel,
       usedOnlineModel: remoteResult.usedOnlineModel,
       searchResults: searchResults,
+      selectionLabel: groundedActions.selectionLabel,
+      sourceNotes: groundedActions.sourceNotes,
       bookmarkSuggestion: groundedActions.bookmarkSuggestion,
       matchedLineNumber: groundedActions.matchedLineNumber,
       matchedLineText: groundedActions.matchedLineText,

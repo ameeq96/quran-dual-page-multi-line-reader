@@ -1,12 +1,18 @@
+import 'dart:convert';
+
+import 'package:flutter/services.dart';
+
 import '../../domain/models/quran_ai_models.dart';
 import '../../domain/models/quran_search_result.dart';
 import '../../domain/models/quran_study_models.dart';
 import 'quran_study_data_source.dart';
+import 'quran_navigation_data_source.dart';
 
 class QuranAiFeatureService {
   QuranAiFeatureService();
 
   Future<Map<String, _AiSearchVerse>>? _searchIndexFuture;
+  List<_AiSearchChapter> _searchChapters = const [];
 
   Future<Map<String, _AiSearchVerse>> _searchIndex() => _searchIndexFuture ??=
       _loadSearchIndex().catchError((Object error) {
@@ -21,13 +27,201 @@ class QuranAiFeatureService {
       if (source.verseCount != 6236) {
         throw StateError('The verified Quran search corpus is incomplete.');
       }
+      final navigation = QuranNavigationDataSource();
+      await navigation.initialize();
+      final payload = jsonDecode(await rootBundle.loadString(
+        'assets/quran_pages/quran_page_insights.json')) as Map<String, dynamic>;
+      final metadata = {for (final chapter in payload['chapters'] as List)
+        (chapter as Map)['id'] as int: chapter};
+      if (navigation.surahs.length != 114 || metadata.length != 114) {
+        throw StateError('The verified Surah catalogue is incomplete.');
+      }
+      final locations = <String, ({int page, Set<int> juz})>{};
+      for (final page in payload['pages'] as List) {
+        for (final verse in page['verses'] as List) {
+          locations[verse['verseKey'] as String] = (page: page['pageNumber'] as int,
+            juz: {verse['juzNumber'] as int});
+        }
+      }
+      _searchChapters = List.unmodifiable(navigation.surahs.map((chapter) =>
+        _AiSearchChapter(chapter.id, chapter.nameSimple, chapter.nameComplex,
+          chapter.nameArabic, chapter.translatedName,
+          metadata[chapter.id]!['versesCount'] as int,
+          metadata[chapter.id]!['revelationPlace'] as String)));
       return Map.unmodifiable({
         for (final key in source.references)
-          key: _AiSearchVerse(source.verse(key), _normalizeAiSearch),
+          key: _AiSearchVerse(source.verse(key), _normalizeAiSearch,
+            page: locations[key]?.page ?? 0, juz: locations[key]?.juz ?? const {}),
       });
     } finally {
       source.dispose();
     }
+  }
+
+  Future<String> searchCatalog() async {
+    await _searchIndex();
+    return 'Coverage: 6236 Arabic Ayahs, English/Urdu, roots/POS. '
+        'Offline gloss/transliteration: Al-Fatihah only. '
+        'No global remote Tafsir, image OCR or personal data.\n'
+        'Surahs: ID | name | Arabic | English title\n'
+        '${_searchChapters.map((chapter) => '${chapter.id}|${chapter.simple}|'
+          '${chapter.arabic}|${chapter.translated}').join('\n')}\n'
+        'Study collections: ID | title\n'
+        '${quranStudyCollections.map((collection) => '${collection.id}|${collection.title}').join('\n')}';
+  }
+
+  Future<String> searchPlanningContext(String userInput) async {
+    if (userInput.length > 4000) throw const FormatException('Use at most 4000 characters.');
+    await _searchIndex();
+    final chapter = _resolveAiChapterQuery(_normalizeAiSearch(userInput), _searchChapters);
+    return 'Tool coverage: all 6236 Quran Ayahs and all 114 Surahs are available '
+        'locally in Arabic, English and Urdu, with roots/POS and study collections. '
+        'Offline word glosses/transliteration cover Al-Fatihah only.\n'
+        'The app already resolves named Surahs, Ayah references, Juz/page filters '
+        'and explicit root/POS requests. Translate only the user topic into short '
+        'English search terms. Do not prepend invented Surah names or references '
+        'to a topic. Unmentioned Surah IDs and unknown references stay empty.\n'
+        '${chapter.ids.isEmpty ? 'Named Surah filters: none. Search the whole Quran.' :
+          'Locally resolved named Surahs:\n${_searchChapters.where((item) => chapter.ids.contains(item.id))
+            .map((item) => '${item.id}|${item.simple}|${item.arabic}|${item.translated}').join('\n')}'}\n'
+        'Available study collection tools (ID | title):\n'
+        '${quranStudyCollections.map((collection) => '${collection.id}|${collection.title}').join('\n')}';
+  }
+
+  Future<bool> needsSearchPlanning(String userInput) async {
+    await _searchIndex();
+    final query = _normalizeAiSearch(userInput);
+    if (_explicitAiSearchKey(query) != null) return false;
+    final chapter = _resolveAiChapterQuery(query, _searchChapters);
+    final location = _AiDataLocation.parse(chapter.remaining);
+    if (location.remaining.isEmpty && (location.juz != null || location.page != null)) return false;
+    final structured = _AiDataQuery(location.remaining);
+    if (structured.root != null || structured.pos != null) return false;
+    return chapter.ids.isEmpty || chapter.remaining.isNotEmpty;
+  }
+
+  Future<QuranAiToolResult> searchQuranData({
+    required ReaderAiSettings settings,
+    required QuranAiPageContext context,
+    required String userInput,
+    Map<String, dynamic>? plan,
+    required List<QuranSearchResult> Function(String) ayahSearch,
+  }) async {
+    if (userInput.length > 4000) throw const FormatException('Use at most 4000 characters.');
+    final index = await _searchIndex();
+    final retrieval = _AiDataPlan.parse(plan, index);
+    final query = _normalizeAiSearch(userInput);
+    final exact = _explicitAiSearchKey(query);
+    final chapter = _resolveAiChapterQuery(query, _searchChapters);
+    final filters = _AiDataLocation.parse(chapter.remaining);
+    final chapterIds = chapter.ids.isNotEmpty ? chapter.ids : retrieval.surahIds;
+    if (exact == null && chapter.ids.isNotEmpty &&
+        retrieval.surahIds.any((id) => !chapter.ids.contains(id))) {
+      throw const FormatException('The search plan does not match the named Surah.');
+    }
+    if (exact == null && chapter.ids.isEmpty && retrieval.surahIds.isNotEmpty) {
+      final tokens = query.split(' ');
+      for (final id in retrieval.surahIds) {
+        var named = false;
+        for (var start = 0; start < tokens.length; start++) {
+          if (start == 0 || !const {'in', 'from', 'within', 'mein', 'main'}.contains(tokens[start - 1])) {
+            continue;
+          }
+          for (var end = start + 1; end <= tokens.length && end <= start + 6; end++) {
+            if (_matchAiChapter(tokens.sublist(start, end).join(' '), _searchChapters,
+                explicit: false)?.id == id) {
+              named = true;
+            }
+          }
+        }
+        if (!named) throw const FormatException('The search plan contains an unmentioned Surah filter.');
+      }
+    }
+    bool allowed(_AiSearchVerse verse) =>
+        (chapterIds.isEmpty || chapterIds.contains(verse.chapterId)) &&
+        (filters.juz == null || verse.juz.contains(filters.juz)) &&
+        (filters.page == null || verse.page == filters.page);
+    final scores = <String, int>{};
+    void add(String key, int score) {
+      final verse = index[key];
+      if (verse != null && (exact != null || allowed(verse))) {
+        if (score > (scores[key] ?? -1)) scores[key] = score;
+      }
+    }
+    if (userInput.trim().isNotEmpty) {
+      if (exact != null) {
+        add(exact, 1000000);
+      } else {
+        final local = filters.remaining;
+        final pureScope = local.isEmpty && (chapterIds.isNotEmpty ||
+            filters.juz != null || filters.page != null);
+        final structured = _AiDataQuery(local);
+        final localOnly = pureScope || structured.root != null || structured.pos != null;
+        final queries = {if (local.isNotEmpty) local,
+          if (!localOnly) ...retrieval.queries.map(_normalizeAiSearch)};
+        final scorers = queries.map(_AiDataQuery.new).toList(growable: false);
+        for (final verse in index.values) {
+          if (!allowed(verse)) continue;
+          if (pureScope && queries.isEmpty) {
+            add(verse.reference, chapterIds.length > 1 ? 5000 - verse.verseNumber : 5000);
+          }
+          for (final scorer in scorers) {
+            final score = scorer.score(verse);
+            if (score > 0) add(verse.reference, score);
+          }
+        }
+        for (final key in localOnly ? const <String>[] : retrieval.references) {
+          add(key, 18000);
+        }
+        final collections = quranStudyCollections.where((collection) =>
+          (!localOnly && retrieval.collectionIds.contains(collection.id)) ||
+          _normalizeAiSearch(collection.title) == local || collection.id == local);
+        for (final collection in collections) {
+          for (var position = 0; position < collection.references.length; position++) {
+            add(collection.references[position], 12000 - position);
+          }
+        }
+      }
+    }
+    final ordered = scores.keys.toList()..sort((a, b) {
+      final score = scores[b]!.compareTo(scores[a]!);
+      if (score != 0) return score;
+      final chapterOrder = index[a]!.chapterId.compareTo(index[b]!.chapterId);
+      return chapterOrder != 0 ? chapterOrder : index[a]!.verseNumber.compareTo(index[b]!.verseNumber);
+    });
+    final results = <QuranSearchResult>[];
+    for (final key in ordered) {
+      final navigation = ayahSearch(key).where((result) => result.verseKey == key);
+      if (navigation.isEmpty) continue;
+      final target = navigation.first;
+      final verse = index[key]!;
+      results.add(QuranSearchResult(pageNumber: target.pageNumber,
+        referencePageNumber: target.referencePageNumber,
+        title: '$key - ${verse.chapterName}',
+        snippet: verse.canonical.translationFor(settings.responseLanguage),
+        category: 'Ayah translation', verseKey: key, navigationNote: target.navigationNote));
+      if (results.length == 12) break;
+    }
+    return QuranAiToolResult(tool: QuranAiTool.smartSearch,
+      output: results.isEmpty ? _localize(settings,
+        urdu: 'Is sawal ke liye verified Quran data mein result nahi mila. Surah, Ayah, root ya doosre alfaaz try karein.',
+        english: 'No verified Quran result was found. Try a Surah, Ayah, Arabic root, or different wording.')
+        : _localize(settings, urdu: '${results.length} verified Quran results mile.',
+          english: 'Found ${results.length} verified Quran results.'),
+      sourceLabel: 'Verified Quran and study data', usedOnlineModel: false,
+      searchResults: List.unmodifiable(results),
+      selectionLabel: chapterIds.isEmpty ? '' : _searchChapters
+        .where((item) => chapterIds.contains(item.id)).map((item) => item.simple).join(', '),
+      sourceNotes: [
+        'Search coverage: 6236 canonical Arabic Ayahs, English/Urdu translations, Quranic Corpus roots/POS and 20 study collections. Offline word glosses and pronunciation transliterations cover Al-Fatihah only.',
+        for (final item in _searchChapters.where((item) => chapterIds.contains(item.id)))
+          'Surah ${item.id}: ${item.simple} (${item.arabic}); ${item.count} Ayahs; revelation place: ${item.revelation}.',
+        for (final collection in quranStudyCollections.where((item) => retrieval.collectionIds.contains(item.id)))
+          'Study collection: ${collection.title} (${collection.references.join(', ')}).',
+        if (filters.juz != null) 'Juz ${filters.juz} is filtered by each canonical Ayah\'s verified Juz metadata.',
+        if (filters.page != null) 'Canonical page ${filters.page}; edition scans have different page numbers.',
+        'Printed-scan navigation uses the edition\'s estimated Surah anchor. Exact Ayah-to-scan-page alignment is unavailable.',
+      ]);
   }
 
   Future<QuranAiStudyMaterial> prepareStudy({
@@ -525,129 +719,8 @@ class QuranAiFeatureService {
     required String userInput,
     required List<QuranSearchResult> Function(String query) pageSearch,
     required List<QuranSearchResult> Function(String query) ayahSearch,
-  }) async {
-    if (userInput.isEmpty) {
-      return QuranAiToolResult(
-        tool: tool,
-        output: _localize(
-          settings,
-          urdu:
-              'AI smart search chalane ke liye theme ya topic likho, jaise sabr, namaz, Musa alaihissalam, ya dua.',
-          english:
-              'Type a theme or topic such as patience, salah, Musa, or dua to run AI smart search.',
-        ),
-        sourceLabel: 'Local search helper',
-        usedOnlineModel: false,
-      );
-    }
-
-    final query = _normalizeAiSearch(userInput);
-    final index = await _searchIndex();
-    final reference = RegExp(r'(?:^|\s)(\d+)\s*:\s*(\d+)(?=\s|$)')
-        .firstMatch(query);
-    final isKursi = const ['ayatul kursi', 'ayat ul kursi', 'ayat al kursi',
-      'ayatal kursi', 'ayatulkursi', 'ayatalkursi', 'آیت الکرسی',
-      'آية الكرسي', 'اية الكرسي'].any((alias) =>
-        _hasAiSearchTerm(query, _normalizeAiSearch(alias)));
-    final exactKey = reference != null
-        ? '${int.tryParse(reference[1]!)}:${int.tryParse(reference[2]!)}'
-        : isKursi ? '2:255' : null;
-    final chapter = exactKey == null ? _chapterForAiSearchQuery(query, index) : null;
-    final ranked = <({_AiSearchVerse verse, int score})>[];
-    if (exactKey != null) {
-      final verse = index[exactKey];
-      if (verse != null) ranked.add((verse: verse, score: 100000));
-    } else if (chapter != null) {
-      for (final verse in index.values) {
-        if (verse.reference.startsWith('$chapter:')) {
-          ranked.add((verse: verse, score: 100000));
-        }
-      }
-    } else if (!RegExp(r'^[\d\s:]+$').hasMatch(query)) {
-      final topics = _aiSearchTopics.where((topic) => topic.mentions(query)).toList();
-      final tokens = query.split(' ').where((token) => token.length >= 2 &&
-          !_aiSearchStopwords.contains(token) &&
-          !topics.any((topic) => topic.mentions(token))).toSet();
-      if (topics.isEmpty && tokens.isEmpty &&
-          const {'allah', 'الله', 'god', 'lord'}.contains(query)) {
-        tokens.add(query);
-      }
-      final total = topics.length + tokens.length;
-      if (total > 0) {
-        for (final verse in index.values) {
-          var matched = 0;
-          var curated = 0;
-          for (final topic in topics) {
-            final curatedHit = topic.references.contains(verse.reference);
-            if (curatedHit || topic.terms.any(verse.contains)) matched++;
-            if (curatedHit) curated++;
-          }
-          matched += tokens.where(verse.contains).length;
-          final required = total == 1 ? 1 : (total * 0.67).ceil();
-          if (matched < required) continue;
-          final exactPhrase = verse.contains(query);
-          ranked.add((verse: verse, score:
-              (matched * 10000 ~/ total) + matched * 300 +
-              (exactPhrase ? 2000 : 0) + curated * 150));
-        }
-      }
-    }
-    ranked.sort((a, b) {
-      final score = b.score.compareTo(a.score);
-      if (score != 0) return score;
-      final aKey = a.verse.reference.split(':').map(int.parse).toList();
-      final bKey = b.verse.reference.split(':').map(int.parse).toList();
-      final chapter = aKey[0].compareTo(bKey[0]);
-      return chapter != 0 ? chapter : aKey[1].compareTo(bKey[1]);
-    });
-    final topResults = <QuranSearchResult>[];
-    for (final hit in ranked) {
-      final navigation = ayahSearch(hit.verse.reference)
-          .where((result) => result.verseKey == hit.verse.reference);
-      if (navigation.isEmpty) continue;
-      final target = navigation.first;
-      final verse = hit.verse;
-      final snippet = switch (settings.responseLanguage) {
-        AiResponseLanguage.english => verse.english,
-        AiResponseLanguage.urdu => verse.urdu,
-        AiResponseLanguage.bilingual => '${verse.english}\n\n${verse.urdu}',
-      };
-      topResults.add(QuranSearchResult(
-        pageNumber: target.pageNumber,
-        referencePageNumber: target.referencePageNumber,
-        title: '${verse.reference} - ${verse.chapterName}',
-        snippet: snippet,
-        category: 'Ayah translation',
-        verseKey: verse.reference,
-        navigationNote: target.navigationNote,
-      ));
-      if (topResults.length == 12) break;
-    }
-    final summary = topResults.isEmpty
-        ? _localize(
-            settings,
-            urdu:
-                'Is topic par local Quran data mein direct result nahi mila. Thora different lafz, Urdu/English synonym, ya ayah key try karo.',
-            english:
-                'No direct result was found in local Quran data for this topic. Try a different word, synonym, or verse key.',
-          )
-        : _localize(
-            settings,
-            urdu:
-                '${topResults.length} relevant result mile. Neeche wali list se page open karke direct jump kar sakte ho.',
-            english:
-                'Found ${topResults.length} relevant results. Use the list below to jump directly to a page.',
-          );
-
-    return QuranAiToolResult(
-      tool: tool,
-      output: summary,
-      sourceLabel: 'Local semantic helper',
-      usedOnlineModel: false,
-      searchResults: topResults,
-    );
-  }
-
+  }) => searchQuranData(settings: settings, context: context,
+      userInput: userInput, ayahSearch: ayahSearch);
   Future<QuranAiToolResult> _runBookmarkAssistant({
     required QuranAiTool tool,
     required ReaderAiSettings settings,
@@ -1192,36 +1265,281 @@ class _LineMatch {
   final double score;
 }
 
-int? _chapterForAiSearchQuery(String query, Map<String, _AiSearchVerse> index) {
-  final prefix = RegExp(r'^(?:surah|surat|sure|sura|سوره|سورت)\s*').firstMatch(query);
-  var name = prefix == null ? query : query.substring(prefix.end).trim();
-  if (prefix != null) name = name.replaceFirst(RegExp(r'^e\s+'), '');
-  final compact = name.replaceAll(' ', '');
-  if (compact.isEmpty) return null;
-  final matches = <int>{};
-  for (final verse in index.values) {
-    if (!verse.reference.endsWith(':1')) continue;
-    final chapter = int.parse(verse.reference.split(':').first);
-    final canonical = _normalizeAiSearch(verse.chapterName);
-    final aliases = <String>{
-      canonical,
-      canonical.replaceFirst(RegExp(r'^(?:al|an|ar|ash|as|at|ad|az)\s+'), ''),
-      ...switch (chapter) {
-        1 => const ['fatiha', 'fatihah', 'al fatiha', 'الفاتحة', 'فاتحة'],
-        6 => ['inam', 'inaam', 'anaam', 'al inam', 'al inaam', 'al anaam',
-          'الأنعام', if (prefix != null) 'انعام'],
-        36 => const ['yaseen', 'ya seen', 'يس'],
-        55 => const ['rehman', 'ar rehman', 'al rehman', 'al rahman', 'الرحمن'],
+class _AiDataPlan {
+  const _AiDataPlan(this.surahIds, this.queries, this.references, this.collectionIds);
+  final Set<int> surahIds;
+  final List<String> queries;
+  final List<String> references;
+  final Set<String> collectionIds;
+  static _AiDataPlan parse(Map<String, dynamic>? value, Map<String, _AiSearchVerse> index) {
+    if (value == null) return const _AiDataPlan({}, [], [], {});
+    const keys = {'surahIds', 'queries', 'references', 'collectionIds'};
+    if (value.length != keys.length || value.keys.any((key) => !keys.contains(key))) {
+      throw const FormatException('Invalid Quran search plan.');
+    }
+    List<Object?> list(String key, int limit) {
+      final items = value[key];
+      if (items is! List || items.length > limit) throw const FormatException('Invalid Quran search plan.');
+      return items;
+    }
+    final ids = list('surahIds', 4);
+    if (ids.any((id) => id is! int || id < 1 || id > 114) || ids.toSet().length != ids.length) {
+      throw const FormatException('Invalid Surah in search plan.');
+    }
+    List<String> strings(String key, int limit, int length) {
+      final values = list(key, limit);
+      if (values.any((item) => item is! String || item.trim().isEmpty || item.length > length) ||
+          values.toSet().length != values.length) {
+        throw const FormatException('Invalid Quran search plan.');
+      }
+      return values.cast<String>();
+    }
+    final queries = strings('queries', 3, 120);
+    final references = strings('references', 4, 12);
+    if (references.any((key) => !RegExp(r'^\d{1,3}:\d{1,3}$').hasMatch(key) || !index.containsKey(key))) {
+      throw const FormatException('Invalid Ayah in search plan.');
+    }
+    final collections = strings('collectionIds', 4, 64);
+    if (collections.any((id) => !quranStudyCollections.any((item) => item.id == id))) {
+      throw const FormatException('Invalid study collection in search plan.');
+    }
+    return _AiDataPlan(ids.cast<int>().toSet(), queries, references, collections.toSet());
+  }
+}
+
+class _AiSearchChapter {
+  const _AiSearchChapter(this.id, this.simple, this.complex, this.arabic,
+      this.translated, this.count, this.revelation);
+  final int id;
+  final String simple;
+  final String complex;
+  final String arabic;
+  final String translated;
+  final int count;
+  final String revelation;
+  Set<String> aliases({required bool explicit}) {
+    final names = <String>{simple, complex, arabic,
+      simple.replaceFirst(RegExp(r'^(?:Al|An|Ar|Ash|As|At|Ad|Az)-'), ''),
+      complex.replaceFirst(RegExp(r'^(?:Al|An|Ar|Ash|As|At|Ad|Az)-'), ''),
+      if (explicit) translated,
+      if (explicit) translated.replaceFirst(RegExp(r'^The\s+'), ''),
+      if (explicit) arabic.replaceFirst(RegExp(r'^ال'), ''),
+      ...switch (id) {
+        1 => const ['fatiha', 'al fatiha'],
+        6 => const ['inam', 'inaam', 'anaam', 'al inam', 'al inaam', 'al anaam'],
+        36 => const ['yaseen', 'ya seen'],
+        55 => const ['rehman', 'ar rehman', 'al rehman', 'al rahman'],
         _ => const <String>[],
       },
     };
-    if (aliases.any((alias) => _normalizeAiSearch(alias).replaceAll(' ', '') == compact)) {
-      matches.add(chapter);
-    }
+    return names.map(_entityName).where((name) => name.isNotEmpty).toSet();
   }
-  return matches.length == 1 ? matches.single : null;
 }
 
+String _entityName(String value) => _normalizeAiSearch(value
+    .replaceAll(RegExp(r'[ĥḩ]'), 'h').replaceAll(RegExp(r'[đḏ]'), 'd')
+    .replaceAll('ş', 's').replaceAll('ţ', 't')).replaceAll(' ', '');
+
+String _entitySound(String name) {
+  var value = name.replaceAll('ee', 'i').replaceAll('oo', 'u').replaceAll('aa', 'a');
+  value = value.replaceAllMapped(RegExp(r'([a-z])\1+'), (match) => match[1]!);
+  if (value.length > 4 && value.endsWith('h')) value = value.substring(0, value.length - 1);
+  return value;
+}
+
+int _nameDistance(String a, String b) {
+  var previous = List.generate(b.length + 1, (index) => index);
+  for (var i = 0; i < a.length; i++) {
+    final next = List<int>.filled(b.length + 1, 0)..[0] = i + 1;
+    for (var j = 0; j < b.length; j++) {
+      final substitution = previous[j] + (a[i] == b[j] ? 0 : 1);
+      final insertion = next[j] + 1;
+      final deletion = previous[j + 1] + 1;
+      next[j + 1] = substitution < insertion ? substitution : insertion;
+      if (deletion < next[j + 1]) next[j + 1] = deletion;
+    }
+    previous = next;
+  }
+  return previous.last;
+}
+
+({int id, int distance})? _matchAiChapter(String phrase,
+    List<_AiSearchChapter> chapters, {required bool explicit, bool fuzzy = false}) {
+  final name = _entityName(phrase);
+  if (name.isEmpty) return null;
+  if (explicit && RegExp(r'^\d{1,3}$').hasMatch(name)) {
+    final id = int.parse(name);
+    return id >= 1 && id <= 114 ? (id: id, distance: 0) : null;
+  }
+  final exact = chapters.where((item) => item.aliases(explicit: explicit).contains(name)).toList();
+  if (exact.length == 1) return (id: exact.single.id, distance: 0);
+  if (exact.isNotEmpty || !fuzzy || name.length < 4) return null;
+  final sound = _entitySound(name);
+  final distances = <({int id, int distance})>[];
+  for (final item in chapters) {
+    var distance = 1000;
+    for (final alias in item.aliases(explicit: explicit)) {
+      final current = _nameDistance(sound, _entitySound(alias));
+      if (current < distance) distance = current;
+    }
+    distances.add((id: item.id, distance: distance));
+  }
+  distances.sort((a, b) => a.distance.compareTo(b.distance));
+  final best = distances.first;
+  final maximum = sound.length >= 7 ? 2 : 1;
+  return best.distance <= maximum && distances[1].distance > best.distance ? best : null;
+}
+
+const _aiChapterMarker = r'(surah|surat|sure|sura|soorah|soora|sooray|suray|sureh|chapter|سوره|سورت)';
+final _aiDataCommands = {'please', 'open', 'show', 'read', 'find', 'give', 'tell', 'display',
+  'me', 'i', 'want', 'to', 'the', 'of', 'in', 'from', 'and', 'or', 'do',
+  'mujhe', 'mujhy', 'muje', 'dikha', 'dikhao', 'dikhaao', 'kholo', 'khol',
+  'parho', 'parhao', 'chalao', 'batao', 'bata', 'hai', 'hain', 'ki', 'ke', 'ka', 'e',
+  'مجھے', 'دکھاؤ', 'دکھاو', 'کھولو', 'بتاؤ', 'كي', 'كے', 'كا', 'ہے', 'هے',
+  'اعطني', 'ارني', 'افتح', 'من', 'في', 'عن', 'فضلا',
+  'how', 'many', 'count', 'number', 'verse', 'verses', 'ayah', 'ayahs', 'ayat', 'ayats',
+  'kitni', 'kitne', 'ayatein', 'ayatain'}.map(_normalizeAiSearch).toSet();
+
+({Set<int> ids, String remaining}) _resolveAiChapterQuery(String query,
+    List<_AiSearchChapter> chapters) {
+  final marker = RegExp('^$_aiChapterMarker\$');
+  final prefixes = _aiChapterMarker.substring(1, _aiChapterMarker.length - 1).split('|')
+    ..sort((a, b) => b.length.compareTo(a.length));
+  final tokens = <String>[];
+  for (final word in query.split(' ').where((word) => word.isNotEmpty)) {
+    if (marker.hasMatch(word)) {
+      tokens.add(word);
+      continue;
+    }
+    final attached = prefixes.where((prefix) => word.startsWith(prefix) && word.length > prefix.length);
+    if (attached.isEmpty) {
+      tokens.add(word);
+    } else {
+      final prefix = attached.first;
+      tokens.addAll([prefix, word.substring(prefix.length)]);
+    }
+  }
+  final removed = <int>{};
+  final ids = <int>{};
+  for (var i = 0; i < tokens.length; i++) {
+    if (!marker.hasMatch(tokens[i])) continue;
+    var start = i + 1;
+    while (start < tokens.length && const {'e', 'named', 'called'}.contains(tokens[start])) {
+      start++;
+    }
+    ({int id, int distance})? chosen;
+    var chosenEnd = start;
+    for (final fuzzy in [false, true]) {
+      for (var end = start + 1; end <= tokens.length && end <= start + 6; end++) {
+        if (tokens.sublist(start, end).any(marker.hasMatch)) break;
+        final candidate = _matchAiChapter(tokens.sublist(start, end).join(' '), chapters,
+            explicit: true, fuzzy: fuzzy);
+        if (candidate != null && (chosen == null || candidate.distance < chosen.distance ||
+            (candidate.distance == chosen.distance && end > chosenEnd))) {
+          chosen = candidate; chosenEnd = end;
+        }
+      }
+      if (chosen != null) break;
+    }
+    if (chosen != null) {
+      ids.add(chosen.id);
+      for (var position = i; position < chosenEnd; position++) { removed.add(position); }
+    }
+  }
+  if (ids.isNotEmpty) {
+    return (ids: ids, remaining: [for (var i = 0; i < tokens.length; i++)
+      if (!removed.contains(i) && !_aiDataCommands.contains(tokens[i])) tokens[i]].join(' '));
+  }
+  final bare = tokens.where((word) => !_aiDataCommands.contains(word)).join(' ');
+  final whole = _matchAiChapter(bare, chapters, explicit: false);
+  return whole == null ? (ids: <int>{}, remaining: query) : (ids: {whole.id}, remaining: '');
+}
+
+String? _explicitAiSearchKey(String query) {
+  final reference = RegExp(r'(?:^|\s)(\d+)\s*:\s*(\d+)(?=\s|$)').firstMatch(query);
+  if (reference != null) return '${int.parse(reference[1]!)}:${int.parse(reference[2]!)}';
+  return const ['ayatul kursi', 'ayat ul kursi', 'ayat al kursi', 'ayatal kursi',
+    'ayatulkursi', 'ayatalkursi', 'آیت الکرسی', 'آية الكرسي', 'اية الكرسي']
+      .any((alias) => _hasAiSearchTerm(query, _normalizeAiSearch(alias))) ? '2:255' : null;
+}
+
+class _AiDataLocation {
+  const _AiDataLocation(this.remaining, this.juz, this.page);
+  final String remaining;
+  final int? juz;
+  final int? page;
+  static _AiDataLocation parse(String query) {
+    final juz = RegExp(r'(?:^|\s)(?:juz|para|parah|sipara|siparah|جزء|جز|پاره|پارا|سپاره)\s*(\d{1,2})(?=\s|$)').firstMatch(query);
+    final page = RegExp(r'(?:^|\s)(?:canonical page|page|صفحہ|صفحه)\s*(\d{1,3})(?=\s|$)').firstMatch(query);
+    final juzNumber = juz == null ? null : int.parse(juz[1]!);
+    final pageNumber = page == null ? null : int.parse(page[1]!);
+    if (juzNumber != null && (juzNumber < 1 || juzNumber > 30) ||
+        pageNumber != null && (pageNumber < 1 || pageNumber > 604)) {
+      throw const FormatException('Use a Juz from 1 to 30 or a canonical page from 1 to 604.');
+    }
+    var remaining = query;
+    if (juz != null) remaining = remaining.replaceFirst(juz[0]!, ' ');
+    if (page != null) remaining = remaining.replaceFirst(page[0]!, ' ');
+    if (juz != null || page != null) {
+      remaining = remaining.split(' ')
+        .where((word) => word.isNotEmpty && !_aiDataCommands.contains(word)).join(' ');
+    }
+    return _AiDataLocation(remaining, juzNumber, pageNumber);
+  }
+}
+
+String _aiLatinStem(String value) {
+  var word = value;
+  if (word.length > 5 && word.endsWith('ies')) return '${word.substring(0, word.length - 3)}y';
+  for (final suffix in ['ingly', 'edly', 'ing', 'ness', 'ed', 'ly', 'es', 's']) {
+    if (word.length > suffix.length + 2 && word.endsWith(suffix)) {
+      word = word.substring(0, word.length - suffix.length); break;
+    }
+  }
+  if (word.length > 4 && word.endsWith('e')) word = word.substring(0, word.length - 1);
+  return word;
+}
+
+class _AiDataQuery {
+  _AiDataQuery(this.phrase);
+  final String phrase;
+  late final Match? root = RegExp(r'^(?:arabic\s+)?(?:root|جذر|جذور|ماده)\s+(.+)$').firstMatch(phrase);
+  late final Match? pos = RegExp(r'^(?:(?:pos|part of speech)\s+)?(nouns?|verbs?|adjectives?|pronouns?|prepositions?)$').firstMatch(phrase);
+  late final List<_AiSearchTopic> topics = _aiSearchTopics.where((topic) => topic.mentions(phrase)).toList();
+  late final Set<String> tokens = _buildTokens();
+  Set<String> _buildTokens() {
+    final result = phrase.split(' ').where((token) => token.length >= 2 &&
+        !_aiSearchStopwords.contains(token) && !topics.any((topic) => topic.mentions(token))).toSet();
+    if (topics.isEmpty && result.isEmpty && const {'allah', 'الله', 'god', 'lord'}.contains(phrase)) result.add(phrase);
+    return result;
+  }
+  int score(_AiSearchVerse verse) {
+    final rootMatch = root;
+    if (rootMatch != null) {
+      return verse.roots.contains(rootMatch[1]!.replaceAll(' ', '')) ? 20000 : 0;
+    }
+    final posMatch = pos;
+    if (posMatch != null) {
+      final value = posMatch[1]!;
+      final tag = value.startsWith('noun') ? 'N' : value.startsWith('verb') ? 'V'
+          : value.startsWith('adject') ? 'ADJ' : value.startsWith('pronoun') ? 'PRON' : 'P';
+      return verse.partsOfSpeech.contains(tag) ? 18000 : 0;
+    }
+    final total = topics.length + tokens.length;
+    if (total == 0) return 0;
+    var matched = 0;
+    var curated = 0;
+    for (final topic in topics) {
+      final curatedHit = topic.references.contains(verse.reference);
+      if (curatedHit || topic.terms.any(verse.containsData)) matched++;
+      if (curatedHit) curated++;
+    }
+    matched += tokens.where(verse.containsData).length;
+    if (matched < (total == 1 ? 1 : (total * 0.67).ceil())) return 0;
+    return matched * 10000 ~/ total + matched * 300 +
+        (verse.containsData(phrase) ? 2000 : 0) + curated * 150;
+  }
+}
 String _normalizeAiSearch(String value) {
   const latin = {'ā': 'a', 'á': 'a', 'à': 'a', 'â': 'a', 'ä': 'a', 'ã': 'a',
     'ī': 'i', 'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
@@ -1272,15 +1590,33 @@ const _studyLookupContext = QuranAiPageContext(pageNumber: 0, standardPageNumber
 final _aiArabicWord = RegExp(r'^[\u0621-\u064A]+$');
 
 class _AiSearchVerse {
-  _AiSearchVerse(QuranStudyVerse verse, String Function(String) normalize)
+  _AiSearchVerse(QuranStudyVerse verse, String Function(String) normalize,
+      {required this.page, required this.juz})
       : reference = verse.reference, chapterName = verse.chapterName,
         english = verse.english, urdu = verse.urdu, arabic = verse.arabic,
-        fields = [normalize(verse.english), normalize(verse.urdu), normalize(verse.arabic)];
+        fields = [normalize(verse.english), normalize(verse.urdu), normalize(verse.arabic)],
+        roots = verse.words.expand((word) => (word.root ?? '').split('/'))
+          .map((root) => normalize(root).replaceAll(' ', '')).where((root) => root.isNotEmpty).toSet(),
+        partsOfSpeech = verse.words.expand((word) => word.partOfSpeech.split(' + ')).toSet(),
+        wordFields = verse.words.expand((word) => [if (word.meaning != null) normalize(word.meaning!),
+          if (word.transliteration != null) normalize(word.transliteration!)]).toList();
   final String reference;
   final String chapterName;
   final String english;
   final String urdu;
   final String arabic;
+  final int page;
+  final Set<int> juz;
+  final Set<String> roots;
+  final Set<String> partsOfSpeech;
+  final List<String> wordFields;
+  int get chapterId => int.parse(reference.split(':').first);
+  int get verseNumber => int.parse(reference.split(':').last);
+  late final Set<String> _stems = fields.expand((text) => text.split(' '))
+    .where((word) => RegExp(r'^[a-z]{3,}$').hasMatch(word)).map(_aiLatinStem).toSet();
+  bool containsData(String term) => contains(term) || roots.contains(term) ||
+    wordFields.any((field) => _hasAiSearchTerm(field, term) || field.replaceAll(' ', '') == term) ||
+    (RegExp(r'^[a-z]{3,}$').hasMatch(term) && _stems.contains(_aiLatinStem(term)));
   QuranAiCanonicalVerse get canonical => QuranAiCanonicalVerse(verseKey: reference,
     chapterName: chapterName, arabic: arabic, translationEn: english, translationUr: urdu);
   final List<String> fields;
