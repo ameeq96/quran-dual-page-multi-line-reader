@@ -229,6 +229,12 @@ class QuranAiFeatureService {
     } else if (tool == QuranAiTool.flashcards) {
       output = _localize(settings, urdu: 'پہلے اصل عربی پڑھیں، پھر کارڈ پلٹ کر مستند ترجمہ دیکھیں۔',
         english: 'Read the original Arabic first, then reveal the verified translation on each card.');
+    } else if (tool == QuranAiTool.studyChat || tool == QuranAiTool.askCurrentPage || tool == QuranAiTool.voiceQna) {
+      final intro = _localize(settings, urdu: 'آپ کے سوال کے لیے منتخب مستند آیات اور ان کے اصل تراجم:',
+        english: 'Verified Ayah sources and their recorded translations for your question:');
+      final passages = verses.map((verse) => '${verse.verseKey} — ${verse.chapterName}\n${verse.translationFor(settings.responseLanguage)}').join('\n\n');
+      output = '$intro\n\n$passages';
+      notes.add('This source-based reply contains recorded translations, not generated paraphrase or new tafsir.');
     } else if (tool == QuranAiTool.hifzCoach || tool == QuranAiTool.recitationFollow) {
       output = comparison == null
         ? _localize(settings, urdu: 'منتخب آیات میں لکھے ہوئے الفاظ کا واضح ملاپ نہیں ملا۔',
