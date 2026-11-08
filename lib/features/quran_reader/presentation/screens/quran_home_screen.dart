@@ -25,6 +25,7 @@ import 'quran_growth_hub_screen.dart';
 import 'quran_reader_screen.dart';
 import 'quran_search_screen.dart';
 import 'quran_settings_screen.dart';
+import 'quran_study_screen.dart';
 
 class QuranHomeScreen extends StatelessWidget {
   const QuranHomeScreen({
@@ -481,6 +482,12 @@ class QuranHomeScreen extends StatelessWidget {
                     subtitle: tr(context, 'Read with a deeper understanding'),
                     onTap: () => _openKanzulStudyPage(context),
                   ),
+                _HomeMenuTile(
+                  icon: Icons.menu_book_outlined,
+                  title: tr(context, 'Word study & collections'),
+                  subtitle: tr(context, 'Translation, notes and reflection'),
+                  onTap: () => Navigator.of(context).push(buildReaderPageRoute<void>(builder: (_) => const QuranStudyScreen())),
+                ),
                 _HomeMenuTile(
                   icon: Icons.tune_rounded,
                   title: tr(context, 'Settings'),

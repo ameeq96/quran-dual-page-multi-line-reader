@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:html' as html;
 import 'dart:js_interop';
+import 'dart:typed_data';
 
 import 'reader_voice_capture.dart';
 
@@ -46,6 +47,7 @@ class _BrowserVoiceCapture extends ReaderVoiceCapture {
   Timer? _recordingStopTimer;
   Completer<void>? _stopped;
   String? _recordingUrl;
+  html.Blob? _recordingBlob;
   String _mimeType = '';
   int _recordedBytes = 0;
   int _generation = 0;
@@ -77,6 +79,25 @@ class _BrowserVoiceCapture extends ReaderVoiceCapture {
   bool get hasRecording => _recordingUrl != null;
   @override
   bool get isPlaying => _isPlaying;
+  @override
+  int get recordingRevision => _generation;
+  @override
+  String get recordingMimeType => _mimeType;
+
+  @override
+  Future<Uint8List> readRecordingBytes() async {
+    final blob = _recordingBlob;
+    final generation = _generation;
+    if (_disposed || isBusy || blob == null) {
+      throw StateError('No completed recording is available.');
+    }
+    final reader = html.FileReader()..readAsArrayBuffer(blob);
+    await reader.onLoadEnd.first;
+    if (!_current(generation) || reader.error != null || reader.result is! Uint8List) {
+      throw StateError('The recording changed before it could be saved.');
+    }
+    return reader.result as Uint8List;
+  }
 
   bool _current(int generation) => !_disposed && generation == _generation;
 
@@ -296,7 +317,10 @@ class _BrowserVoiceCapture extends ReaderVoiceCapture {
     _cancelSubscriptions(_recordingSubscriptions);
     if (_chunks.isNotEmpty) {
       final blob = html.Blob(_chunks, _mimeType);
-      if (blob.size > 0) _recordingUrl = html.Url.createObjectUrlFromBlob(blob);
+      if (blob.size > 0) {
+        _recordingBlob = blob;
+        _recordingUrl = html.Url.createObjectUrlFromBlob(blob);
+      }
     }
     _chunks.clear();
     _recordedBytes = 0;
@@ -447,6 +471,7 @@ class _BrowserVoiceCapture extends ReaderVoiceCapture {
     _cancelSubscriptions(_playbackSubscriptions);
     final url = _recordingUrl;
     _recordingUrl = null;
+    _recordingBlob = null;
     if (url != null) html.Url.revokeObjectUrl(url);
     _chunks.clear();
     _recordedBytes = 0;

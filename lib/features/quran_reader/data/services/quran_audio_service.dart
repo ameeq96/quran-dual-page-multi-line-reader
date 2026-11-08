@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../../core/services/browser_file_store.dart';
 import '../../domain/models/quran_reciter.dart';
+import 'reader_audio_practice.dart';
 
 class QuranAudioService {
   QuranAudioService({
@@ -29,7 +30,38 @@ class QuranAudioService {
   int? loadedReciterId;
   int? loadedChapterId;
   static int _downloadSequence = 0;
+  ReaderAudioPractice? _practice;
+  bool _repeatChapter = false;
+  int _sourceGeneration = 0;
+  ReaderAudioPractice get practice => _practice ??= ReaderAudioPractice(
+    positions: _player.positionStream, duration: () => _player.duration,
+    source: () => loadedChapterId == null || loadedReciterId == null
+        ? null : '$loadedReciterId:$loadedChapterId',
+    playing: () => _player.playing,
+    pause: _pauseForPractice, seek: _player.seek, play: _startPlayback,
+    loop: (enabled) => _player.setLoopMode(enabled ? LoopMode.one : LoopMode.off),
+    repeatChapter: () => _repeatChapter,
+  );
+
+  ({Duration start, Duration end})? practiceRangeForAyah(String key) {
+    if (loadedChapterId == null || !key.startsWith('$loadedChapterId:')) return null;
+    for (final timing in _currentTimings) {
+      if (timing['verse_key'] == key) {
+        return (
+          start: Duration(milliseconds: timing['timestamp_from'] as int),
+          end: Duration(milliseconds: timing['timestamp_to'] as int),
+        );
+      }
+    }
+    return null;
+  }
   bool get isPlaybackCompleted => _player.processingState == ProcessingState.completed;
+  bool get isPlaying => _player.playing;
+
+  Future<void> _pauseForPractice() {
+    ++_sourceGeneration;
+    return _player.pause();
+  }
 
   String? verseKeyAtPosition(Duration position) {
     final milliseconds = position.inMilliseconds;
@@ -93,10 +125,14 @@ class QuranAudioService {
     required String reciterName,
     Duration? initialPosition,
   }) async {
+    final generation = ++_sourceGeneration;
+    await _practice?.cancel();
+    if (generation != _sourceGeneration) return;
     final localFilePath = await localFilePathForChapter(
       reciterId: reciterId,
       chapterId: chapterId,
     );
+    if (generation != _sourceGeneration) return;
     _currentTimings = const [];
     final cachedTimings = await _loadSavedTimings(reciterId, chapterId);
     _QuranChapterAudio? chapterAudio;
@@ -107,6 +143,7 @@ class QuranAudioService {
         if (localFilePath == null) rethrow;
       }
     }
+    if (generation != _sourceGeneration) return;
     _currentTimings = chapterAudio?.timings ?? cachedTimings;
     final sourceUri = localFilePath == null
         ? Uri.parse(chapterAudio!.url)
@@ -130,6 +167,7 @@ class QuranAudioService {
       ),
       initialPosition: initialPosition,
     );
+    if (generation != _sourceGeneration) return;
     loadedReciterId = reciterId;
     loadedChapterId = chapterId;
     _startPlayback();
@@ -299,10 +337,19 @@ class QuranAudioService {
     return keys;
   }
 
-  Future<void> pause() => _player.pause();
+  Future<void> pause() async {
+    final generation = ++_sourceGeneration;
+    await _practice?.cancel();
+    if (generation != _sourceGeneration) return;
+    await _player.pause();
+  }
 
   Future<void> resume() async {
+    final generation = ++_sourceGeneration;
+    await _practice?.cancel();
+    if (generation != _sourceGeneration) return;
     if (isPlaybackCompleted) await _player.seek(Duration.zero);
+    if (generation != _sourceGeneration) return;
     _startPlayback();
   }
 
@@ -312,22 +359,39 @@ class QuranAudioService {
     }));
   }
 
-  Future<void> stop() => _player.stop();
+  Future<void> stop() async {
+    final generation = ++_sourceGeneration;
+    _practice?.setSleepTimer(null);
+    await _practice?.cancel();
+    if (generation != _sourceGeneration) return;
+    await _player.stop();
+  }
 
   Future<void> resetPlayback() async {
+    final generation = ++_sourceGeneration;
+    _practice?.setSleepTimer(null);
+    await _practice?.cancel();
+    if (generation != _sourceGeneration) return;
     await _player.stop();
+    if (generation != _sourceGeneration) return;
     loadedReciterId = null;
     loadedChapterId = null;
     _currentTimings = const [];
   }
 
-  Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> seek(Duration position) async {
+    await _practice?.cancel();
+    await _player.seek(position);
+  }
 
   Future<void> setRepeatEnabled(bool enabled) {
-    return _player.setLoopMode(enabled ? LoopMode.one : LoopMode.off);
+    _repeatChapter = enabled;
+    return _player.setLoopMode(enabled && !(_practice?.active ?? false) ? LoopMode.one : LoopMode.off);
   }
 
   void dispose() {
+    ++_sourceGeneration;
+    _practice?.dispose();
     _client.close();
     _playbackErrors.close();
     _player.dispose();

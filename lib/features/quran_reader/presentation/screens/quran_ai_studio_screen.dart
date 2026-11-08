@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../widgets/reader_recording_library.dart';
 
 import '../../../../app/reader_localization.dart';
 
@@ -278,6 +279,10 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
                     onStop: _voiceCapture.stop,
                     onCancel: _cancelVoiceCapture,
                   ),
+                  const SizedBox(height: 10),
+                  ReaderRecordingSaveControls(capture: _voiceCapture,
+                    chapterId: widget.controller.currentChapterSummary?.id,
+                    chapterName: widget.controller.currentChapterSummary?.nameSimple),
                 ],
                 const SizedBox(height: 14),
                 ConstrainedBox(
@@ -827,7 +832,7 @@ class _VoiceInputCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(tr(context,
-              'Record up to 60 seconds. Audio stays in memory; download a copy before leaving this screen.')),
+              'Record up to 60 seconds. Save to your local library or download a copy before leaving this screen.')),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,

@@ -12,6 +12,7 @@ import 'placeholder_quran_page.dart';
 import 'quran_page_image_provider.dart';
 import 'reader_hifz_line_mask.dart';
 import 'reader_skeleton.dart';
+import 'reader_page_pin_overlay.dart';
 
 class MushafPageWidget extends StatelessWidget {
   const MushafPageWidget({
@@ -374,6 +375,7 @@ class _PageSurfaceState extends State<_PageSurface> {
           page: widget.page,
           appearance: widget.appearance,
           lowMemoryMode: widget.settings.lowMemoryMode,
+          edition: widget.settings.mushafEdition.storageValue,
         ),
       QuranPageContentType.text ||
       QuranPageContentType.placeholder => PlaceholderQuranPage(
@@ -541,11 +543,13 @@ class _ImagePageContent extends StatelessWidget {
     required this.page,
     required this.appearance,
     required this.lowMemoryMode,
+    required this.edition,
   });
 
   final QuranPage page;
   final ReaderPageAppearance appearance;
   final bool lowMemoryMode;
+  final String edition;
 
   @override
   Widget build(BuildContext context) {
@@ -607,11 +611,7 @@ class _ImagePageContent extends StatelessWidget {
           );
         }
 
-        if (!appearance.hasImageTint) {
-          return image;
-        }
-
-        return Stack(
+        final content = !appearance.hasImageTint ? image : Stack(
           fit: StackFit.expand,
           children: [
             image,
@@ -625,6 +625,14 @@ class _ImagePageContent extends StatelessWidget {
               ),
             ),
           ],
+        );
+        return ReaderPagePinOverlay(
+          pageNumber: page.number,
+          edition: edition,
+          sourceKey: page.assetPath ?? '',
+          imageProvider: imageProvider,
+          originalImageProvider: buildQuranPageImageProvider(page),
+          child: content,
         );
       },
     );

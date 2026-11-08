@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'reader_extra_translations.dart';
+import '../core/storage/reader_profile_store.dart';
 
 enum ReaderLanguage { english, urdu, romanUrdu, arabic }
 
@@ -28,6 +29,14 @@ class ReaderLocalization extends ChangeNotifier {
           ? SharedPreferences.getInstance()
           : Future.value(_injectedPreferences);
   Future<void>? _loading;
+  String _profileId = 'default';
+  String get _storageKey => ReaderProfileStore.keyFor(storageKey, _profileId);
+  Future<void> loadForProfile(String profileId) async {
+    if (_profileId == profileId) return load();
+    _profileId = profileId;
+    _loading = null;
+    await load();
+  }
   ReaderLanguage _language = ReaderLanguage.english;
 
   ReaderLanguage get language => _language;
@@ -44,8 +53,11 @@ class ReaderLocalization extends ChangeNotifier {
   Future<void> load() => _loading ??= _load();
 
   Future<void> _load() async {
+    final profileId = _profileId;
+    final key = _storageKey;
     try {
-      final saved = (await _preferences).getString(storageKey);
+      final saved = (await _preferences).getString(key);
+      if (_profileId != profileId) return;
       _language = ReaderLanguage.values.firstWhere(
         (language) => language.name == saved,
         orElse: () => ReaderLanguage.english,
@@ -59,8 +71,11 @@ class ReaderLocalization extends ChangeNotifier {
   Future<void> setLanguage(ReaderLanguage language) async {
     await load();
     if (_language == language) return;
-    final saved = await (await _preferences).setString(storageKey, language.name);
+    final profileId = _profileId;
+    final key = _storageKey;
+    final saved = await (await _preferences).setString(key, language.name);
     if (!saved) throw StateError('Unable to save interface language.');
+    if (_profileId != profileId) return;
     _language = language;
     notifyListeners();
   }

@@ -7,10 +7,11 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../storage/reader_preferences.dart';
+import '../storage/reader_profile_store.dart';
 import 'browser_push.dart';
 
 class ReaderBrowserReminderService extends ChangeNotifier {
-  ReaderBrowserReminderService._(this.baseUrl, {BrowserPush? browser, http.Client Function()? clientFactory})
+  ReaderBrowserReminderService._(this.baseUrl, {this.profileId = 'default', BrowserPush? browser, http.Client Function()? clientFactory})
       : _browser = browser ?? BrowserPush(), _clientFactory = clientFactory ?? http.Client.new;
   @visibleForTesting
   ReaderBrowserReminderService.forTesting(String baseUrl, {required BrowserPush browser, required http.Client Function() clientFactory})
@@ -22,10 +23,12 @@ class ReaderBrowserReminderService extends ChangeNotifier {
     if (uri.scheme != 'https' && !const {'localhost', '127.0.0.1', '::1'}.contains(uri.host)) {
       throw const FormatException('Background reminders require HTTPS.');
     }
-    return _instances.putIfAbsent(base, () => ReaderBrowserReminderService._(base));
+    final profile = ReaderProfileStore.instance.activeId;
+    return _instances.putIfAbsent('$profile:$base', () => ReaderBrowserReminderService._(base, profileId: profile));
   }
 
   final String baseUrl;
+  final String profileId;
   final BrowserPush _browser;
   final http.Client Function() _clientFactory;
   bool configured = false;
@@ -36,7 +39,7 @@ class ReaderBrowserReminderService extends ChangeNotifier {
   String? _instanceId;
   Future<void>? _loading;
   bool get supported => _browser.supported;
-  String get _key => 'reader.push.${Uri.encodeComponent(baseUrl)}.v1';
+  String get _key => ReaderProfileStore.keyFor('reader.push.${Uri.encodeComponent(baseUrl)}.v1', profileId);
 
   Future<void> initialize() => _loading ??= _load();
 
@@ -74,7 +77,7 @@ class ReaderBrowserReminderService extends ChangeNotifier {
     busy = true; error = null; notifyListeners();
     final wasEnabled = enabled;
     try {
-      final identity = await ReaderPreferences().loadOrCreateSyncIdentity(baseUrl);
+      final identity = await ReaderPreferences(profileId: profileId).loadOrCreateSyncIdentity(baseUrl);
       if (!value) {
         await _disable(identity);
       } else {
@@ -172,7 +175,7 @@ Future<void> detachReaderBrowserReminders({required String baseUrl, required Rea
 void ensureReaderBrowserRemindersIdle(String baseUrl) {
   if (!kIsWeb || baseUrl.isEmpty) return;
   final base = ReaderPreferences.normalizeSyncBaseUrl(baseUrl);
-  if (ReaderBrowserReminderService._instances[base]?.busy == true) {
+  if (ReaderBrowserReminderService._instances['${ReaderProfileStore.instance.activeId}:$base']?.busy == true) {
     throw StateError('Finish updating background reminders before changing account.');
   }
 }

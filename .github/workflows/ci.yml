@@ -49,7 +49,7 @@ jobs:
         timeout-minutes: 8
         env:
           CHROME_EXECUTABLE: google-chrome
-        run: flutter test --platform chrome --no-pub test/quran_offline_pack_browser_test.dart test/reader_voice_capture_browser_test.dart
+        run: flutter test --platform chrome --no-pub test/quran_offline_pack_browser_test.dart test/reader_voice_capture_browser_test.dart test/reader_recording_store_browser_test.dart
       - name: Run browser notification worker regressions
         run: node --test test/reader_push_worker.test.mjs
       - name: Build web release

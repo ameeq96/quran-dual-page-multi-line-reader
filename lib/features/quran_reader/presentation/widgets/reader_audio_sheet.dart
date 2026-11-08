@@ -7,6 +7,7 @@ import '../../domain/models/quran_page_verse.dart';
 import '../controllers/quran_reader_controller.dart';
 import '../models/reader_audio_state.dart';
 import 'reader_sheet_frame.dart';
+import 'reader_audio_practice_panel.dart';
 
 Future<void> showReaderAudioSheet(
   BuildContext context, {
@@ -360,6 +361,12 @@ class ReaderAudioContent extends StatelessWidget {
                                 ]),
                               ),
                               ReaderAudioVersePanel(verse: controller.currentAudioVerse),
+                              ReaderAudioPracticePanel(
+                                key: ValueKey('${audio.currentChapterId}:${audio.selectedReciter?.id}'),
+                                service: controller.audioPracticeService,
+                                audio: audio,
+                                verseKey: controller.currentRecitationVerseKey,
+                              ),
                               const SizedBox(height: 8),
                               SwitchListTile.adaptive(
                                 contentPadding: EdgeInsets.zero,

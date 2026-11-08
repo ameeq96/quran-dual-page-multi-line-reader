@@ -8,6 +8,8 @@ import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
 import '../widgets/reader_reminder_settings.dart';
 import '../widgets/reader_account_settings.dart';
+import '../widgets/reader_local_data_settings.dart';
+import 'quran_study_screen.dart';
 
 class QuranGrowthHubScreen extends StatelessWidget {
   const QuranGrowthHubScreen({
@@ -146,6 +148,13 @@ class QuranGrowthHubScreen extends StatelessWidget {
             backgroundColor: themeData.scaffoldBackgroundColor,
             appBar: AppBar(
               title: Text(tr(context, 'Plans & Hifz')),
+              actions: [IconButton(tooltip: tr(context, 'Profiles & restore history'), icon: const Icon(Icons.people_outline),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => Scaffold(
+                  appBar: AppBar(title: Text(tr(context, 'Profiles & restore history'))),
+                  body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20), child: ReaderLocalDataSettings(controller: controller)))))))),
+                IconButton(tooltip: tr(context, 'Word study & collections'), icon: const Icon(Icons.auto_stories_outlined),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const QuranStudyScreen())))],
               centerTitle: true,
             ),
             body: Center(
@@ -509,6 +518,10 @@ class QuranGrowthHubScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 20),
+                      ExpansionTile(tilePadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.people_outline), title: Text(tr(context, 'Profiles & restore history')),
+                        children: [ReaderLocalDataSettings(controller: controller), const SizedBox(height: 20)]),
+                      const SizedBox(height: 12),
                       ReaderAccountSettings(controller: controller),
                       const SizedBox(height: 12),
                       FilledButton.tonalIcon(

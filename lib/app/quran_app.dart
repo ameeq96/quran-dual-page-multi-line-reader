@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import '../core/services/system_ui_service.dart';
 import '../core/services/reader_reminder_service.dart';
 import '../core/storage/reader_preferences.dart';
+import '../core/storage/reader_profile_store.dart';
 import '../features/quran_reader/data/repositories/quran_reader_repository.dart';
 import '../features/quran_reader/data/services/quran_asset_resolver.dart';
 import '../features/quran_reader/data/services/quran_audio_service.dart';
@@ -32,8 +33,19 @@ class QuranApp extends StatelessWidget {
     return ReaderLocalizationScope(
       localization: localization,
       child: AnimatedBuilder(
-        animation: localization,
-        builder: (context, _) => MaterialApp(
+        animation: Listenable.merge([localization, ReaderProfileStore.instance]),
+        builder: (context, _) => FutureBuilder<void>(
+          future: ReaderProfileStore.instance.load(),
+          builder: (context, profiles) {
+            if (profiles.hasError) {
+              return MaterialApp(home: Scaffold(body: Center(child: Text(tr(context, 'Local profiles could not be loaded. Restart the app to retry.')))));
+            }
+            if (profiles.connectionState != ConnectionState.done) {
+              return const MaterialApp(home: BootstrapSplash(nightMode: false));
+            }
+            final profileId = ReaderProfileStore.instance.activeId;
+            return MaterialApp(
+          key: ValueKey(profileId),
           title: tr(context, 'Quran Pak Dual Page Reader'),
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light(),
@@ -61,7 +73,9 @@ class QuranApp extends StatelessWidget {
               ],
             ),
           ),
-          home: const _AppBootstrap(),
+          home: _AppBootstrap(profileId: profileId),
+        );
+          },
         ),
       ),
     );
@@ -69,7 +83,8 @@ class QuranApp extends StatelessWidget {
 }
 
 class _AppBootstrap extends StatefulWidget {
-  const _AppBootstrap();
+  const _AppBootstrap({required this.profileId});
+  final String profileId;
 
   @override
   State<_AppBootstrap> createState() => _AppBootstrapState();
@@ -88,7 +103,7 @@ class _AppBootstrapState extends State<_AppBootstrap>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     ReaderLocalization.instance.addListener(_refreshReminderLanguage);
-    _preferences = ReaderPreferences();
+    _preferences = ReaderPreferences(profileId: widget.profileId);
     final adminConfigService = QuranAdminConfigService(
       preferences: _preferences,
     );
@@ -112,7 +127,7 @@ class _AppBootstrapState extends State<_AppBootstrap>
   }
 
   Future<_BootstrapPrefs> _loadBootstrapPrefs() async {
-    await ReaderLocalization.instance.load();
+    await ReaderLocalization.instance.loadForProfile(widget.profileId);
     try {
       final settings = await _preferences.loadSettings();
       final onboardingSeen = await _preferences.loadOnboardingSeen();
@@ -133,6 +148,7 @@ class _AppBootstrapState extends State<_AppBootstrap>
     await SystemUiService.allowReaderOrientations();
     final prefs = await _bootstrapPrefsFuture;
     if (!mounted) return;
+    await ReaderReminderService.instance.switchLocalProfile(widget.profileId);
     await ReaderReminderService.instance.initialize();
     if (!mounted) return;
     final lifecycleState = WidgetsBinding.instance.lifecycleState;

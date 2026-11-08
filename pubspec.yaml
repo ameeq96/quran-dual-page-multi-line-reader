@@ -34,6 +34,7 @@ dependencies:
     sdk: flutter
   shared_preferences: ^2.3.2
   qr_flutter: 4.1.0
+  crypto: 3.0.7
   connectivity_plus: 6.1.5
   disk_space_2: 1.0.12
   flutter_local_notifications: 19.5.0

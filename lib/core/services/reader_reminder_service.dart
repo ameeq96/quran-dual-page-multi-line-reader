@@ -9,6 +9,7 @@ import 'package:timezone/data/latest.dart' as time_zone_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../app/reader_localization.dart';
+import '../storage/reader_profile_store.dart';
 
 class ReaderReminderService extends ChangeNotifier {
   ReaderReminderService._({
@@ -32,7 +33,19 @@ class ReaderReminderService extends ChangeNotifier {
   );
 
   static final ReaderReminderService instance = ReaderReminderService._();
-  static const _preferenceKey = 'reader.dailyReminder.v1';
+  String _profileId = 'default';
+  String get _preferenceKey => ReaderProfileStore.keyFor('reader.dailyReminder.v1', _profileId);
+  Future<void> switchLocalProfile(String profileId) => _enqueue(() async {
+    if (_profileId == profileId) return;
+    _inAppTimer?.cancel();
+    _inAppReminderDue = false;
+    _loaded = false;
+    _enabled = false; _hour = 20; _minute = 0;
+    _notBeforeDate = null; _lastDeliveredDate = null;
+    _profileId = profileId;
+    await _loadSettings();
+    if (supported) await _syncSchedule();
+  });
   static const _notificationId = 173016;
   final _notifications = FlutterLocalNotificationsPlugin();
   final DateTime Function() _now;

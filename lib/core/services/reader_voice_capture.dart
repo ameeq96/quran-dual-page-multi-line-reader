@@ -19,6 +19,10 @@ abstract class ReaderVoiceCapture extends ChangeNotifier {
   String? get errorMessage;
   bool get hasRecording;
   bool get isPlaying;
+  int get recordingRevision => 0;
+  String get recordingMimeType => '';
+  Future<Uint8List> readRecordingBytes() => Future.error(
+      StateError('No completed recording is available.'));
 
   bool get isBusy =>
       phase == ReaderVoiceCapturePhase.requesting ||

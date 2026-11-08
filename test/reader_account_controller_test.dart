@@ -50,6 +50,13 @@ void main() {
     fixture.controller.dispose();
     await Future<void>.delayed(Duration.zero);
   });
+  test('concurrent favorite removals keep both removals after restore-point writes', () async {
+    await fixture.controller.toggleFavoritePage(1);
+    await fixture.controller.toggleFavoritePage(2);
+    expect(fixture.controller.favoritePages, containsAll([1, 2]));
+    await Future.wait([fixture.controller.toggleFavoritePage(1), fixture.controller.toggleFavoritePage(2)]);
+    expect(fixture.controller.favoritePages, isEmpty);
+  });
 
   test('preparing a checked account keeps local data until adoption', () async {
     final prepared = await fixture.prepare();

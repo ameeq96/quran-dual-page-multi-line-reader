@@ -9,6 +9,7 @@ import '../../../../core/services/system_ui_service.dart';
 import '../../../../core/services/reader_download_policy.dart';
 import '../../../../core/services/reader_browser_reminder_service.dart';
 import '../../../../core/storage/reader_preferences.dart';
+import '../../../../core/storage/reader_backup_history.dart';
 import '../../data/repositories/quran_reader_repository.dart';
 import '../../data/services/quran_admin_ai_proxy_service.dart';
 import '../../data/services/quran_ai_feature_service.dart';
@@ -78,9 +79,51 @@ class QuranReaderController extends ChangeNotifier {
 
   final QuranReaderRepository _repository;
   final QuranAudioService _audioService;
+  QuranAudioService get audioPracticeService => _audioService;
   final QuranReaderSyncService _readerSyncService;
   final ReaderAccountService _readerAccountService;
   final ReaderPreferences _preferences;
+  late final ReaderBackupHistory backupHistory = ReaderBackupHistory(profileId: _preferences.profileId);
+  Timer? _backupHistoryTimer;
+  String? _backupHistoryError;
+  String? get backupHistoryError => _backupHistoryError;
+  Future<void> saveRestorePoint(String reason, {bool force = false}) async {
+    await backupHistory.save(buildStateBackupJson(), reason: reason, force: force);
+    _backupHistoryError = null;
+  }
+  void _scheduleRestorePoint() {
+    if (_isDisposed || _isLoading) return;
+    _backupHistoryTimer?.cancel();
+    _backupHistoryTimer = Timer(const Duration(seconds: 2), () async {
+      try { await saveRestorePoint('Automatic backup'); }
+      catch (_) {
+        _backupHistoryError = 'Automatic backup could not be saved. Export a backup to keep a copy.';
+        if (!_isDisposed) notifyListeners();
+      }
+    });
+  }
+  Future<void> restoreHistoryPoint(ReaderRestorePoint point) async {
+    await restoreStateBackupJson(point.backup);
+  }
+  Future<void> prepareForLocalProfileSwitch() async {
+    if (_readerAccountBusy) throw StateError('Finish the current account action first.');
+    if (_syncBaseUrl.isNotEmpty && _syncToken.isNotEmpty) {
+      await detachReaderBrowserReminders(baseUrl: _syncBaseUrl,
+          identity: ReaderSyncIdentity(deviceId: _syncClientId, token: _syncToken));
+    }
+    _cloudSyncTimer?.cancel();
+    _backupHistoryTimer?.cancel();
+    _pagePersistenceTimer?.cancel();
+    _notesPersistenceTimer?.cancel();
+    _invalidateReaderSyncContext();
+    await _audioService.pause();
+    await _persistCurrentPageSnapshot();
+    await _repository.savePageNotesByEdition(_editionPageNotes);
+    await _persistAudioState();
+    await _syncStateWrites;
+    await saveRestorePoint('Before switching profile');
+    _cloudSyncTimer?.cancel();
+  }
   final ReaderDownloadPolicy _downloadPolicy = ReaderDownloadPolicy();
   StreamSubscription<bool>? _downloadNetworkSubscription;
   Map<MushafEdition, QuranPartialAssetPack> _partialOfflinePacks = {};
@@ -171,6 +214,7 @@ class QuranReaderController extends ChangeNotifier {
   int _readingStreakCount = 0;
   String? _readingStreakLastDate;
   int _savedAudioPositionMillis = 0;
+  int _audioLoadGeneration = 0;
   Timer? _controlsTimer;
   Timer? _pagePersistenceTimer;
   Timer? _pageUiRefreshTimer;
@@ -960,6 +1004,7 @@ class QuranReaderController extends ChangeNotifier {
     } finally {
       _isLoading = false;
       _loadingNotifier.value = false;
+      _scheduleRestorePoint();
       if (!_isDisposed) {
         notifyListeners();
       }
@@ -1182,10 +1227,14 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> clearHifzReviewEntry(int pageNumber) async {
+    final edition = _settings.mushafEdition;
+    final preferImages = _settings.preferImageMode;
+    await saveRestorePoint('Before deleting reader data');
+    if (_isDisposed) return;
     _hifzReviewEntries = _hifzReviewEntries
         .where((entry) => entry.pageNumber != pageNumber ||
-            entry.preferImageMode != _settings.preferImageMode ||
-            (entry.preferImageMode && entry.edition != _settings.mushafEdition))
+            entry.preferImageMode != preferImages ||
+            (entry.preferImageMode && entry.edition != edition))
         .toList(growable: false);
     _markReaderSyncDirty();
     await _repository.saveHifzRevisionEntries(_hifzReviewEntries);
@@ -1702,29 +1751,41 @@ class QuranReaderController extends ChangeNotifier {
 
   Future<void> saveNoteForCurrentPage(String note) async {
     final trimmed = note.trim();
-    final nextNotes = Map<int, String>.from(_pageNotes);
-    if (trimmed.isEmpty) {
-      nextNotes.remove(_currentPageNumber);
-    } else {
-      nextNotes[_currentPageNumber] = trimmed;
+    final page = _currentPageNumber;
+    final annotationKey = _annotationKey;
+    if ((_pageNotes[page] ?? '') != trimmed) {
+      await saveRestorePoint('Before changing note');
     }
-    _pageNotes = nextNotes;
-    _editionPageNotes[_annotationKey] = nextNotes;
+    if (_isDisposed) return;
+    final nextNotes = Map<int, String>.from(_editionPageNotes[annotationKey] ?? {});
+    if (trimmed.isEmpty) {
+      nextNotes.remove(page);
+    } else {
+      nextNotes[page] = trimmed;
+    }
+    if (_annotationKey == annotationKey) _pageNotes = nextNotes;
+    _editionPageNotes[annotationKey] = nextNotes;
     _publishContentChange();
     _scheduleNotesPersistence();
   }
 
   Future<void> toggleFavoritePage([int? pageNumber]) async {
     final targetPage = pageNumber ?? _currentPageNumber;
-    final next = List<int>.from(_favoritePages);
-    if (next.contains(targetPage)) {
+    final annotationKey = _annotationKey;
+    final wasFavorite = _favoritePages.contains(targetPage);
+    if (wasFavorite) {
+      await saveRestorePoint('Before deleting reader data');
+    }
+    if (_isDisposed) return;
+    final next = List<int>.from(_editionFavoritePages[annotationKey] ?? []);
+    if (wasFavorite) {
       next.remove(targetPage);
-    } else {
+    } else if (!next.contains(targetPage)) {
       next.add(targetPage);
       next.sort();
     }
-    _favoritePages = next;
-    _editionFavoritePages[_annotationKey] = next;
+    if (_annotationKey == annotationKey) _favoritePages = next;
+    _editionFavoritePages[annotationKey] = next;
     _rebuildContentCaches();
     _publishContentChange();
     await _repository.saveFavoritePagesByEdition(_editionFavoritePages);
@@ -1774,10 +1835,14 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> removeBookmark(int pageNumber) async {
+    final edition = _settings.mushafEdition;
+    final preferImages = _settings.preferImageMode;
+    await saveRestorePoint('Before deleting reader data');
+    if (_isDisposed) return;
     _bookmarks = _bookmarks
         .where((entry) => entry.pageNumber != pageNumber ||
-            entry.preferImageMode != _settings.preferImageMode ||
-            (entry.preferImageMode && entry.edition != _settings.mushafEdition))
+            entry.preferImageMode != preferImages ||
+            (entry.preferImageMode && entry.edition != edition))
         .toList(growable: false);
     _rebuildContentCaches();
     _publishContentChange();
@@ -1995,6 +2060,8 @@ class QuranReaderController extends ChangeNotifier {
 
   Future<void> restoreStateBackupJson(String source) async {
     final snapshot = _validatedReaderBackup(source);
+    await saveRestorePoint('Before restoring backup', force: true);
+    _backupHistoryTimer?.cancel();
     _pagePersistenceTimer?.cancel();
     _notesPersistenceTimer?.cancel();
     _cloudSyncTimer?.cancel();
@@ -2034,6 +2101,8 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> selectReciter(QuranReciter reciter) async {
+    ++_audioLoadGeneration;
+    if (_audioState.selectedReciter?.id != reciter.id) await _audioService.practice.cancel();
     if (_audioState.selectedReciter?.id != reciter.id) _currentRecitationVerseKey = null;
     _setAudioState(_audioState.copyWith(selectedReciter: reciter));
     _markReaderSyncDirty();
@@ -2051,6 +2120,8 @@ class QuranReaderController extends ChangeNotifier {
       return;
     }
 
+    ++_audioLoadGeneration;
+    await _audioService.practice.cancel();
     _currentRecitationVerseKey = null;
     _savedAudioPositionMillis = 0;
     _markReaderSyncDirty();
@@ -2095,6 +2166,7 @@ class QuranReaderController extends ChangeNotifier {
       return;
     }
 
+    final request = ++_audioLoadGeneration;
     _currentRecitationVerseKey = null;
     _setAudioState(
       _audioState.copyWith(
@@ -2120,18 +2192,22 @@ class QuranReaderController extends ChangeNotifier {
             ? Duration(milliseconds: _savedAudioPositionMillis)
             : null,
       );
+      if (_isDisposed || request != _audioLoadGeneration ||
+          _audioState.currentChapterId != chapter.id || _audioState.selectedReciter?.id != reciter.id) return;
+      final loaded = _audioService.loadedChapterId == chapter.id && _audioService.loadedReciterId == reciter.id;
       _setAudioState(
         _audioState.copyWith(
           isLoading: false,
           isBuffering: false,
           isDownloading: false,
-          isPlaying: true,
+          isPlaying: loaded && _audioService.isPlaying,
           clearError: true,
         ),
       );
-      await _repository.saveAudioChapterId(chapter.id);
+      if (loaded) await _repository.saveAudioChapterId(chapter.id);
       _scheduleCloudSyncPush();
     } catch (error) {
+      if (_isDisposed || request != _audioLoadGeneration) return;
       _setAudioState(
         _audioState.copyWith(
           isLoading: false,
@@ -2163,11 +2239,13 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> pauseAudio() async {
+    ++_audioLoadGeneration;
     await _audioService.pause();
     await _persistAudioState();
     _setAudioState(
       _audioState.copyWith(
         isPlaying: false,
+        isLoading: false,
         isBuffering: false,
         clearError: true,
       ),
@@ -2193,6 +2271,7 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<void> stopAudio() async {
+    ++_audioLoadGeneration;
     _currentRecitationVerseKey = null;
     _savedAudioPositionMillis = 0;
     _markReaderSyncDirty();
@@ -2202,6 +2281,7 @@ class QuranReaderController extends ChangeNotifier {
     _setAudioState(
       _audioState.copyWith(
         isPlaying: false,
+        isLoading: false,
         isBuffering: false,
         positionMillis: 0,
         durationMillis: 0,
@@ -2724,6 +2804,7 @@ class QuranReaderController extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _backupHistoryTimer?.cancel();
     for (final token in _offlinePackCancelTokens.values) {
       if (!token.isCancelled) token.cancel(QuranPackDownloadStop.pause);
     }
@@ -2941,6 +3022,7 @@ class QuranReaderController extends ChangeNotifier {
 
   void _markReaderSyncDirty() {
     if (_isDisposed || _isLoading || _suppressSyncDirty) return;
+    _scheduleRestorePoint();
     _localChangeGeneration++;
     _readerSyncDirty = true;
     unawaited(_persistReaderSyncLocalState());
@@ -3617,6 +3699,8 @@ class QuranReaderController extends ChangeNotifier {
             ? _readerSyncContextIsCurrent(syncContext)
             : syncContext == _syncContextGeneration)) &&
         (expectedGeneration == null || expectedGeneration == _localChangeGeneration);
+    if (!isCurrent()) return false;
+    await saveRestorePoint('Before replacing reader data');
     if (!isCurrent()) return false;
     await _audioService.resetPlayback();
     if (!isCurrent()) return false;

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'reader_profile_store.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,6 +14,10 @@ import '../../features/quran_reader/domain/models/reader_growth_models.dart';
 import '../../features/quran_reader/domain/models/reader_settings.dart';
 
 class ReaderPreferences {
+  ReaderPreferences({this.profileId = 'default'}) {
+    if (!ReaderProfileStore.validId(profileId)) throw ArgumentError('Invalid local profile.');
+  }
+  final String profileId;
   static const _defaultAdminPublicBaseUrl =
       'https://quran.opplexify.com';
   static const _lastPageKey = 'reader.lastPageNumber';
@@ -65,8 +71,8 @@ class ReaderPreferences {
       'reader.customFontColorEnabled';
   static const _legacyFontColorPresetKey = 'reader.fontColorPreset';
 
-  Future<SharedPreferences> get _prefs async {
-    return SharedPreferences.getInstance();
+  Future<_ProfilePreferences> get _prefs async {
+    return _ProfilePreferences(await SharedPreferences.getInstance(), profileId);
   }
 
   Future<int> loadLastPageNumber() async {
@@ -456,7 +462,8 @@ class ReaderPreferences {
     final prefs = await _prefs;
     final payload = prefs.getString(_experienceSettingsKey);
     if (payload == null || payload.trim().isEmpty) {
-      return const ReaderExperienceSettings.defaults();
+      return profileId == 'default' ? const ReaderExperienceSettings.defaults()
+          : const ReaderExperienceSettings.defaults().copyWith(syncMode: ReaderSyncMode.localOnly);
     }
 
     try {
@@ -623,7 +630,8 @@ class ReaderPreferences {
     if (!isValidSyncIdentity(identity)) {
       throw const FormatException('Invalid private sync identity.');
     }
-    final pending = _syncIdentityLoads[normalized];
+    final cacheKey = '$profileId:$normalized';
+    final pending = _syncIdentityLoads[cacheKey];
     if (pending != null) await pending;
     final prefs = await _prefs;
     final key = 'reader.sync.identity.${Uri.encodeComponent(normalized)}';
@@ -634,11 +642,12 @@ class ReaderPreferences {
 
   Future<ReaderSyncIdentity> loadOrCreateSyncIdentity(String baseUrl) {
     final normalized = normalizeSyncBaseUrl(baseUrl);
-    final pending = _syncIdentityLoads[normalized];
+    final cacheKey = '$profileId:$normalized';
+    final pending = _syncIdentityLoads[cacheKey];
     if (pending != null) return pending;
     final request = _loadOrCreateSyncIdentity(normalized);
-    _syncIdentityLoads[normalized] = request;
-    return request.whenComplete(() { if (identical(_syncIdentityLoads[normalized], request)) _syncIdentityLoads.remove(normalized); });
+    _syncIdentityLoads[cacheKey] = request;
+    return request.whenComplete(() { if (identical(_syncIdentityLoads[cacheKey], request)) _syncIdentityLoads.remove(cacheKey); });
   }
 
   Future<ReaderSyncIdentity> _loadOrCreateSyncIdentity(String normalized) async {
@@ -667,6 +676,25 @@ class ReaderPreferences {
 
 }
 
+
+class _ProfilePreferences {
+  const _ProfilePreferences(this.prefs, this.profileId);
+  final SharedPreferences prefs;
+  final String profileId;
+  String key(String value) => value == 'reader.admin.publicBaseUrl' ||
+          value == 'reader.admin.publicConfigJson' || value == 'reader.onboardingSeen'
+      ? value : ReaderProfileStore.keyFor(value, profileId);
+  String? getString(String k) => prefs.getString(key(k));
+  List<String>? getStringList(String k) => prefs.getStringList(key(k));
+  int? getInt(String k) => prefs.getInt(key(k));
+  bool? getBool(String k) => prefs.getBool(key(k));
+  double? getDouble(String k) => prefs.getDouble(key(k));
+  Future<bool> setString(String k, String v) => prefs.setString(key(k), v);
+  Future<bool> setInt(String k, int v) => prefs.setInt(key(k), v);
+  Future<bool> setBool(String k, bool v) => prefs.setBool(key(k), v);
+  Future<bool> setDouble(String k, double v) => prefs.setDouble(key(k), v);
+  Future<bool> remove(String k) => prefs.remove(key(k));
+}
 
 class ReaderSyncIdentity {
   const ReaderSyncIdentity({required this.deviceId, required this.token});

@@ -47,11 +47,13 @@ void main() {
     expect(_read('window.__readerVoiceTest.getUserMediaCalls'), 1);
     await capture.stop();
     expect(capture.hasRecording, isTrue);
+    expect(await capture.readRecordingBytes(), orderedEquals('local audio fixture'.codeUnits));
     expect(capture.isBusy, isFalse);
     expect(_read('window.__readerVoiceTest.allTracksStopped()'), isTrue);
     expect(_read('window.__readerVoiceTest.createdUrls.length'), 1);
     capture.cancel();
     expect(capture.hasRecording, isFalse);
+    await expectLater(capture.readRecordingBytes(), throwsStateError);
     expect(_read('window.__readerVoiceTest.revokedUrls.length'), 1);
   });
 
