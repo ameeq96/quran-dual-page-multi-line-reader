@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../domain/models/quran_page.dart';
 import '../../domain/models/reader_settings.dart';
 
@@ -211,6 +213,7 @@ class ReaderHifzMaskGeometry {
           verticalNudgeFactor: 0,
         ),
       MushafEdition.kanzulIman => _fallback,
+      _ => _fallback,
     };
   }
 }
@@ -378,7 +381,7 @@ class ReaderHifzManualMask extends StatelessWidget {
                         ),
                       ),
                       child: Text(
-                        'L$selectedLineNumber',
+                        tr(context, 'L$selectedLineNumber'),
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               color: Colors.white.withValues(

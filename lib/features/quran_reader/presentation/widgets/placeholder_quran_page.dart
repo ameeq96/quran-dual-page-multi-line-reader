@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../domain/models/quran_page.dart';
 import '../models/reader_page_appearance.dart';
 
@@ -46,7 +48,7 @@ class PlaceholderQuranPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  title ?? 'Page is not available offline',
+                  tr(context, title ?? 'Page is not available offline'),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
@@ -55,8 +57,8 @@ class PlaceholderQuranPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  message ??
-                      'Connect to the internet, or download this Quran edition from Asset Packs for offline reading.',
+                  tr(context, message ??
+                      'Connect to the internet, or download this Quran edition from Asset Packs for offline reading.'),
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall?.copyWith(
                     height: 1.35,

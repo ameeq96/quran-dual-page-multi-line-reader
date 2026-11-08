@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../../../core/constants/quran_constants.dart';
 import '../../domain/models/quran_page.dart';
 import '../../domain/models/reader_settings.dart';
@@ -10,6 +12,7 @@ import 'placeholder_quran_page.dart';
 import 'quran_page_image_provider.dart';
 import 'reader_hifz_line_mask.dart';
 import 'reader_skeleton.dart';
+import 'reader_page_pin_overlay.dart';
 
 class MushafPageWidget extends StatelessWidget {
   const MushafPageWidget({
@@ -147,7 +150,7 @@ class MushafPageWidget extends StatelessWidget {
                               vertical: 8,
                             ),
                             child: Text(
-                              page.number.toString(),
+                              tr(context, page.number.toString()),
                               style: theme.textTheme.labelLarge?.copyWith(
                                 fontWeight: FontWeight.w700,
                                 color: appearance.pageNumberForegroundColor,
@@ -372,19 +375,21 @@ class _PageSurfaceState extends State<_PageSurface> {
           page: widget.page,
           appearance: widget.appearance,
           lowMemoryMode: widget.settings.lowMemoryMode,
+          edition: widget.settings.mushafEdition.storageValue,
         ),
-      QuranPageContentType.text => PlaceholderQuranPage(
-          page: widget.page,
-          appearance: widget.appearance,
-        ),
+      QuranPageContentType.text ||
       QuranPageContentType.placeholder => PlaceholderQuranPage(
           page: widget.page,
           appearance: widget.appearance,
-          title: 'This edition is not downloaded',
+          title: tr(context, 'This edition is not downloaded'),
           message:
               'Connect to the internet, or open Asset Packs and download this Quran edition for offline reading.',
         ),
     };
+
+    if (widget.page.usesText) {
+      return pageBody;
+    }
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -538,11 +543,13 @@ class _ImagePageContent extends StatelessWidget {
     required this.page,
     required this.appearance,
     required this.lowMemoryMode,
+    required this.edition,
   });
 
   final QuranPage page;
   final ReaderPageAppearance appearance;
   final bool lowMemoryMode;
+  final String edition;
 
   @override
   Widget build(BuildContext context) {
@@ -578,9 +585,9 @@ class _ImagePageContent extends StatelessWidget {
             return PlaceholderQuranPage(
               page: page,
               appearance: appearance,
-              title: page.usesRemoteImage
+              title: tr(context, page.usesRemoteImage
                   ? 'Unable to load this page'
-                  : 'This page file is missing',
+                  : 'This page file is missing'),
               message: page.usesRemoteImage
                   ? 'You may be offline or the server may be unreachable. Connect to the internet, or download this edition from Asset Packs.'
                   : 'Download this Quran edition again from Asset Packs to restore the offline pages.',
@@ -604,11 +611,7 @@ class _ImagePageContent extends StatelessWidget {
           );
         }
 
-        if (!appearance.hasImageTint) {
-          return image;
-        }
-
-        return Stack(
+        final content = !appearance.hasImageTint ? image : Stack(
           fit: StackFit.expand,
           children: [
             image,
@@ -622,6 +625,15 @@ class _ImagePageContent extends StatelessWidget {
               ),
             ),
           ],
+        );
+        return ReaderPagePinOverlay(
+          allowEditing: ReaderPinEditingScope.enabled(context),
+          pageNumber: page.number,
+          edition: edition,
+          sourceKey: page.assetPath ?? '',
+          imageProvider: imageProvider,
+          originalImageProvider: buildQuranPageImageProvider(page),
+          child: content,
         );
       },
     );

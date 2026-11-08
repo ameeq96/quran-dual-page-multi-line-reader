@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 class ReaderControlsOverlay extends StatelessWidget {
   const ReaderControlsOverlay({
     super.key,
@@ -32,7 +34,7 @@ class ReaderControlsOverlay extends StatelessWidget {
                 left: edgeInset,
                 bottom: buttonBottom,
                 child: _ReaderEdgeButton(
-                  label: 'Next',
+                  label: tr(context, 'Next'),
                   helper: 'Move forward',
                   icon: Icons.arrow_back_rounded,
                   enabled: canGoNext,
@@ -44,7 +46,7 @@ class ReaderControlsOverlay extends StatelessWidget {
                 right: edgeInset,
                 bottom: buttonBottom,
                 child: _ReaderEdgeButton(
-                  label: 'Previous',
+                  label: tr(context, 'Previous'),
                   helper: 'Go back',
                   icon: Icons.arrow_forward_rounded,
                   enabled: canGoPrevious,
@@ -87,7 +89,7 @@ class ReaderControlsOverlay extends StatelessWidget {
                           vertical: compact ? 8 : 10,
                         ),
                         child: Text(
-                          'Tap anywhere to focus on reading',
+                          tr(context, 'Tap anywhere to focus on reading'),
                           style: compact
                               ? Theme.of(context).textTheme.labelMedium
                               : null,
@@ -162,10 +164,10 @@ class _ReaderEdgeButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label),
+                Text(tr(context, label)),
                 if (!compact)
                   Text(
-                    helper,
+                    tr(context, helper),
                     style: theme.textTheme.bodySmall,
                   ),
               ],

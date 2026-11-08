@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../../app/app_theme.dart';
+import '../../../../app/reader_localization.dart';
+import '../../domain/models/quran_asset_pack_download.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
 
@@ -22,19 +24,19 @@ class QuranAssetPacksScreen extends StatelessWidget {
             context: context,
             builder: (context) {
               return AlertDialog(
-                title: const Text('Download another edition?'),
+                title: Text(tr(context, 'Download another edition?')),
                 content: Text(
-                  '${activeDownload.label} is already downloading. '
-                  'Do you want to start downloading ${edition.label} too?',
+                  tr(context, '${activeDownload.label} is already downloading. '
+                  'Do you want to start downloading ${edition.label} too?'),
                 ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(false),
-                    child: const Text('Cancel'),
+                    child: Text(tr(context, 'Cancel')),
                   ),
                   FilledButton(
                     onPressed: () => Navigator.of(context).pop(true),
-                    child: const Text('Download'),
+                    child: Text(tr(context, 'Download')),
                   ),
                 ],
               );
@@ -49,19 +51,26 @@ class QuranAssetPacksScreen extends StatelessWidget {
     try {
       await controller.downloadOfflineEditionPack(edition);
       if (!context.mounted) return;
+      if (!controller.isOfflinePackDownloaded(edition) ||
+          controller.isOfflinePackPaused(edition) ||
+          controller.isOfflinePackDownloading(edition)) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${edition.label} is ready offline.')),
+        SnackBar(content: Text(tr(context, '${edition.label} is ready offline.'))),
       );
     } catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_downloadErrorMessage(error))),
+        SnackBar(content: Text(tr(context, _downloadErrorMessage(error)))),
       );
     }
   }
 
   String _downloadErrorMessage(Object error) {
     final message = error.toString().toLowerCase();
+    if (message.contains('paused')) return 'Download paused. Saved data is kept for resume.';
+    if (message.contains('wi-fi-only')) return 'Wi-Fi-only downloads are enabled. Connect to Wi-Fi to continue.';
     if (message.contains('cancelled') ||
         message.contains('canceled') ||
         message.contains('request cancelled') ||
@@ -93,12 +102,12 @@ class QuranAssetPacksScreen extends StatelessWidget {
       await controller.removeOfflineEditionPack(edition);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${edition.label} pack deleted.')),
+        SnackBar(content: Text(tr(context, '${edition.label} pack deleted.'))),
       );
     } catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Delete failed: $error')),
+        SnackBar(content: Text(tr(context, 'Delete failed: $error'))),
       );
     }
   }
@@ -127,7 +136,7 @@ class QuranAssetPacksScreen extends StatelessWidget {
           data: themeData,
           child: Scaffold(
             appBar: AppBar(
-              title: const Text('Asset Packs'),
+              title: Text(tr(context, 'Asset Packs')),
             ),
             body: SafeArea(
               child: _AssetPackList(
@@ -170,6 +179,7 @@ class _AssetPackListState extends State<_AssetPackList> {
   void initState() {
     super.initState();
     widget.controller.addListener(_handleControllerChange);
+    unawaited(widget.controller.refreshDownloadStorage().catchError((Object _) {}));
   }
 
   @override
@@ -181,6 +191,7 @@ class _AssetPackListState extends State<_AssetPackList> {
     oldWidget.controller.removeListener(_handleControllerChange);
     _refreshTimer?.cancel();
     widget.controller.addListener(_handleControllerChange);
+    unawaited(widget.controller.refreshDownloadStorage().catchError((Object _) {}));
   }
 
   @override
@@ -221,12 +232,18 @@ class _AssetPackListState extends State<_AssetPackList> {
     final showCancelAll = widget.controller.hasActiveOfflinePackDownloads;
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      itemCount: packs.length + (showCancelAll ? 1 : 0),
+      itemCount: packs.length + 1 + (showCancelAll ? 1 : 0),
       cacheExtent: 360,
       addAutomaticKeepAlives: false,
       addRepaintBoundaries: true,
       itemBuilder: (context, index) {
-        if (showCancelAll && index == 0) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _DownloadStorageCard(controller: widget.controller),
+          );
+        }
+        if (showCancelAll && index == 1) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: _CancelAllDownloadsTile(
@@ -234,7 +251,7 @@ class _AssetPackListState extends State<_AssetPackList> {
             ),
           );
         }
-        final packIndex = index - (showCancelAll ? 1 : 0);
+        final packIndex = index - 1 - (showCancelAll ? 1 : 0);
         final pack = packs[packIndex];
         final bottomPadding = packIndex == packs.length - 1 ? 0.0 : 12.0;
         final edition = pack.edition;
@@ -242,18 +259,26 @@ class _AssetPackListState extends State<_AssetPackList> {
           edition,
         );
         final isReady = widget.controller.isOfflinePackDownloaded(edition);
+        final isPaused = widget.controller.isOfflinePackPaused(edition);
+        final partial = widget.controller.partialOfflinePackForEdition(edition);
+        final transfer = widget.controller.transferProgressForEdition(edition);
         final isBuiltIn = widget.controller.isBundledPackForEdition(edition);
         final canDownload =
             widget.controller.hasDownloadablePackForEdition(edition) &&
                 !isDownloading &&
-                !isReady &&
+                (!isReady || isPaused) &&
                 !isBuiltIn;
         final canDelete = isReady && !isBuiltIn && !isDownloading;
         final progress = widget.controller.offlinePackProgressForEdition(
           edition,
         );
         final statusLabel = isDownloading
-            ? 'Downloading ${(progress * 100).round()}%'
+            ? switch (transfer?.phase) {
+                QuranPackTransferPhase.extracting => 'Verifying & extracting',
+                QuranPackTransferPhase.publishing => 'Saving offline pack',
+                _ => 'Downloading ${(progress * 100).round()}%',
+              }
+            : isPaused ? 'Paused'
             : isReady || isBuiltIn
                 ? 'Ready'
                 : 'Not downloaded';
@@ -267,14 +292,23 @@ class _AssetPackListState extends State<_AssetPackList> {
               subtitle: widget.controller.adminPackSubtitleForEdition(edition),
               progress: isDownloading ? progress : null,
               isDownloading: isDownloading,
-              onDownload: canDownload
-                  ? () => widget.onDownload(context, edition)
-                  : null,
+              isPaused: isPaused,
+              restartRequired: partial?.canResume == false,
+              transferLabel: _transferLabel(transfer, partial),
+              onDownload: isDownloading
+                  ? () => widget.controller.pauseOfflineEditionPackDownload(edition)
+                  : canDownload ? () => widget.onDownload(context, edition) : null,
               onCancelDownload: isDownloading
-                  ? () => widget.controller.cancelOfflineEditionPackDownload(
-                        edition,
-                      )
-                  : null,
+                  ? () => widget.controller.cancelOfflineEditionPackDownload(edition)
+                  : isPaused ? () async {
+                      try {
+                        await widget.controller.discardPausedOfflineEditionPack(edition);
+                      } catch (error) {
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(tr(context, 'Unable to remove partial download.'))),
+                        );
+                      }
+                    } : null,
               onDelete:
                   canDelete ? () => widget.onDelete(context, edition) : null,
             ),
@@ -291,6 +325,9 @@ class _AssetPackTile extends StatelessWidget {
     required this.statusLabel,
     required this.subtitle,
     required this.isDownloading,
+    required this.isPaused,
+    required this.restartRequired,
+    required this.transferLabel,
     required this.onDownload,
     required this.onCancelDownload,
     required this.onDelete,
@@ -301,6 +338,9 @@ class _AssetPackTile extends StatelessWidget {
   final String statusLabel;
   final String subtitle;
   final bool isDownloading;
+  final bool isPaused;
+  final bool restartRequired;
+  final String? transferLabel;
   final VoidCallback? onDownload;
   final VoidCallback? onCancelDownload;
   final VoidCallback? onDelete;
@@ -331,7 +371,7 @@ class _AssetPackTile extends StatelessWidget {
                   backgroundColor:
                       theme.colorScheme.primary.withValues(alpha: 0.12),
                   child: Text(
-                    edition.shortLabel,
+                    tr(context, edition.shortLabel),
                     style: theme.textTheme.labelLarge?.copyWith(
                       color: theme.colorScheme.primary,
                       fontWeight: FontWeight.w900,
@@ -344,14 +384,14 @@ class _AssetPackTile extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        edition.label,
+                        tr(context, edition.label),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w900,
                         ),
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        statusLabel,
+                        tr(context, statusLabel),
                         style: theme.textTheme.labelMedium?.copyWith(
                           color: theme.colorScheme.primary,
                           fontWeight: FontWeight.w800,
@@ -361,7 +401,7 @@ class _AssetPackTile extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Delete pack',
+                  tooltip: tr(context, 'Delete pack'),
                   onPressed: onDelete,
                   icon: const Icon(Icons.delete_outline_rounded),
                 ),
@@ -369,20 +409,27 @@ class _AssetPackTile extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              subtitle,
+              tr(context, subtitle).replaceFirst(edition.bestUseLabel, tr(context, edition.bestUseLabel)),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
                 height: 1.35,
               ),
             ),
+            if (transferLabel != null) ...[
+              const SizedBox(height: 8),
+              Text(tr(context, transferLabel!), style: theme.textTheme.labelMedium),
+            ],
             if (progressValue != null) ...[
               const SizedBox(height: 12),
-              LinearProgressIndicator(
-                value: progressValue <= 0 || progressValue >= 1
-                    ? null
-                    : progressValue,
-                minHeight: 8,
-                borderRadius: BorderRadius.circular(999),
+              Semantics(
+                container: true,
+                child: LinearProgressIndicator(
+                  value: progressValue <= 0 || progressValue >= 1
+                      ? null
+                      : progressValue,
+                  minHeight: 8,
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
             ],
             const SizedBox(height: 12),
@@ -393,10 +440,10 @@ class _AssetPackTile extends StatelessWidget {
                     onPressed: onDownload,
                     icon: Icon(
                       isDownloading
-                          ? Icons.downloading_rounded
-                          : Icons.download_rounded,
+                          ? Icons.pause_rounded
+                          : isPaused ? Icons.play_arrow_rounded : Icons.download_rounded,
                     ),
-                    label: Text(isDownloading ? 'In progress' : 'Download'),
+                    label: Text(tr(context, isDownloading ? 'Pause' : isPaused ? (restartRequired ? 'Restart' : 'Resume') : 'Download')),
                   ),
                 ),
                 if (onCancelDownload != null) ...[
@@ -404,7 +451,7 @@ class _AssetPackTile extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: onCancelDownload,
                     icon: const Icon(Icons.close_rounded),
-                    label: const Text('Cancel'),
+                    label: Text(tr(context, 'Cancel')),
                   ),
                 ],
               ],
@@ -445,7 +492,7 @@ class _CancelAllDownloadsTile extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Downloads are running',
+                tr(context, 'Downloads are running'),
                 style: theme.textTheme.labelLarge?.copyWith(
                   fontWeight: FontWeight.w900,
                 ),
@@ -454,10 +501,80 @@ class _CancelAllDownloadsTile extends StatelessWidget {
             TextButton.icon(
               onPressed: onCancelAll,
               icon: const Icon(Icons.close_rounded),
-              label: const Text('Cancel all'),
+              label: Text(tr(context, 'Cancel all')),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+String _formatPackBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+}
+
+String? _transferLabel(QuranPackTransferProgress? transfer, QuranPartialAssetPack? partial) {
+  final received = transfer?.receivedBytes ?? partial?.receivedBytes;
+  if (received == null) return null;
+  final total = transfer?.totalBytes ?? partial?.totalBytes;
+  return total == null || total <= 0
+      ? _formatPackBytes(received)
+      : '${_formatPackBytes(received)} / ${_formatPackBytes(total)}';
+}
+
+class _DownloadStorageCard extends StatelessWidget {
+  const _DownloadStorageCard({required this.controller});
+  final QuranReaderController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final info = controller.packStorageInfo;
+    final quota = info?.browserQuotaBytes;
+    final usage = info?.browserUsageBytes;
+    final free = controller.availableStorageBytes ??
+        (quota != null && usage != null ? (quota - usage).clamp(0, quota) : null);
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(tr(context, 'Storage & downloads'), style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(tr(context, info == null ? tr(context, 'Checking storage…') :
+            tr(context, 'Downloaded files: {size}', args: {'size': _formatPackBytes(info.totalBytes)}))),
+          if (info != null && info.partialBytes > 0 && !controller.hasActiveOfflinePackDownloads)
+            Text(tr(context, 'Paused data: {size}', args: {'size': _formatPackBytes(info.partialBytes)})),
+          Text(tr(context, free == null ? tr(context, 'Available space could not be measured.') :
+            tr(context, controller.availableStorageBytes == null ? 'Browser storage available: about {size}' : 'Device space available: {size}',
+              args: {'size': _formatPackBytes(free.toInt())}))),
+          if (quota != null) Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(tr(context, 'Browser storage is an estimate and may be cleared by the browser.'), style: theme.textTheme.bodySmall),
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: Text(tr(context, 'Wi-Fi-only downloads')),
+            subtitle: Text(tr(context, controller.supportsWifiOnlyDownloads
+                ? 'Pause edition downloads when Wi-Fi disconnects.'
+                : 'Wi-Fi detection is available in the mobile app.')),
+            value: controller.wifiOnlyDownloads,
+            onChanged: !controller.supportsWifiOnlyDownloads ? null : (value) async {
+              try {
+                await controller.setWifiOnlyDownloads(value);
+              } catch (_) {
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(tr(context, 'Unable to save download setting.'))),
+                );
+              }
+            },
+          ),
+        ]),
       ),
     );
   }

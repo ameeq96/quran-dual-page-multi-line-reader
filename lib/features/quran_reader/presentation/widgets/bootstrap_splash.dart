@@ -2,13 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../../../app/app_theme.dart';
 
 class BootstrapSplash extends StatefulWidget {
-  const BootstrapSplash({
-    super.key,
-    this.nightMode,
-  });
+  const BootstrapSplash({super.key, this.nightMode});
 
   final bool? nightMode;
 
@@ -19,14 +18,26 @@ class BootstrapSplash extends StatefulWidget {
 class _BootstrapSplashState extends State<BootstrapSplash>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  bool _reducedMotion = false;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
-    )..repeat();
+      duration: const Duration(milliseconds: 3200),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _reducedMotion = MediaQuery.disableAnimationsOf(context);
+    if (_reducedMotion) {
+      _controller.stop();
+    } else if (!_controller.isAnimating) {
+      _controller.repeat();
+    }
   }
 
   @override
@@ -37,363 +48,165 @@ class _BootstrapSplashState extends State<BootstrapSplash>
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final compact = size.width < 420 || size.height < 760;
-    final shortHeight = size.height < 700;
-    final ultraCompact = size.height < 620;
     final useDark = widget.nightMode ?? false;
-    final effectiveTheme = useDark ? AppTheme.dark() : AppTheme.light();
-
     return Theme(
-      data: effectiveTheme,
+      data: useDark ? AppTheme.dark() : AppTheme.light(),
       child: Builder(
         builder: (context) {
           final theme = Theme.of(context);
-
           return Scaffold(
             backgroundColor: theme.scaffoldBackgroundColor,
-            body: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, _) {
-                final t = Curves.easeInOut.transform(_controller.value);
-
-                return DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        theme.scaffoldBackgroundColor,
-                        theme.colorScheme.surface,
-                        theme.colorScheme.surfaceContainer
-                            .withValues(alpha: 0.96),
-                      ],
+            body: Stack(
+              children: [
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: ExcludeSemantics(
+                      child: RepaintBoundary(
+                        child: CustomPaint(
+                          painter: _SplashFramePainter(
+                            color: theme.colorScheme.secondary,
+                            dark: useDark,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                  child: Stack(
-                    children: [
-                      Positioned(
-                        top: -140,
-                        left: -90,
-                        child: _SplashOrb(
-                          size: compact ? 240 : 320,
-                          color:
-                              theme.colorScheme.primary.withValues(alpha: 0.1),
-                          driftX: -14 + (t * 20),
-                          driftY: -8 + (t * 16),
-                        ),
-                      ),
-                      Positioned(
-                        right: -120,
-                        bottom: -140,
-                        child: _SplashOrb(
-                          size: compact ? 260 : 360,
-                          color: theme.colorScheme.secondary
-                              .withValues(alpha: 0.08),
-                          driftX: 16 - (t * 18),
-                          driftY: 12 - (t * 14),
-                        ),
-                      ),
-                      SafeArea(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final outerPadding =
-                                ultraCompact ? 14.0 : (compact ? 18.0 : 24.0);
-                            final innerHorizontal =
-                                ultraCompact ? 18.0 : (compact ? 22.0 : 28.0);
-                            final innerTop =
-                                ultraCompact ? 18.0 : (compact ? 24.0 : 30.0);
-                            final innerBottom =
-                                ultraCompact ? 16.0 : (compact ? 22.0 : 26.0);
-
-                            return SingleChildScrollView(
-                              padding: EdgeInsets.all(outerPadding),
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minHeight: math.max(
-                                    0,
-                                    constraints.maxHeight - (outerPadding * 2),
-                                  ),
-                                ),
-                                child: Center(
-                                  child: ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxWidth: 540,
-                                    ),
-                                    child: DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                          colors: [
-                                            theme.colorScheme.surface
-                                                .withValues(
-                                              alpha: 0.96,
-                                            ),
-                                            theme.colorScheme.surfaceContainer
-                                                .withValues(alpha: 0.9),
-                                          ],
-                                        ),
-                                        borderRadius: BorderRadius.circular(
-                                          compact ? 30 : 36,
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: theme.colorScheme.shadow
-                                                .withValues(alpha: 0.12),
-                                            blurRadius: compact ? 26 : 36,
-                                            offset: const Offset(0, 18),
-                                          ),
-                                        ],
-                                      ),
-                                      child: Padding(
-                                        padding: EdgeInsets.fromLTRB(
-                                          innerHorizontal,
-                                          innerTop,
-                                          innerHorizontal,
-                                          innerBottom,
-                                        ),
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            _SplashHeader(
-                                              compact: compact,
-                                              pulseValue: t,
-                                            ),
-                                            SizedBox(
-                                              height: ultraCompact
-                                                  ? 12
-                                                  : (compact ? 18 : 24),
-                                            ),
-                                            Text(
-                                              'Quran Pak Dual Page Reader',
-                                              textAlign: TextAlign.center,
-                                              style: (ultraCompact
-                                                      ? theme
-                                                          .textTheme.titleLarge
-                                                      : theme.textTheme
-                                                          .headlineSmall)
-                                                  ?.copyWith(
-                                                fontWeight: FontWeight.w900,
-                                                letterSpacing: -0.7,
-                                              ),
-                                            ),
-                                            SizedBox(
-                                              height: ultraCompact ? 8 : 10,
-                                            ),
-                                            Text(
-                                              'Preparing your Quran library, reading tools, and recitation workspace.',
-                                              textAlign: TextAlign.center,
-                                              style: (ultraCompact
-                                                      ? theme
-                                                          .textTheme.bodyMedium
-                                                      : theme
-                                                          .textTheme.bodyLarge)
-                                                  ?.copyWith(
-                                                color: theme.colorScheme
-                                                    .onSurfaceVariant,
-                                                height:
-                                                    shortHeight ? 1.35 : 1.45,
-                                              ),
-                                            ),
-                                            SizedBox(
-                                              height: ultraCompact
-                                                  ? 14
-                                                  : (compact ? 18 : 22),
-                                            ),
-                                            const Wrap(
-                                              alignment: WrapAlignment.center,
-                                              spacing: 8,
-                                              runSpacing: 8,
-                                              children: [
-                                                _SplashFeatureChip(
-                                                  icon: Icons
-                                                      .auto_stories_rounded,
-                                                  label: 'Mushaf editions',
-                                                ),
-                                                _SplashFeatureChip(
-                                                  icon: Icons.search_rounded,
-                                                  label: 'Search and jump',
-                                                ),
-                                                _SplashFeatureChip(
-                                                  icon:
-                                                      Icons.headphones_rounded,
-                                                  label: 'Recitation ready',
-                                                ),
-                                              ],
-                                            ),
-                                            SizedBox(
-                                              height: ultraCompact
-                                                  ? 16
-                                                  : (compact ? 20 : 24),
-                                            ),
-                                            _LoadingRail(
-                                              progress: _controller.value,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _SplashHeader extends StatelessWidget {
-  const _SplashHeader({
-    required this.compact,
-    required this.pulseValue,
-  });
-
-  final bool compact;
-  final double pulseValue;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final accent = Color.lerp(
-      theme.colorScheme.primary.withValues(alpha: 0.16),
-      theme.colorScheme.secondary.withValues(alpha: 0.12),
-      pulseValue,
-    )!;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Expanded(
-          child: Container(
-            height: 1,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.transparent,
-                  theme.dividerColor.withValues(alpha: 0.7),
-                ],
-              ),
-            ),
-          ),
-        ),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 14),
-          width: compact ? 84 : 96,
-          height: compact ? 84 : 96,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(compact ? 26 : 30),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                accent,
-                theme.colorScheme.surface.withValues(alpha: 0.32),
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                blurRadius: 20 + (pulseValue * 6),
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(
-                Icons.menu_book_rounded,
-                size: compact ? 36 : 42,
-                color: theme.colorScheme.primary,
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Container(
-            height: 1,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  theme.dividerColor.withValues(alpha: 0.7),
-                  Colors.transparent,
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _LoadingRail extends StatelessWidget {
-  const _LoadingRail({
-    required this.progress,
-  });
-
-  final double progress;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Container(
-      height: 12,
-      decoration: BoxDecoration(
-        color:
-            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.28),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = constraints.maxWidth;
-          final beamWidth = math.max(78.0, width * 0.28);
-          final travel = math.max(0.0, width - beamWidth);
-          final left = travel * Curves.easeInOut.transform(progress);
-
-          return Stack(
-            children: [
-              Positioned(
-                left: left,
-                top: 1,
-                bottom: 1,
-                child: Container(
-                  width: beamWidth,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(999),
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        theme.colorScheme.primary.withValues(alpha: 0.2),
-                        theme.colorScheme.primary.withValues(alpha: 0.9),
-                        theme.colorScheme.secondary.withValues(alpha: 0.55),
-                      ],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color:
-                            theme.colorScheme.primary.withValues(alpha: 0.24),
-                        blurRadius: 10,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
                   ),
                 ),
-              ),
-            ],
+                SafeArea(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final short = constraints.maxHeight < 500;
+                      final padding = constraints.maxWidth < 380 ? 20.0 : 28.0;
+                      final artworkWidth = math.min(
+                        short ? 128.0 : 236.0,
+                        math.max(80.0, constraints.maxWidth - padding * 2) *
+                            0.72,
+                      );
+                      return SingleChildScrollView(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: padding,
+                          vertical: short ? 16 : 24,
+                        ),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: math.max(
+                              0,
+                              constraints.maxHeight - (short ? 32 : 48),
+                            ),
+                          ),
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 440),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IgnorePointer(
+                                    child: ExcludeSemantics(
+                                      child: RepaintBoundary(
+                                        child: CustomPaint(
+                                          size: Size(
+                                            artworkWidth,
+                                            artworkWidth * 1.125,
+                                          ),
+                                          isComplex: true,
+                                          willChange: !_reducedMotion,
+                                          painter: _MushafEmblemPainter(
+                                            progress: _controller,
+                                            reducedMotion: _reducedMotion,
+                                            accent: theme.colorScheme.secondary,
+                                            halo: theme
+                                                .colorScheme
+                                                .secondaryContainer,
+                                            dark: useDark,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(height: short ? 8 : 20),
+                                  Text(
+                                    tr(context, 'Quran Pak'),
+                                    textAlign: TextAlign.center,
+                                    style:
+                                        (short
+                                                ? theme.textTheme.headlineSmall
+                                                : theme.textTheme.headlineLarge)
+                                            ?.copyWith(
+                                              color:
+                                                  theme.colorScheme.onSurface,
+                                              fontWeight: FontWeight.w500,
+                                              letterSpacing: -0.8,
+                                            ),
+                                  ),
+                                  const SizedBox(height: 7),
+                                  Text(
+                                    tr(context, 'DUAL PAGE READER'),
+                                    textAlign: TextAlign.center,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: theme.colorScheme.secondary,
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: 2.5,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                  SizedBox(height: short ? 18 : 30),
+                                  Semantics(
+                                    liveRegion: true,
+                                    label: tr(context, 'Preparing your Mushaf'),
+                                    child: ExcludeSemantics(
+                                      child: Text(
+                                        tr(context, 'Preparing your Mushaf…'),
+                                        textAlign: TextAlign.center,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color: theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 15),
+                                  ExcludeSemantics(
+                                    child: RepaintBoundary(
+                                      child: SizedBox(
+                                        width: 156,
+                                        height: 4,
+                                        child: CustomPaint(
+                                          painter: _LoadingRailPainter(
+                                            progress: _controller,
+                                            reducedMotion: _reducedMotion,
+                                            accent: theme.colorScheme.secondary,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  if (!short) ...[
+                                    const SizedBox(height: 30),
+                                    Text(
+                                      tr(context, 'Read. Reflect. Return.'),
+                                      textAlign: TextAlign.center,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: theme
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                            letterSpacing: 0.6,
+                                          ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),
@@ -401,81 +214,286 @@ class _LoadingRail extends StatelessWidget {
   }
 }
 
-class _SplashFeatureChip extends StatelessWidget {
-  const _SplashFeatureChip({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
+class _SplashFramePainter extends CustomPainter {
+  const _SplashFramePainter({required this.color, required this.dark});
+  final Color color;
+  final bool dark;
 
   @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.72),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: theme.colorScheme.primary,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
+  void paint(Canvas canvas, Size size) {
+    if (size.width < 80 || size.height < 80) return;
+    final inset = size.width < 420 ? 12.0 : 22.0;
+    final rect = Rect.fromLTRB(
+      inset,
+      inset,
+      size.width - inset,
+      size.height - inset,
     );
+    final line = Paint()
+      ..color = color.withValues(alpha: dark ? 0.2 : 0.17)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(rect, const Radius.circular(26)),
+      line,
+    );
+    final mark = Paint()..color = color.withValues(alpha: 0.5);
+    for (final y in [rect.top, rect.bottom]) {
+      final x = size.width / 2;
+      canvas.drawPath(
+        Path()
+          ..moveTo(x, y - 3)
+          ..lineTo(x + 3, y)
+          ..lineTo(x, y + 3)
+          ..lineTo(x - 3, y)
+          ..close(),
+        mark,
+      );
+    }
   }
+
+  @override
+  bool shouldRepaint(covariant _SplashFramePainter oldDelegate) =>
+      color != oldDelegate.color || dark != oldDelegate.dark;
 }
 
-class _SplashOrb extends StatelessWidget {
-  const _SplashOrb({
-    required this.size,
-    required this.color,
-    required this.driftX,
-    required this.driftY,
-  });
-
-  final double size;
-  final Color color;
-  final double driftX;
-  final double driftY;
+class _MushafEmblemPainter extends CustomPainter {
+  _MushafEmblemPainter({
+    required this.progress,
+    required this.reducedMotion,
+    required this.accent,
+    required this.halo,
+    required this.dark,
+  }) : super(repaint: progress);
+  final Animation<double> progress;
+  final bool reducedMotion;
+  final Color accent;
+  final Color halo;
+  final bool dark;
 
   @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Transform.translate(
-        offset: Offset(driftX, driftY),
-        child: Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: RadialGradient(
-              colors: [
-                color,
-                color.withValues(alpha: 0.04),
-                Colors.transparent,
-              ],
-            ),
-          ),
-        ),
-      ),
+  void paint(Canvas canvas, Size size) {
+    final scale = math.min(size.width / 240, size.height / 270);
+    canvas.save();
+    canvas.translate(
+      (size.width - 240 * scale) / 2,
+      (size.height - 270 * scale) / 2,
     );
+    canvas.scale(scale);
+    final phase = progress.value * math.pi * 2;
+    final lift = reducedMotion ? 0.0 : math.sin(phase) * 2.5;
+    final glow = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          halo.withValues(alpha: dark ? 0.24 : 0.45),
+          halo.withValues(alpha: 0),
+        ],
+      ).createShader(const Rect.fromLTWH(12, 24, 216, 216));
+    canvas.drawCircle(const Offset(120, 132), 108, glow);
+
+    final frame = Path()
+      ..moveTo(24, 232)
+      ..lineTo(24, 108)
+      ..quadraticBezierTo(24, 46, 120, 16)
+      ..quadraticBezierTo(216, 46, 216, 108)
+      ..lineTo(216, 232)
+      ..close();
+    final framePaint = Paint()
+      ..color = accent.withValues(alpha: dark ? 0.28 : 0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    canvas.drawPath(frame, framePaint);
+    final inner = Path()
+      ..moveTo(34, 223)
+      ..lineTo(34, 109)
+      ..quadraticBezierTo(34, 54, 120, 27)
+      ..quadraticBezierTo(206, 54, 206, 109)
+      ..lineTo(206, 223);
+    canvas.drawPath(inner, framePaint..color = accent.withValues(alpha: 0.12));
+    final metric = frame.computeMetrics().first;
+    final start = (reducedMotion ? 0.2 : progress.value) * metric.length;
+    final end = start + metric.length * 0.18;
+    final beam = Paint()
+      ..color = accent.withValues(alpha: 0.85)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.1
+      ..strokeCap = StrokeCap.round;
+    canvas.drawPath(
+      metric.extractPath(start, math.min(end, metric.length)),
+      beam,
+    );
+    if (end > metric.length) {
+      canvas.drawPath(metric.extractPath(0, end - metric.length), beam);
+    }
+
+    canvas.save();
+    canvas.translate(0, lift);
+    final cover = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(62, 61, 116, 160),
+      const Radius.circular(8),
+    );
+    final coverPath = Path()..addRRect(cover);
+    canvas.drawShadow(
+      coverPath,
+      Colors.black.withValues(alpha: dark ? 0.34 : 0.16),
+      12,
+      false,
+    );
+    final pages = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(65, 67, 113, 159),
+      const Radius.circular(7),
+    );
+    canvas.drawRRect(pages, Paint()..color = const Color(0xFFE6DDC7));
+    for (var i = 0; i < 3; i++) {
+      canvas.drawLine(
+        Offset(71, 222 + i * 1.5),
+        Offset(171, 222 + i * 1.5),
+        Paint()
+          ..color = const Color(0xFFB4A98D)
+          ..strokeWidth = 0.6,
+      );
+    }
+    canvas.drawRRect(
+      cover,
+      Paint()..color = dark ? const Color(0xFF204B3A) : const Color(0xFF163F35),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(62, 61, 10, 160),
+        const Radius.circular(5),
+      ),
+      Paint()..color = Colors.black.withValues(alpha: 0.13),
+    );
+    final gold = Paint()
+      ..color = const Color(0xFFE2C68B)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.9;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(72, 70, 96, 142),
+        const Radius.circular(3),
+      ),
+      gold,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(76, 74, 88, 134),
+        const Radius.circular(2),
+      ),
+      gold..color = const Color(0xFFE2C68B).withValues(alpha: 0.45),
+    );
+    final ribbon = Path()
+      ..moveTo(148, 61)
+      ..lineTo(157, 61)
+      ..lineTo(157, 87)
+      ..lineTo(152.5, 83)
+      ..lineTo(148, 87)
+      ..close();
+    canvas.drawPath(ribbon, Paint()..color = const Color(0xFFE2C68B));
+
+    canvas.save();
+    canvas.translate(120, 140);
+    gold
+      ..color = const Color(0xFFE2C68B).withValues(alpha: 0.72)
+      ..strokeWidth = 0.9;
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(-26, -26, 52, 52),
+        const Radius.circular(2),
+      ),
+      gold,
+    );
+    canvas.rotate(math.pi / 4);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        const Rect.fromLTWH(-26, -26, 52, 52),
+        const Radius.circular(2),
+      ),
+      gold,
+    );
+    canvas.restore();
+    final book = Path()
+      ..moveTo(103, 132)
+      ..quadraticBezierTo(111, 128, 120, 134)
+      ..quadraticBezierTo(129, 128, 137, 132)
+      ..lineTo(137, 149)
+      ..quadraticBezierTo(129, 145, 120, 151)
+      ..quadraticBezierTo(111, 145, 103, 149)
+      ..close()
+      ..moveTo(120, 134)
+      ..lineTo(120, 151);
+    canvas.drawPath(
+      book,
+      gold
+        ..color = const Color(0xFFF1DFB3)
+        ..strokeWidth = 1.6
+        ..strokeJoin = StrokeJoin.round
+        ..strokeCap = StrokeCap.round,
+    );
+    for (final y in [89.0, 191.0]) {
+      canvas.drawLine(
+        Offset(105, y),
+        Offset(135, y),
+        gold
+          ..color = const Color(0xFFE2C68B).withValues(alpha: 0.7)
+          ..strokeWidth = 0.8,
+      );
+      canvas.drawCircle(
+        Offset(120, y),
+        2,
+        Paint()..color = const Color(0xFFE2C68B),
+      );
+    }
+    canvas.restore();
+    canvas.restore();
   }
+
+  @override
+  bool shouldRepaint(covariant _MushafEmblemPainter oldDelegate) =>
+      progress != oldDelegate.progress ||
+      reducedMotion != oldDelegate.reducedMotion ||
+      accent != oldDelegate.accent ||
+      halo != oldDelegate.halo ||
+      dark != oldDelegate.dark;
+}
+
+class _LoadingRailPainter extends CustomPainter {
+  _LoadingRailPainter({
+    required this.progress,
+    required this.reducedMotion,
+    required this.accent,
+  }) : super(repaint: progress);
+  final Animation<double> progress;
+  final bool reducedMotion;
+  final Color accent;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final radius = Radius.circular(size.height / 2);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Offset.zero & size, radius),
+      Paint()..color = accent.withValues(alpha: 0.13),
+    );
+    final width = size.width * 0.3;
+    final travel = size.width - width;
+    final position = reducedMotion
+        ? 0.5
+        : (1 - math.cos(progress.value * math.pi * 2)) / 2;
+    final rect = Rect.fromLTWH(travel * position, 0, width, size.height);
+    final paint = Paint()
+      ..shader = LinearGradient(
+        colors: [
+          accent.withValues(alpha: 0.15),
+          accent,
+          accent.withValues(alpha: 0.15),
+        ],
+      ).createShader(rect);
+    canvas.drawRRect(RRect.fromRectAndRadius(rect, radius), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LoadingRailPainter oldDelegate) =>
+      progress != oldDelegate.progress ||
+      reducedMotion != oldDelegate.reducedMotion ||
+      accent != oldDelegate.accent;
 }

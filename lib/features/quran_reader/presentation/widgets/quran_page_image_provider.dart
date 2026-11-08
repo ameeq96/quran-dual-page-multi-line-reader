@@ -29,7 +29,9 @@ ImageProvider<Object> buildQuranPageImageProvider(
     return cached;
   }
 
-  final ImageProvider<Object> baseProvider = page.usesRemoteImage
+  final ImageProvider<Object> baseProvider = imageSource.startsWith('blob:')
+      ? NetworkImage(imageSource)
+      : page.usesRemoteImage
       ? CachedNetworkImageProvider(imageSource)
       : imageSource.startsWith('assets/')
           ? AssetImage(imageSource)

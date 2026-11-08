@@ -1,9 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../../../app/reader_localization.dart';
 
 import '../../../../app/app_theme.dart';
 import '../../domain/models/reader_settings.dart';
+import '../../domain/models/quran_page.dart';
 import '../controllers/quran_reader_controller.dart';
 import '../widgets/bootstrap_splash.dart';
 import '../widgets/dual_page_spread.dart';
@@ -20,6 +24,8 @@ import '../widgets/reader_page_strip_sheet.dart';
 import '../widgets/reader_zoom_viewport.dart';
 import '../widgets/quran_page_image_provider.dart';
 import '../widgets/single_page_reader.dart';
+import '../widgets/mushaf_page_widget.dart';
+import '../widgets/reader_page_pin_overlay.dart';
 import 'quran_ai_studio_screen.dart';
 import 'quran_bookmarks_screen.dart';
 import 'quran_growth_hub_screen.dart';
@@ -412,6 +418,23 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
     });
   }
 
+  Future<void> _openManualPins() async {
+    final controller = widget.controller;
+    final candidates = MediaQuery.orientationOf(context) == Orientation.landscape
+        ? [controller.currentSpread.rightPage, controller.currentSpread.leftPage]
+        : [controller.currentPage];
+    final pages = <int, QuranPage>{for (final page in candidates)
+      if (page.number > 0 && page.contentType == QuranPageContentType.image) page.number: page}.values.toList();
+    if (pages.isEmpty) return;
+    final settings = controller.settings.copyWith(hifzFocusMode: false);
+    final experience = controller.experienceSettings;
+    final theme = settings.nightMode
+        ? AppTheme.dark(highContrast: experience.highContrastMode, largerText: experience.largerTextMode)
+        : AppTheme.light(highContrast: experience.highContrastMode, largerText: experience.largerTextMode);
+    await Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => Theme(data: theme,
+        child: _ReaderManualPinEditor(pages: pages, settings: settings))));
+  }
+
   Future<void> _openCompareSheet() {
     if (!widget.controller.isCompareEnabled) {
       _showUnavailablePackMessage(
@@ -449,7 +472,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
       return;
     }
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(content: Text(tr(context, message))),
     );
   }
 
@@ -667,6 +690,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                                         onOpenKanzulStudy:
                                             _openKanzulStudySheet,
                                         onOpenSettings: _openSettingsSheet,
+                                        onOpenManualPins: _openManualPins,
                                       )
                                     : null,
                                 body: DecoratedBox(
@@ -691,7 +715,7 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                                       ),
                                       SafeArea(
                                         top: !showAppBar,
-                                        bottom: false,
+                                        bottom: true,
                                         child: Stack(
                                           children: [
                                             AnimatedPadding(
@@ -704,20 +728,16 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                                                 0,
                                                 bodyBottomPadding,
                                               ),
-                                              child: readerViewport,
-                                            ),
-                                            Positioned.fill(
-                                              child: IgnorePointer(
-                                                ignoring: widget
-                                                        .controller
-                                                        .settings
-                                                        .hifzFocusMode ||
-                                                    zoomActive,
-                                                child: GestureDetector(
-                                                  behavior: HitTestBehavior
-                                                      .translucent,
-                                                  onTap: widget.controller
-                                                      .toggleControlsVisibility,
+                                              child: GestureDetector(
+                                                behavior: HitTestBehavior.translucent,
+                                                excludeFromSemantics: true,
+                                                onTap: settings.hifzFocusMode || zoomActive
+                                                    ? null
+                                                    : widget.controller.toggleControlsVisibility,
+                                                child: _DesktopPageNavigation(
+                                                  controller: widget.controller,
+                                                  portraitMode: isPortrait,
+                                                  child: readerViewport!,
                                                 ),
                                               ),
                                             ),
@@ -775,6 +795,42 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
   }
 }
 
+class _DesktopPageNavigation extends StatelessWidget {
+  const _DesktopPageNavigation({required this.controller,
+    required this.portraitMode, required this.child});
+
+  final QuranReaderController controller;
+  final bool portraitMode;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final desktop = switch (Theme.of(context).platform) {
+      TargetPlatform.linux || TargetPlatform.macOS || TargetPlatform.windows => true,
+      _ => false,
+    };
+    if (!desktop) return child;
+    return AnimatedBuilder(animation: controller.pageListenable, builder: (context, _) {
+      void next() => unawaited(portraitMode ? controller.nextPage() : controller.nextSpread());
+      void previous() => unawaited(portraitMode ? controller.previousPage() : controller.previousSpread());
+      final canNext = portraitMode ? controller.canGoNextPage : controller.canGoNextSpread;
+      final canPrevious = portraitMode ? controller.canGoPreviousPage : controller.canGoPreviousSpread;
+      return CallbackShortcuts(bindings: {
+        const SingleActivator(LogicalKeyboardKey.arrowLeft, includeRepeats: false): next,
+        const SingleActivator(LogicalKeyboardKey.arrowRight, includeRepeats: false): previous,
+      }, child: Focus(autofocus: true, child: Stack(fit: StackFit.expand, children: [
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 56), child: child),
+        Align(alignment: Alignment.centerLeft, child: IconButton.filledTonal(
+          tooltip: tr(context, 'Next'), onPressed: canNext ? next : null,
+          icon: const Icon(Icons.chevron_left, textDirection: TextDirection.ltr))),
+        Align(alignment: Alignment.centerRight, child: IconButton.filledTonal(
+          tooltip: tr(context, 'Previous'), onPressed: canPrevious ? previous : null,
+          icon: const Icon(Icons.chevron_right, textDirection: TextDirection.ltr))),
+      ])));
+    });
+  }
+}
+
 class _LandscapeSpreadReader extends StatelessWidget {
   const _LandscapeSpreadReader({
     required this.controller,
@@ -791,7 +847,9 @@ class _LandscapeSpreadReader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: PageView.builder(
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: PageView.builder(
         controller: controller,
         reverse: true,
         padEnds: false,
@@ -854,6 +912,7 @@ class _LandscapeSpreadReader extends StatelessWidget {
           );
         },
       ),
+      ),
     );
   }
 }
@@ -874,7 +933,9 @@ class _PortraitPageReader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: PageView.builder(
+      child: Directionality(
+        textDirection: TextDirection.ltr,
+        child: PageView.builder(
         controller: controller,
         reverse: true,
         padEnds: false,
@@ -910,8 +971,35 @@ class _PortraitPageReader extends StatelessWidget {
           );
         },
       ),
+      ),
     );
   }
+}
+
+class _ReaderManualPinEditor extends StatefulWidget {
+  const _ReaderManualPinEditor({required this.pages, required this.settings});
+  final List<QuranPage> pages;
+  final ReaderSettings settings;
+  @override
+  State<_ReaderManualPinEditor> createState() => _ReaderManualPinEditorState();
+}
+
+class _ReaderManualPinEditorState extends State<_ReaderManualPinEditor> {
+  int _selected = 0;
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: Text(tr(context, 'Manual notes and mistake pins'))),
+    body: SafeArea(child: Column(children: [
+      if (widget.pages.length > 1) Padding(padding: const EdgeInsets.all(10), child: Wrap(
+        spacing: 10, runSpacing: 10, children: [for (var index = 0; index < widget.pages.length; index++)
+          ChoiceChip(label: Text(tr(context, 'Page {page}', args: {'page': widget.pages[index].number})),
+            selected: _selected == index, onSelected: (_) => setState(() => _selected = index)),
+        ])),
+      Expanded(child: ReaderZoomViewport(key: ValueKey(widget.pages[_selected].number),
+        onZoomChanged: (_) {}, child: ReaderPinEditingScope(child: MushafPageWidget(
+          page: widget.pages[_selected], settings: widget.settings, showPageNumbers: false)))),
+    ])),
+  );
 }
 
 class _ReaderBackdrop extends StatelessWidget {

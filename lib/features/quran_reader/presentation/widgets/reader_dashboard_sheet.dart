@@ -1,11 +1,11 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
+
+import '../../../../app/reader_localization.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../../app/app_theme.dart';
+import '../../../../core/services/reader_file_export.dart';
 import '../controllers/quran_reader_controller.dart';
 import 'reader_sheet_frame.dart';
 
@@ -96,22 +96,28 @@ class QuranDashboardScreen extends StatelessWidget {
                 ),
           child: Scaffold(
             body: SafeArea(
-              child: ReaderDashboardContent(
-                controller: controller,
-                onOpenGrowthHub: onOpenGrowthHub,
-                onOpenSearch: onOpenSearch,
-                onOpenInsights: onOpenInsights,
-                onOpenAudio: onOpenAudio,
-                onOpenAiStudio: onOpenAiStudio,
-                onOpenPageStrip: onOpenPageStrip,
-                onOpenCompare: onOpenCompare,
-                onOpenKanzulStudy: onOpenKanzulStudy,
-                showHandle: false,
-                closeOnAction: false,
-                onSelectPage: onSelectPage ??
-                    (pageNumber) async {
-                      Navigator.of(context).pop(pageNumber);
-                    },
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 940),
+                  child: ReaderDashboardContent(
+                    controller: controller,
+                    onOpenGrowthHub: onOpenGrowthHub,
+                    onOpenSearch: onOpenSearch,
+                    onOpenInsights: onOpenInsights,
+                    onOpenAudio: onOpenAudio,
+                    onOpenAiStudio: onOpenAiStudio,
+                    onOpenPageStrip: onOpenPageStrip,
+                    onOpenCompare: onOpenCompare,
+                    onOpenKanzulStudy: onOpenKanzulStudy,
+                    showHandle: false,
+                    closeOnAction: false,
+                    onSelectPage:
+                        onSelectPage ??
+                        (pageNumber) async {
+                          Navigator.of(context).pop(pageNumber);
+                        },
+                  ),
+                ),
               ),
             ),
           ),
@@ -178,8 +184,8 @@ class ReaderDashboardContent extends StatelessWidget {
         final theme = Theme.of(context);
         final size = MediaQuery.of(context).size;
         final compact = size.width < 420 || size.height < 760;
-        final pagePadding = compact ? 10.0 : 12.0;
-        final sectionGap = compact ? 10.0 : 12.0;
+        final pagePadding = compact ? 16.0 : 24.0;
+        final sectionGap = compact ? 16.0 : 20.0;
         final chapter = controller.currentChapterSummary;
         final bookmarksByFolder = controller.bookmarksByFolder;
         final nonEmptyBookmarkFolders = bookmarksByFolder.entries
@@ -216,17 +222,45 @@ class ReaderDashboardContent extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Reader dashboard',
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      Row(
+                        children: [
+                          if (!showHandle) ...[
+                            IconButton.outlined(
+                              tooltip: tr(context, 'Back'),
+                              onPressed: () => Navigator.of(context).maybePop(),
+                              icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                            ),
+                            const SizedBox(width: 14),
+                          ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  tr(context, 'YOUR READING JOURNAL'),
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: theme.colorScheme.secondary,
+                                    letterSpacing: 1.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  tr(context, 'A steady connection.'),
+                                  style: theme.textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        chapter == null
+                        tr(context, chapter == null
                             ? 'Continue from page ${controller.currentPageNumber}.'
-                            : 'Continue from ${chapter.nameSimple} - Page ${controller.currentPageNumber}.',
+                            : 'Continue from ${chapter.nameSimple} - Page ${controller.currentPageNumber}.'),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -239,55 +273,55 @@ class ReaderDashboardContent extends StatelessWidget {
                           if (controller.isPlansPacksEnabled)
                             _QuickActionButton(
                               icon: Icons.insights_outlined,
-                              label: 'Plans',
+                              label: tr(context, 'Plans'),
                               onPressed: () =>
                                   _handleAction(context, onOpenGrowthHub),
                             ),
                           _QuickActionButton(
                             icon: Icons.search_rounded,
-                            label: 'Search',
+                            label: tr(context, 'Search'),
                             onPressed: () =>
                                 _handleAction(context, onOpenSearch),
                           ),
                           if (controller.isInsightsEnabled)
                             _QuickActionButton(
                               icon: Icons.auto_stories_outlined,
-                              label: 'Insights',
+                              label: tr(context, 'Insights'),
                               onPressed: () =>
                                   _handleAction(context, onOpenInsights),
                             ),
                           if (controller.isAudioEnabled)
                             _QuickActionButton(
                               icon: Icons.headphones_rounded,
-                              label: 'Audio',
+                              label: tr(context, 'Audio'),
                               onPressed: () =>
                                   _handleAction(context, onOpenAudio),
                             ),
                           if (controller.isAiStudioEnabled)
                             _QuickActionButton(
                               icon: Icons.auto_awesome_rounded,
-                              label: 'AI Studio',
+                              label: tr(context, 'AI Studio'),
                               onPressed: () =>
                                   _handleAction(context, onOpenAiStudio),
                             ),
                           if (controller.isPageStripEnabled)
                             _QuickActionButton(
                               icon: Icons.photo_library_outlined,
-                              label: 'Pages',
+                              label: tr(context, 'Pages'),
                               onPressed: () =>
                                   _handleAction(context, onOpenPageStrip),
                             ),
                           if (controller.isCompareEnabled)
                             _QuickActionButton(
                               icon: Icons.compare_rounded,
-                              label: 'Compare',
+                              label: tr(context, 'Compare'),
                               onPressed: () =>
                                   _handleAction(context, onOpenCompare),
                             ),
                           if (controller.isKanzulStudyEnabled)
                             _QuickActionButton(
                               icon: Icons.translate_rounded,
-                              label: 'Kanzul study',
+                              label: tr(context, 'Kanzul study'),
                               onPressed: () =>
                                   _handleAction(context, onOpenKanzulStudy),
                             ),
@@ -302,7 +336,7 @@ class ReaderDashboardContent extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Reading rhythm',
+                        tr(context, 'Reading rhythm'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
@@ -313,30 +347,30 @@ class ReaderDashboardContent extends StatelessWidget {
                         runSpacing: 10,
                         children: [
                           _InfoPill(
-                            label: 'Streak',
-                            value: '${controller.readingStreakCount} days',
+                            label: tr(context, 'Streak'),
+                            value: '${controller.readingStreakCount} ${controller.readingStreakCount == 1 ? 'day' : 'days'}',
                           ),
                           _InfoPill(
-                            label: 'Today',
+                            label: tr(context, 'Today'),
                             value: controller.dailyProgressSummaryLabel,
                           ),
                           _InfoPill(
-                            label: 'Favorites',
+                            label: tr(context, 'Favorites'),
                             value: '${controller.favoritePages.length}',
                           ),
                           _InfoPill(
-                            label: 'Bookmarks',
+                            label: tr(context, 'Bookmarks'),
                             value: '${controller.bookmarks.length}',
                           ),
                           _InfoPill(
-                            label: 'Offline audio',
+                            label: tr(context, 'Offline audio'),
                             value: '${controller.downloadedAudioCount}',
                           ),
                         ],
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        controller.dailyProgressStatusLabel,
+                        tr(context, controller.dailyProgressStatusLabel),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: controller.isDailyTargetComplete
                               ? theme.colorScheme.primary
@@ -354,7 +388,7 @@ class ReaderDashboardContent extends StatelessWidget {
                           );
                           final key = _dateKey(date);
                           return _DayDot(
-                            label: _shortDay(date.weekday),
+                            label: _shortDay(context, date.weekday),
                             active: activityKeys.contains(key),
                             today: index == 6,
                           );
@@ -371,7 +405,7 @@ class ReaderDashboardContent extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Khatam plans',
+                        tr(context, 'Khatam plans'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
@@ -383,7 +417,7 @@ class ReaderDashboardContent extends StatelessWidget {
                         children: [7, 15, 30, 60].map((days) {
                           return Chip(
                             label: Text(
-                              '$days days: ${controller.plannedPagesPerDay(days)} pages/day',
+                              tr(context, '$days days: ${controller.plannedPagesPerDay(days)} pages/day'),
                             ),
                           );
                         }).toList(growable: false),
@@ -397,7 +431,7 @@ class ReaderDashboardContent extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Saved places',
+                        tr(context, 'Saved places'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
@@ -405,7 +439,7 @@ class ReaderDashboardContent extends StatelessWidget {
                       const SizedBox(height: 12),
                       if (nonEmptyBookmarkFolders.isEmpty)
                         Text(
-                          'No bookmarked pages yet.',
+                          tr(context, 'No bookmarked pages yet.'),
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
@@ -430,11 +464,11 @@ class ReaderDashboardContent extends StatelessWidget {
                           );
                         }),
                       _FolderSection(
-                        title: 'Favorites',
+                        title: tr(context, 'Favorites'),
                         emptyLabel: 'No favorite pages yet.',
                         children: controller.favoritePages.map((pageNumber) {
                           return ActionChip(
-                            label: Text('Page $pageNumber'),
+                            label: Text(tr(context, 'Page $pageNumber')),
                             onPressed: () =>
                                 _handlePageOpen(context, pageNumber),
                           );
@@ -449,7 +483,7 @@ class ReaderDashboardContent extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Export',
+                        tr(context, 'Export'),
                         style: theme.textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
@@ -468,7 +502,7 @@ class ReaderDashboardContent extends StatelessWidget {
                               );
                             },
                             icon: const Icon(Icons.copy_rounded),
-                            label: const Text('Copy page ref'),
+                            label: Text(tr(context, 'Copy page ref')),
                           ),
                           FilledButton.tonalIcon(
                             onPressed: () {
@@ -479,7 +513,7 @@ class ReaderDashboardContent extends StatelessWidget {
                               );
                             },
                             icon: const Icon(Icons.summarize_outlined),
-                            label: const Text('Copy summary'),
+                            label: Text(tr(context, 'Copy summary')),
                           ),
                           FilledButton.tonalIcon(
                             onPressed: () {
@@ -490,14 +524,14 @@ class ReaderDashboardContent extends StatelessWidget {
                               );
                             },
                             icon: const Icon(Icons.share_outlined),
-                            label: const Text('Share summary'),
+                            label: Text(tr(context, 'Share summary')),
                           ),
                           FilledButton.tonalIcon(
                             onPressed: () {
                               _shareNotesExport(context);
                             },
                             icon: const Icon(Icons.upload_file_outlined),
-                            label: const Text('Export notes'),
+                            label: Text(tr(context, 'Export notes')),
                           ),
                         ],
                       ),
@@ -559,14 +593,11 @@ class ReaderDashboardContent extends StatelessWidget {
       }
     }
 
-    final tempDirectory = await getTemporaryDirectory();
-    final file = File(
-        '${tempDirectory.path}${Platform.pathSeparator}mushaf_reader_export.txt');
-    await file.writeAsString(buffer.toString(), flush: true);
-    await Share.shareXFiles(
-      <XFile>[XFile(file.path)],
-      subject: 'Mushaf Reader export',
-    );
+    try {
+      await exportReaderFile(fileName: 'mushaf_reader_export.txt', contents: buffer.toString(), mimeType: 'text/plain', subject: 'Mushaf Reader export');
+    } catch (error) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr(context, 'Notes export failed: $error'))));
+    }
   }
 
   void _copyToClipboard(
@@ -576,7 +607,7 @@ class ReaderDashboardContent extends StatelessWidget {
   ) {
     Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(confirmation)),
+      SnackBar(content: Text(tr(context, confirmation))),
     );
   }
 
@@ -586,17 +617,8 @@ class ReaderDashboardContent extends StatelessWidget {
     return '${date.year}-$month-$day';
   }
 
-  String _shortDay(int weekday) {
-    return switch (weekday) {
-      DateTime.monday => 'M',
-      DateTime.tuesday => 'T',
-      DateTime.wednesday => 'W',
-      DateTime.thursday => 'T',
-      DateTime.friday => 'F',
-      DateTime.saturday => 'S',
-      DateTime.sunday => 'S',
-      _ => '-',
-    };
+  String _shortDay(BuildContext context, int weekday) {
+    return MaterialLocalizations.of(context).narrowWeekdays[weekday % 7];
   }
 }
 
@@ -620,7 +642,7 @@ class _MonthHeatmap extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Last 28 days',
+          tr(context, 'Last 28 days'),
           style: theme.textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w700,
           ),
@@ -641,17 +663,21 @@ class _MonthHeatmap extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: active
-                      ? theme.colorScheme.primary.withValues(
-                          alpha: count >= 3 ? 1 : (count == 2 ? 0.72 : 0.42),
-                        )
-                      : theme.colorScheme.surfaceContainerHighest,
+                      ? count >= 3
+                          ? theme.colorScheme.primary
+                          : count == 2
+                              ? theme.colorScheme.primaryContainer
+                              : theme.colorScheme.secondaryContainer
+                      : theme.colorScheme.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '${date.day}',
+                  tr(context, '${date.day}'),
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: active
-                        ? theme.colorScheme.onPrimary
+                        ? count >= 3
+                            ? theme.colorScheme.onPrimary
+                            : theme.colorScheme.onSurface
                         : theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
@@ -683,14 +709,14 @@ class _DashboardCard extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.95),
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: theme.dividerColor.withValues(alpha: 0.52),
+          color: theme.dividerColor,
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(20),
         child: child,
       ),
     );
@@ -710,19 +736,16 @@ class _QuickActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.tonalIcon(
+    return OutlinedButton.icon(
       onPressed: onPressed,
-      icon: Icon(icon),
-      label: Text(label),
+      icon: Icon(icon, size: 18),
+      label: Text(tr(context, label)),
     );
   }
 }
 
 class _InfoPill extends StatelessWidget {
-  const _InfoPill({
-    required this.label,
-    required this.value,
-  });
+  const _InfoPill({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -731,31 +754,40 @@ class _InfoPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(18),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(
+        minWidth: 112,
+        maxWidth: 180,
+        minHeight: 88,
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: theme.dividerColor),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                tr(context, label),
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
+              const SizedBox(height: 8),
+              Text(
+                tr(context, value),
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.primary,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -784,7 +816,7 @@ class _DayDot extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          label,
+          tr(context, label),
           style: theme.textTheme.labelSmall?.copyWith(
             color: today ? theme.colorScheme.primary : null,
           ),
@@ -836,7 +868,7 @@ class _FolderSection extends StatelessWidget {
         const SizedBox(height: 8),
         if (children.isEmpty)
           Text(
-            emptyLabel,
+            tr(context, emptyLabel),
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),

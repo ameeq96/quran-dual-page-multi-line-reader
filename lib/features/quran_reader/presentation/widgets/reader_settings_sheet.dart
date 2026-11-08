@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../domain/models/reader_settings.dart';
 
 class ReaderSettingsSheet extends StatefulWidget {
@@ -9,6 +11,7 @@ class ReaderSettingsSheet extends StatefulWidget {
     required this.availableImageEditions,
     this.showHandle = true,
     required this.onSelectMushafEdition,
+    this.onTogglePreferImageMode,
     required this.onToggleFullscreen,
     required this.onTogglePageNumbers,
     required this.onToggleCustomBrightness,
@@ -29,6 +32,7 @@ class ReaderSettingsSheet extends StatefulWidget {
   final List<MushafEdition> availableImageEditions;
   final bool showHandle;
   final ValueChanged<MushafEdition> onSelectMushafEdition;
+  final ValueChanged<bool>? onTogglePreferImageMode;
   final ValueChanged<bool> onToggleFullscreen;
   final ValueChanged<bool> onTogglePageNumbers;
   final ValueChanged<bool> onToggleCustomBrightness;
@@ -81,7 +85,12 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
         child: ListView(
           controller: _scrollController,
           primary: false,
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+          padding: EdgeInsets.fromLTRB(
+            MediaQuery.sizeOf(context).width < 420 ? 16 : 24,
+            18,
+            MediaQuery.sizeOf(context).width < 420 ? 16 : 24,
+            32,
+          ),
           children: [
             Center(
               child: widget.showHandle
@@ -95,10 +104,65 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                     )
                   : const SizedBox.shrink(),
             ),
-            SizedBox(height: widget.showHandle ? 20 : 4),
-            const _SectionLabel(
+            SizedBox(height: widget.showHandle ? 20 : 0),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withValues(
+                  alpha: 0.5,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: theme.dividerColor),
+              ),
+              child: Row(
+                children: [
+                  if (!widget.showHandle) ...[
+                    IconButton.outlined(
+                      tooltip: tr(context, 'Back'),
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                    ),
+                    const SizedBox(width: 14),
+                  ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tr(context, 'YOUR MUSHAF'),
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.secondary,
+                            letterSpacing: 1.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          tr(context, 'Reader settings'),
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.6,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          tr(context, 'Make room for your way of reading.'),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            const _InterfaceLanguageSetting(),
+            const SizedBox(height: 26),
+            _SectionLabel(
               icon: Icons.auto_awesome_rounded,
-              label: 'Reading surface',
+              label: tr(context, 'Reading surface'),
             ),
             const SizedBox(height: 10),
             _SettingsCard(
@@ -110,16 +174,14 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Mushaf edition',
+                          tr(context, 'Mushaf edition'),
                           style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          availableImageEditions.length <= 1
-                              ? 'Only offline-ready Quran editions are shown here.'
-                              : 'Only downloaded or bundled Quran editions are shown here.',
+                          tr(context, 'Choose your original Mushaf images. Online editions need internet; download packs for offline reading.'),
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                             height: 1.34,
@@ -136,7 +198,7 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                           )
                         else
                           Text(
-                            'No offline-ready Mushaf edition is available right now.',
+                            tr(context, 'No Mushaf images are available right now.'),
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: theme.colorScheme.onSurfaceVariant,
                             ),
@@ -147,9 +209,9 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                   const Divider(height: 1),
                   _SwitchRow(
                     icon: Icons.light_mode_rounded,
-                    title: 'Custom brightness',
+                    title: tr(context, 'Custom brightness'),
                     subtitle:
-                        'Tune the page surface without changing device brightness.',
+                        tr(context, 'Tune the page surface without changing device brightness.'),
                     value: settings.customBrightnessEnabled,
                     onChanged: widget.onToggleCustomBrightness,
                   ),
@@ -162,7 +224,7 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                       padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
                       child: _SliderBlock(
                         label:
-                            'Adjust page brightness ${(settings.pageBrightness * 100).round()}%',
+                            tr(context, 'Adjust page brightness ${(settings.pageBrightness * 100).round()}%'),
                         value: settings.pageBrightness,
                         min: 0.7,
                         max: 1.25,
@@ -174,25 +236,25 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                   const Divider(height: 1),
                   _SwitchRow(
                     icon: Icons.dark_mode_rounded,
-                    title: 'App dark mode',
-                    subtitle: 'Use dark surfaces for menus and app screens.',
+                    title: tr(context, 'App dark mode'),
+                    subtitle: tr(context, 'Use dark surfaces for menus and app screens.'),
                     value: settings.nightMode,
                     onChanged: widget.onToggleNightMode,
                   ),
                   const Divider(height: 1),
                   _SwitchRow(
                     icon: Icons.auto_stories_outlined,
-                    title: 'Quran page dark mode',
+                    title: tr(context, 'Quran page dark mode'),
                     subtitle:
-                        'Keep the Mushaf page dark or light independently.',
+                        tr(context, 'Keep the Mushaf page dark or light independently.'),
                     value: settings.pageNightMode,
                     onChanged: widget.onTogglePageNightMode,
                   ),
                   const Divider(height: 1),
                   _SwitchRow(
                     icon: Icons.palette_outlined,
-                    title: 'Page preset',
-                    subtitle: 'Apply a curated page tone to the spread.',
+                    title: tr(context, 'Page preset'),
+                    subtitle: tr(context, 'Apply a curated page tone to the spread.'),
                     value: settings.pagePresetEnabled,
                     onChanged: widget.onTogglePagePreset,
                   ),
@@ -216,26 +278,26 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                   const Divider(height: 1),
                   _SwitchRow(
                     icon: Icons.layers_rounded,
-                    title: 'Page overlay',
-                    subtitle: 'Add a soft tonal wash over each page.',
+                    title: tr(context, 'Page overlay'),
+                    subtitle: tr(context, 'Add a soft tonal wash over each page.'),
                     value: settings.pageOverlayEnabled,
                     onChanged: widget.onTogglePageOverlay,
                   ),
                   const Divider(height: 1),
                   _SwitchRow(
                     icon: Icons.auto_awesome_rounded,
-                    title: 'Page reflection',
+                    title: tr(context, 'Page reflection'),
                     subtitle:
-                        'Keep the subtle top sheen that makes the spread feel polished.',
+                        tr(context, 'Keep the subtle top sheen that makes the spread feel polished.'),
                     value: settings.pageReflectionEnabled,
                     onChanged: widget.onTogglePageReflection,
                   ),
                   const Divider(height: 1),
                   _SwitchRow(
                     icon: Icons.visibility_off_outlined,
-                    title: 'Hifz focus mode',
+                    title: tr(context, 'Hifz focus mode'),
                     subtitle:
-                        'Show a draggable conceal plate on the Mushaf page. Tap any line to snap the plate there, or drag it line by line.',
+                        tr(context, 'Show a draggable conceal plate on the Mushaf page. Tap any line to snap the plate there, or drag it line by line.'),
                     value: settings.hifzFocusMode,
                     onChanged: widget.onToggleHifzFocusMode,
                   ),
@@ -250,7 +312,7 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                         children: [
                           _SliderBlock(
                             label:
-                                'Conceal plate size ${(settings.hifzMaskHeightFactor * 100).round()}%',
+                                tr(context, 'Conceal plate size ${(settings.hifzMaskHeightFactor * 100).round()}%'),
                             value: settings.hifzMaskHeightFactor,
                             min: 0.18,
                             max: 0.7,
@@ -260,9 +322,9 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                           const SizedBox(height: 8),
                           _InlineSwitchTile(
                             icon: Icons.pan_tool_alt_outlined,
-                            title: 'Reveal on hold',
+                            title: tr(context, 'Reveal on hold'),
                             subtitle:
-                                'Press and hold the page to temporarily reveal the concealed text.',
+                                tr(context, 'Press and hold the page to temporarily reveal the concealed text.'),
                             value: settings.hifzRevealOnHold,
                             onChanged: widget.onToggleHifzRevealOnHold,
                           ),
@@ -274,10 +336,10 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            const _SectionLabel(
+            const SizedBox(height: 28),
+            _SectionLabel(
               icon: Icons.tune_rounded,
-              label: 'Reader behavior',
+              label: tr(context, 'Reader behavior'),
             ),
             const SizedBox(height: 10),
             _SettingsCard(
@@ -285,27 +347,27 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                 children: [
                   _SwitchRow(
                     icon: Icons.fullscreen_rounded,
-                    title: 'Fullscreen reading',
+                    title: tr(context, 'Fullscreen reading'),
                     subtitle:
-                        'Hide extra chrome and give the Mushaf more room.',
+                        tr(context, 'Hide extra chrome and give the Mushaf more room.'),
                     value: settings.fullscreenReading,
                     onChanged: widget.onToggleFullscreen,
                   ),
                   const Divider(height: 1),
                   _SwitchRow(
                     icon: Icons.pin_outlined,
-                    title: 'Show page numbers',
+                    title: tr(context, 'Show page numbers'),
                     subtitle:
-                        'Keep small page markers visible on generated pages.',
+                        tr(context, 'Keep page markers visible beside your Mushaf images.'),
                     value: settings.showPageNumbers,
                     onChanged: widget.onTogglePageNumbers,
                   ),
                   const Divider(height: 1),
                   _SwitchRow(
                     icon: Icons.memory_rounded,
-                    title: 'Low memory mode',
+                    title: tr(context, 'Low memory mode'),
                     subtitle:
-                        'Reduce image preloading for lighter devices and long sessions.',
+                        tr(context, 'Reduce image preloading for lighter devices and long sessions.'),
                     value: settings.lowMemoryMode,
                     onChanged: widget.onToggleLowMemoryMode,
                   ),
@@ -315,9 +377,9 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
             const SizedBox(height: 14),
             DecoratedBox(
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.34),
-                borderRadius: BorderRadius.circular(22),
+                color: theme.colorScheme.secondaryContainer
+                    .withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: theme.dividerColor.withValues(alpha: 0.46),
                 ),
@@ -329,12 +391,12 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                   children: [
                     Icon(
                       Icons.info_outline_rounded,
-                      color: theme.colorScheme.primary,
+                      color: theme.colorScheme.secondary,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'These appearance controls affect the live Mushaf instantly. Search remains the fastest way to jump by Surah or Sipara.',
+                        tr(context, 'Your changes are applied as you read. Use Search to jump to a Surah or Juz.'),
                         style: theme.textTheme.bodyMedium,
                       ),
                     ),
@@ -366,6 +428,7 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
       MushafEdition.lines16 => const Color(0xFF1B6B5D),
       MushafEdition.lines17 => const Color(0xFF945F2A),
       MushafEdition.kanzulIman => const Color(0xFF2D7F64),
+      _ => const Color(0xFF1B6B5D),
     };
   }
 }
@@ -383,28 +446,14 @@ class _SettingsCard extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            theme.colorScheme.surface.withValues(alpha: 0.96),
-            theme.colorScheme.surfaceContainer.withValues(alpha: 0.9),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(26),
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: theme.dividerColor.withValues(alpha: 0.46),
+          color: theme.dividerColor,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.shadow.withValues(alpha: 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(6),
+        padding: const EdgeInsets.all(4),
         child: child,
       ),
     );
@@ -431,21 +480,32 @@ class _SwitchRow extends StatelessWidget {
     final theme = Theme.of(context);
 
     return SwitchListTile.adaptive(
-      secondary: Icon(
-        icon,
-        color: theme.colorScheme.primary,
+      secondary: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: value
+              ? theme.colorScheme.primaryContainer
+              : theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          icon,
+          size: 19,
+          color: value ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+        ),
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       value: value,
       onChanged: onChanged,
       title: Text(
-        title,
+        tr(context, title),
         style: theme.textTheme.titleSmall?.copyWith(
-          fontWeight: FontWeight.w800,
+          fontWeight: FontWeight.w600,
         ),
       ),
       subtitle: Text(
-        subtitle,
+        tr(context, subtitle),
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
           height: 1.34,
@@ -473,13 +533,17 @@ class _SectionLabel extends StatelessWidget {
         Icon(
           icon,
           size: 17,
-          color: theme.colorScheme.primary,
+          color: theme.colorScheme.secondary,
         ),
         const SizedBox(width: 8),
-        Text(
-          label,
-          style: theme.textTheme.labelLarge?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+        Expanded(
+          child: Text(
+            tr(context, label),
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: theme.colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+            ),
           ),
         ),
       ],
@@ -512,7 +576,7 @@ class _SliderBlock extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
+          tr(context, label),
           style: theme.textTheme.labelLarge,
         ),
         Slider(
@@ -550,7 +614,7 @@ class _InlineSwitchTile extends StatelessWidget {
       decoration: BoxDecoration(
         color:
             theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: theme.dividerColor.withValues(alpha: 0.38),
         ),
@@ -558,8 +622,8 @@ class _InlineSwitchTile extends StatelessWidget {
       child: ListTile(
         leading: Icon(icon, color: theme.colorScheme.primary),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-        title: Text(title),
-        subtitle: Text(subtitle),
+        title: Text(tr(context, title)),
+        subtitle: Text(tr(context, subtitle)),
         trailing: Switch.adaptive(
           value: value,
           onChanged: onChanged,
@@ -586,25 +650,98 @@ class _ChoiceBlock<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Wrap(
-      spacing: 10,
-      runSpacing: 10,
+      spacing: 8,
+      runSpacing: 8,
       children: values.map((value) {
         final selectedValue = value == selected;
         return ChoiceChip(
           selected: selectedValue,
-          onSelected: (_) => onSelected(value),
-          avatar: Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: colorBuilder(value),
-            ),
+          showCheckmark: false,
+          selectedColor: theme.colorScheme.primary,
+          labelStyle: theme.textTheme.labelLarge?.copyWith(
+            color: selectedValue
+                ? theme.colorScheme.onPrimary
+                : theme.colorScheme.onSurface,
           ),
-          label: Text(labelBuilder(value)),
+          side: BorderSide(
+            color: selectedValue
+                ? theme.colorScheme.primary
+                : theme.dividerColor,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          onSelected: (_) => onSelected(value),
+          avatar: value is MushafEdition
+              ? Icon(
+                  Icons.menu_book_outlined,
+                  size: 17,
+                  color: selectedValue
+                      ? theme.colorScheme.onPrimary
+                      : theme.colorScheme.primary,
+                )
+              : Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: colorBuilder(value),
+                  ),
+                ),
+          label: Text(tr(context, labelBuilder(value))),
         );
       }).toList(),
+    );
+  }
+}
+
+class _InterfaceLanguageSetting extends StatelessWidget {
+  const _InterfaceLanguageSetting();
+
+  @override
+  Widget build(BuildContext context) {
+    final localization = ReaderLocalizationScope.of(context);
+    final theme = Theme.of(context);
+    return _SettingsCard(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(tr(context, 'Interface language'), style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(tr(context, 'Choose the language for menus and controls.')),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: ReaderLanguage.values.map((language) => ChoiceChip(
+                label: Text(language.label),
+                selected: localization.language == language,
+                onSelected: (_) async {
+                  try {
+                    await localization.setLanguage(language);
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(tr(context, 'Unable to save interface language.')),
+                      ));
+                    }
+                  }
+                },
+              )).toList(growable: false),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              tr(context, 'Quran text, translations, AI and server responses keep their source language.'),
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -52,7 +52,7 @@ abstract final class QuranConstants {
   }) {
     final leftPage =
         rightPageForSpread(spreadIndex, totalPages: totalPages) + 1;
-    return leftPage > totalPages ? totalPages : leftPage;
+    return leftPage > totalPages ? 0 : leftPage;
   }
 
   static String paddedAssetName(int pageNumber) {

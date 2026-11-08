@@ -1,5 +1,6 @@
 import 'dart:collection';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 
@@ -85,13 +86,23 @@ class QuranAssetResolver {
   MushafEdition _selectedEdition = MushafEdition.lines16;
   String _remoteAssetsBaseUrl = '';
   bool _localPacksLoaded = false;
-  Set<MushafEdition>? _enabledEditionFilter;
+  Set<MushafEdition>? _disabledEditionFilter;
   List<MushafEdition> _availableImageEditionsCache = const <MushafEdition>[];
 
   Future<void> initialize() async {
-    await _offlinePackService.initialize();
+    if (!kIsWeb) {
+      await _offlinePackService.initialize();
+    }
     _setZipCatalog(_offlinePackService.defaultZipPacks());
-    await _loadDownloadedZipPacks();
+    if (!kIsWeb) {
+      await _loadDownloadedZipPacks();
+    } else {
+      try {
+        await _loadDownloadedZipPacks();
+      } catch (_) {
+        // Browser storage restrictions must not prevent online reading.
+      }
+    }
     await _loadLocalPacks();
     _rebuildActivePacks();
   }
@@ -109,17 +120,13 @@ class QuranAssetResolver {
       ..clear()
       ..addAll(config.assetPacks);
     if (!config.hasEditionControls) {
-      _enabledEditionFilter = null;
+      _disabledEditionFilter = null;
     } else {
       final disabledEditions = config.editions.entries
           .where((entry) => !entry.value.enabled)
           .map((entry) => entry.key)
           .toSet();
-      _enabledEditionFilter = disabledEditions.isEmpty
-          ? null
-          : MushafEdition.values
-              .where((edition) => !disabledEditions.contains(edition))
-              .toSet();
+      _disabledEditionFilter = disabledEditions;
     }
     _rebuildActivePacks();
   }
@@ -146,7 +153,10 @@ class QuranAssetResolver {
   }
 
   MushafAssetProfile profileForEdition(MushafEdition edition) {
-    return _profiles[edition]!;
+    return _profiles[edition] ?? MushafAssetProfile(
+      folderName: edition.storageValue,
+      leadingPagesToSkip: 0,
+    );
   }
 
   bool get hasAnyPageAssets => hasAssetsForEdition(_selectedEdition);
@@ -279,6 +289,7 @@ class QuranAssetResolver {
   Future<void> downloadOfflinePack(
     MushafEdition edition, {
     void Function(double progress)? onProgress,
+    void Function(QuranPackTransferProgress)? onTransferProgress,
     CancelToken? cancelToken,
   }) async {
     await _loadZipCatalog();
@@ -287,6 +298,7 @@ class QuranAssetResolver {
       final downloadedPack = await _offlinePackService.downloadEditionZipPack(
         zipPack: zipPack,
         onProgress: onProgress,
+      onTransferProgress: onTransferProgress,
         cancelToken: cancelToken,
       );
       _downloadedZipPacksByEdition[edition] =
@@ -305,12 +317,22 @@ class QuranAssetResolver {
       pack: remotePack,
       assetsBaseUrl: _remoteAssetsBaseUrl,
       onProgress: onProgress,
+      onTransferProgress: onTransferProgress,
       cancelToken: cancelToken,
     );
     await _loadDownloadedZipPacks();
     _rebuildActivePacks();
     _clearResolvedAssetPathCache();
   }
+
+  Future<Map<MushafEdition, QuranPartialAssetPack>> loadPartialOfflinePacks() =>
+      _offlinePackService.loadPartialOfflinePacks();
+
+  Future<void> discardPartialOfflinePack(MushafEdition edition) =>
+      _offlinePackService.discardPartialOfflinePack(edition);
+
+  Future<QuranPackStorageInfo> offlinePackStorageInfo() =>
+      _offlinePackService.offlinePackStorageInfo();
 
   Future<void> removeOfflinePack(MushafEdition edition) async {
     await _offlinePackService.removeZipPack(edition);
@@ -454,8 +476,7 @@ class QuranAssetResolver {
   void _rebuildActivePacks() {
     _remotePacksByEdition.clear();
     for (final edition in MushafEdition.values) {
-      if (_enabledEditionFilter != null &&
-          !_enabledEditionFilter!.contains(edition)) {
+      if (_disabledEditionFilter?.contains(edition) == true) {
         continue;
       }
       final downloadedZipPack = _downloadedZipPacksByEdition[edition];

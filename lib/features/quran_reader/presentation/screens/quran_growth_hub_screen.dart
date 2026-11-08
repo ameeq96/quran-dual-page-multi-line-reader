@@ -1,12 +1,15 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../../app/app_theme.dart';
+import '../../../../app/reader_localization.dart';
+import '../../../../core/services/reader_file_export.dart';
 import '../../domain/models/reader_growth_models.dart';
+import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
+import '../widgets/reader_reminder_settings.dart';
+import '../widgets/reader_account_settings.dart';
+import '../widgets/reader_local_data_settings.dart';
+import 'quran_study_screen.dart';
 
 class QuranGrowthHubScreen extends StatelessWidget {
   const QuranGrowthHubScreen({
@@ -26,18 +29,78 @@ class QuranGrowthHubScreen extends StatelessWidget {
     Navigator.of(context).pop(pageNumber);
   }
 
+  Future<void> _openRevision(
+    BuildContext context,
+    ReaderHifzReviewEntry entry,
+  ) async {
+    try {
+      await controller.openHifzReviewEntry(entry);
+      if (context.mounted) await _openPage(context, entry.pageNumber);
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(tr(context, 'Unable to open revision: {error}', args: {'error': error}))),
+        );
+      }
+    }
+  }
+
+  String _revisionDueLabel(
+    BuildContext context,
+    ReaderHifzReviewEntry entry,
+    DateTime now,
+  ) {
+    final days = entry.daysUntilReview(now: now);
+    if (days < 0) {
+      return tr(context, days == -1 ? '{days} day overdue' : '{days} days overdue',
+          args: {'days': -days});
+    }
+    if (days == 0) return tr(context, 'Due today');
+    if (days == 1) return tr(context, 'Due tomorrow');
+    return tr(context, 'Due in {days} days', args: {'days': days});
+  }
+
   Future<void> _shareBackup(BuildContext context) async {
-    final tempDirectory = await getTemporaryDirectory();
-    final file = File(
-      '${tempDirectory.path}${Platform.pathSeparator}quran_dual_page_backup.json',
-    );
-    await file.writeAsString(controller.buildStateBackupJson(), flush: true);
-    await Share.shareXFiles(
-      <XFile>[XFile(file.path)],
-      subject: 'Quran Pak Dual Page Reader backup',
-      text:
-          'Reader backup export with bookmarks, notes, plan, and hifz tracking.',
-    );
+    try {
+      await exportReaderFile(
+        fileName: 'quran_dual_page_backup.json',
+        contents: controller.buildStateBackupJson(),
+        mimeType: 'application/json',
+        subject: tr(context, 'Quran Reader backup'),
+        text: tr(context, 'Bookmarks, notes, reading plans and hifz tracking.'),
+      );
+    } catch (error) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr(context, 'Backup export failed: $error'))));
+    }
+  }
+
+  Future<void> _restoreBackup(BuildContext context) async {
+    final input = TextEditingController();
+    String? error;
+    bool busy = false;
+    try {
+      await showDialog<void>(context: context, builder: (dialogContext) => StatefulBuilder(builder: (context, setState) => AlertDialog(
+        title: Text(tr(context, 'Restore reader backup')),
+        content: SizedBox(width: 520, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(tr(context, 'Paste your exported backup JSON. Restoring replaces your reader data. Export a backup first if you want to keep the current data.')),
+          const SizedBox(height: 16),
+          TextField(controller: input, minLines: 5, maxLines: 10, enabled: !busy, decoration: InputDecoration(labelText: tr(context, 'Backup JSON'), alignLabelWithHint: true, errorText: error == null ? null : tr(context, error!))),
+        ]))),
+        actions: [
+          TextButton(onPressed: busy ? null : () => Navigator.of(dialogContext).pop(), child: Text(tr(context, 'Cancel'))),
+          FilledButton(onPressed: busy ? null : () async {
+            setState(() { busy = true; error = null; });
+            try {
+              await controller.restoreStateBackupJson(input.text);
+              if (dialogContext.mounted) Navigator.of(dialogContext).pop();
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr(context, 'Reader backup restored.'))));
+            } catch (failure) {
+              if (dialogContext.mounted) setState(() { busy = false; error = failure.toString().replaceFirst('FormatException: ', ''); });
+            }
+          }, child: Text(tr(context, busy ? 'Restoring…' : 'Restore backup'))),
+        ],
+      )));
+    } finally { input.dispose(); }
   }
 
   @override
@@ -62,6 +125,13 @@ class QuranGrowthHubScreen extends StatelessWidget {
                 highContrast: experience.highContrastMode,
                 largerText: experience.largerTextMode,
               );
+        final now = DateTime.now();
+        final revisionQueue = controller.hifzRevisionQueue;
+        final overdueCount = revisionQueue
+            .where((entry) => entry.daysUntilReview(now: now) < 0).length;
+        final dueTodayCount = revisionQueue
+            .where((entry) => entry.daysUntilReview(now: now) == 0).length;
+        final upcomingCount = revisionQueue.length - overdueCount - dueTodayCount;
         final pageReference = controller.buildCurrentPageReference();
         final plan = controller.readingPlan;
         final planPagesPerDay = plan.pagesPerDay(
@@ -77,24 +147,44 @@ class QuranGrowthHubScreen extends StatelessWidget {
           child: Scaffold(
             backgroundColor: themeData.scaffoldBackgroundColor,
             appBar: AppBar(
-              title: const Text('Plans & Packs'),
+              title: Text(tr(context, 'Plans & Hifz')),
+              actions: [IconButton(tooltip: tr(context, 'Profiles & restore history'), icon: const Icon(Icons.people_outline),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => Scaffold(
+                  appBar: AppBar(title: Text(tr(context, 'Profiles & restore history'))),
+                  body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20), child: ReaderLocalDataSettings(controller: controller)))))))),
+                IconButton(tooltip: tr(context, 'Word study & collections'), icon: const Icon(Icons.auto_stories_outlined),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const QuranStudyScreen())))],
+              centerTitle: true,
             ),
-            body: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
+            body: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 940),
+                child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
               children: [
                 _HubCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Growth hub',
-                        style: themeData.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
+                        tr(context, 'YOUR READING JOURNEY'),
+                        style: themeData.textTheme.labelSmall?.copyWith(
+                          color: themeData.colorScheme.secondary,
+                          letterSpacing: 1.5,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Manage reading plans, hifz revision, AI depth, accessibility, and backup-ready sync settings from one place.',
+                        tr(context, 'A steady practice.'),
+                        style: themeData.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        tr(context, 'Set a comfortable pace, strengthen your memorization, and keep your reading close.'),
                         style: themeData.textTheme.bodyMedium?.copyWith(
                           color: themeData.colorScheme.onSurfaceVariant,
                         ),
@@ -111,12 +201,12 @@ class QuranGrowthHubScreen extends StatelessWidget {
                           _Pill(
                             icon: Icons.flag_circle_outlined,
                             label:
-                                '${plan.preset.label} · $planPagesPerDay/day',
+                                tr(context, '{plan} · {pages}/day', args: {'plan': tr(context, plan.preset.label), 'pages': planPagesPerDay}),
                           ),
                           _Pill(
                             icon: Icons.school_outlined,
                             label:
-                                '${controller.hifzReviewEntries.length} hifz pages',
+                                tr(context, '${controller.hifzReviewEntries.length} hifz pages'),
                           ),
                           _Pill(
                             icon: Icons.sync_outlined,
@@ -127,20 +217,20 @@ class QuranGrowthHubScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 18),
                 _HubCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Reading plan',
+                        tr(context, 'Reading plan'),
                         style: themeData.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Choose a reading goal and keep a clear daily pace.',
+                        tr(context, 'Choose a reading goal and keep a clear daily pace.'),
                         style: themeData.textTheme.bodyMedium?.copyWith(
                           color: themeData.colorScheme.onSurfaceVariant,
                         ),
@@ -151,7 +241,7 @@ class QuranGrowthHubScreen extends StatelessWidget {
                         runSpacing: 8,
                         children: ReadingGoalPreset.values.map((preset) {
                           return ChoiceChip(
-                            label: Text(preset.label),
+                            label: Text(tr(context, preset.label)),
                             selected: plan.preset == preset,
                             onSelected: (_) {
                               controller.setReadingPlanPreset(preset);
@@ -163,12 +253,12 @@ class QuranGrowthHubScreen extends StatelessWidget {
                       _MetricGrid(
                         metrics: [
                           _MetricItem(
-                              label: 'Target', value: plan.preset.label),
-                          _MetricItem(label: 'Days', value: '$targetDays'),
+                              label: tr(context, 'Target'), value: tr(context, plan.preset.label)),
+                          _MetricItem(label: tr(context, 'Days'), value: '$targetDays'),
                           _MetricItem(
-                              label: 'Pages/day', value: '$planPagesPerDay'),
+                              label: tr(context, 'Pages/day'), value: '$planPagesPerDay'),
                           _MetricItem(
-                            label: 'Remaining',
+                            label: tr(context, 'Remaining'),
                             value: '${controller.remainingPages}',
                           ),
                         ],
@@ -176,17 +266,17 @@ class QuranGrowthHubScreen extends StatelessWidget {
                       if (plan.preset == ReadingGoalPreset.custom) ...[
                         const SizedBox(height: 14),
                         Text(
-                          'Custom target days',
+                          tr(context, 'Custom target days'),
                           style: themeData.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         Slider(
                           value: plan.targetDays.toDouble(),
-                          min: 7,
-                          max: 120,
-                          divisions: 113,
-                          label: '${plan.targetDays.round()} days',
+                          min: 1,
+                          max: 365,
+                          divisions: 364,
+                          label: tr(context, '${plan.targetDays.round()} days'),
                           onChanged: (value) {
                             controller.setCustomReadingPlan(
                               targetDays: value.round(),
@@ -194,17 +284,17 @@ class QuranGrowthHubScreen extends StatelessWidget {
                           },
                         ),
                         Text(
-                          'Custom pages per day',
+                          tr(context, 'Custom pages per day'),
                           style: themeData.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         Slider(
                           value: plan.customPagesPerDay.toDouble(),
                           min: 1,
-                          max: 30,
-                          divisions: 29,
-                          label: '${plan.customPagesPerDay.round()} pages',
+                          max: 40,
+                          divisions: 39,
+                          label: tr(context, '${plan.customPagesPerDay.round()} pages'),
                           onChanged: (value) {
                             controller.setCustomReadingPlan(
                               pagesPerDay: value.round(),
@@ -215,20 +305,20 @@ class QuranGrowthHubScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 18),
                 _HubCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Hifz planner',
+                        tr(context, 'Hifz planner'),
                         style: themeData.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Track weak pages, schedule revision, and jump back into review quickly.',
+                        tr(context, 'Track weak pages, schedule revision, and jump back into review quickly.'),
                         style: themeData.textTheme.bodyMedium?.copyWith(
                           color: themeData.colorScheme.onSurfaceVariant,
                         ),
@@ -244,7 +334,7 @@ class QuranGrowthHubScreen extends StatelessWidget {
                                 HifzPageStrength.weak,
                               );
                             },
-                            child: const Text('Mark current as weak'),
+                            child: Text(tr(context, 'Mark current as weak')),
                           ),
                           FilledButton.tonal(
                             onPressed: () {
@@ -252,7 +342,7 @@ class QuranGrowthHubScreen extends StatelessWidget {
                                 HifzPageStrength.steady,
                               );
                             },
-                            child: const Text('Mark current as steady'),
+                            child: Text(tr(context, 'Mark current as steady')),
                           ),
                           FilledButton.tonal(
                             onPressed: () {
@@ -260,7 +350,7 @@ class QuranGrowthHubScreen extends StatelessWidget {
                                 HifzPageStrength.strong,
                               );
                             },
-                            child: const Text('Mark current as strong'),
+                            child: Text(tr(context, 'Mark current as strong')),
                           ),
                           OutlinedButton(
                             onPressed: () {
@@ -268,47 +358,94 @@ class QuranGrowthHubScreen extends StatelessWidget {
                                 controller.currentPageNumber,
                               );
                             },
-                            child: const Text('Clear current'),
+                            child: Text(tr(context, 'Clear current')),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      if (controller.prioritizedHifzReviewEntries.isEmpty)
+                      Text(
+                        tr(context, 'Revision reminders'),
+                        style: themeData.textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        tr(context, 'Weak pages return after 1 day, steady after 3, strong after 7. After reading, mark the page again to schedule its next review. Reminders appear here while you use the app.'),
+                        style: themeData.textTheme.bodySmall?.copyWith(
+                          color: themeData.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          _Pill(icon: Icons.history_rounded,
+                              label: tr(context, '{count} overdue', args: {'count': overdueCount})),
+                          _Pill(icon: Icons.today_rounded,
+                              label: tr(context, '{count} due today', args: {'count': dueTodayCount})),
+                          _Pill(icon: Icons.event_outlined,
+                              label: tr(context, '{count} upcoming', args: {'count': upcomingCount})),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      if (revisionQueue.isEmpty)
                         Text(
-                          'No hifz pages tracked yet. Mark weak or strong pages to build a revision queue.',
+                          tr(context, 'Mark a page above to start your revision queue.'),
                           style: themeData.textTheme.bodyMedium?.copyWith(
                             color: themeData.colorScheme.onSurfaceVariant,
                           ),
                         )
                       else
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: controller.prioritizedHifzReviewEntries
-                              .take(12)
-                              .map((entry) {
-                            return ActionChip(
-                              label: Text(
-                                'Page ${entry.pageNumber} · ${entry.strength.label}',
-                              ),
-                              onPressed: () {
-                                _openPage(context, entry.pageNumber);
-                              },
-                            );
-                          }).toList(growable: false),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxHeight: 420),
+                          child: ListView.separated(
+                            shrinkWrap: true,
+                            primary: false,
+                            itemCount: revisionQueue.length,
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final entry = revisionQueue[index];
+                              final days = entry.daysUntilReview(now: now);
+                              final color = days < 0
+                                  ? themeData.colorScheme.error
+                                  : days == 0
+                                      ? themeData.colorScheme.primary
+                                      : themeData.colorScheme.onSurfaceVariant;
+                              return ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                leading: Icon(
+                                  days <= 0
+                                      ? Icons.auto_stories_outlined
+                                      : Icons.event_outlined,
+                                  color: color,
+                                ),
+                                title: Text(
+                                  tr(context, 'Page {page} · {edition}', args: {'page': entry.pageNumber, 'edition': tr(context, entry.edition.label)}),
+                                ),
+                                subtitle: Text(
+                                  '${_revisionDueLabel(context, entry, now)} · ${tr(context, entry.strength.label)}',
+                                  style: TextStyle(color: color),
+                                ),
+                                trailing: const Icon(Icons.chevron_right_rounded),
+                                onTap: () => _openRevision(context, entry),
+                              );
+                            },
+                          ),
                         ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 18),
+                _HubCard(child: ReaderReminderSettings(baseUrl: controller.adminSyncBaseUrl)),
+                const SizedBox(height: 18),
                 _HubCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Accessibility & sync',
+                        tr(context, 'Accessibility & sync'),
                         style: themeData.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -316,41 +453,41 @@ class QuranGrowthHubScreen extends StatelessWidget {
                         contentPadding: EdgeInsets.zero,
                         value: experience.largerTextMode,
                         onChanged: controller.setLargerTextMode,
-                        title: const Text('Larger text mode'),
+                        title: Text(tr(context, 'Larger text mode')),
                         subtitle:
-                            const Text('Increase app text size slightly.'),
+                            Text(tr(context, 'Increase app text size slightly.')),
                       ),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
                         value: experience.highContrastMode,
                         onChanged: controller.setHighContrastMode,
-                        title: const Text('High contrast mode'),
-                        subtitle: const Text(
-                            'Stronger borders and clearer contrast.'),
+                        title: Text(tr(context, 'High contrast mode')),
+                        subtitle: Text(
+                            tr(context, 'Stronger borders and clearer contrast.')),
                       ),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
                         value: experience.reducedMotion,
                         onChanged: controller.setReducedMotion,
-                        title: const Text('Reduced motion'),
-                        subtitle: const Text(
-                            'Prepare the app for lighter transitions.'),
+                        title: Text(tr(context, 'Reduced motion')),
+                        subtitle: Text(
+                            tr(context, 'Prepare the app for lighter transitions.')),
                       ),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
                         value: experience.tajweedMode,
                         onChanged: controller.setTajweedMode,
-                        title: const Text('Tajweed mode'),
-                        subtitle: const Text(
-                            'Keep tajweed-ready reading mode enabled.'),
+                        title: Text(tr(context, 'Tajweed mode')),
+                        subtitle: Text(
+                            tr(context, 'Keep tajweed-ready reading mode enabled.')),
                       ),
                       SwitchListTile.adaptive(
                         contentPadding: EdgeInsets.zero,
                         value: experience.recitationSyncEnabled,
                         onChanged: controller.setRecitationSyncEnabled,
-                        title: const Text('Recitation sync'),
-                        subtitle: const Text(
-                            'Keep audio follow mode ready for page sync.'),
+                        title: Text(tr(context, 'Recitation sync')),
+                        subtitle: Text(
+                            tr(context, 'Follow timed ayahs during recitation when timing data is available.')),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -358,7 +495,7 @@ class QuranGrowthHubScreen extends StatelessWidget {
                         runSpacing: 8,
                         children: ReaderSyncMode.values.map((mode) {
                           return ChoiceChip(
-                            label: Text(mode.label),
+                            label: Text(tr(context, mode.label)),
                             selected: experience.syncMode == mode,
                             onSelected: (_) {
                               controller.setSyncMode(mode);
@@ -368,23 +505,40 @@ class QuranGrowthHubScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        experience.syncMode.subtitle,
+                        tr(context, experience.syncMode.subtitle),
                         style: themeData.textTheme.bodyMedium?.copyWith(
                           color: themeData.colorScheme.onSurfaceVariant,
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        tr(context, controller.readerSyncStatusLabel),
+                        style: themeData.textTheme.bodySmall?.copyWith(
+                          color: themeData.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      ExpansionTile(tilePadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.people_outline), title: Text(tr(context, 'Profiles & restore history')),
+                        children: [ReaderLocalDataSettings(controller: controller), const SizedBox(height: 20)]),
+                      const SizedBox(height: 12),
+                      ReaderAccountSettings(controller: controller),
                       const SizedBox(height: 12),
                       FilledButton.tonalIcon(
                         onPressed: () {
                           _shareBackup(context);
                         },
                         icon: const Icon(Icons.upload_file_outlined),
-                        label: const Text('Export backup JSON'),
+                        label: Text(tr(context, 'Export backup JSON')),
                       ),
+                      const SizedBox(height: 10),
+                      OutlinedButton.icon(onPressed: () => _restoreBackup(context), icon: const Icon(Icons.restore_rounded), label: Text(tr(context, 'Restore backup JSON'))),
                     ],
                   ),
                 ),
               ],
+            ),
+              ),
             ),
           ),
         );
@@ -406,17 +560,11 @@ class _HubCard extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.shadow.withValues(alpha: 0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(20),
         child: child,
       ),
     );
@@ -424,49 +572,68 @@ class _HubCard extends StatelessWidget {
 }
 
 class _MetricGrid extends StatelessWidget {
-  const _MetricGrid({
-    required this.metrics,
-  });
+  const _MetricGrid({required this.metrics});
 
   final List<_MetricItem> metrics;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: metrics.map((metric) {
-        return SizedBox(
-          width: 150,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    metric.label,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 640 ? 4 : 2;
+        final width = (constraints.maxWidth - (columns - 1) * 10) / columns;
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: metrics
+              .map((metric) {
+                return ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: width,
+                    maxWidth: width,
+                    minHeight: 108,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    metric.value,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: theme.dividerColor),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 16,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            tr(context, metric.label),
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            tr(context, metric.value),
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ],
-              ),
-            ),
-          ),
+                );
+              })
+              .toList(growable: false),
         );
-      }).toList(growable: false),
+      },
     );
   }
 }
@@ -482,10 +649,7 @@ class _MetricItem {
 }
 
 class _Pill extends StatelessWidget {
-  const _Pill({
-    required this.icon,
-    required this.label,
-  });
+  const _Pill({required this.icon, required this.label});
 
   final IconData icon;
   final String label;
@@ -495,20 +659,22 @@ class _Pill extends StatelessWidget {
     final theme = Theme.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(999),
+        color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.38),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: theme.colorScheme.primary),
+            Icon(icon, size: 16, color: theme.colorScheme.secondary),
             const SizedBox(width: 8),
-            Text(
-              label,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.w700,
+            Flexible(
+              child: Text(
+                tr(context, label),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ],

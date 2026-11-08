@@ -136,26 +136,29 @@ class DualPageSpread extends StatelessWidget {
                         ),
                       ),
                     Row(
+                      textDirection: TextDirection.ltr,
                       children: [
                         SizedBox(
                           width: pageWidth,
                           child: Padding(
                             padding: const EdgeInsets.only(right: 0.5),
-                            child: MushafPageWidget(
-                              page: spread.leftPage,
-                              settings: settings,
-                              showPageNumbers: settings.showPageNumbers,
-                              smartHifzHiddenLines: leftSmartHifzHiddenLines,
-                              smartHifzManualMaskAnchors:
-                                  leftSmartHifzManualMaskAnchors,
-                              onSmartHifzManualMaskAnchorChanged:
-                                  onLeftSmartHifzManualMaskAnchorChanged,
-                              smartHifzRevealed: leftSmartHifzRevealed,
-                              smartHifzEdition: leftSmartHifzEdition,
-                              smartHifzLineCount: leftSmartHifzLineCount,
-                              alignment: Alignment.centerRight,
-                              turnAmount: 0,
-                            ),
+                            child: spread.leftPage.number == 0
+                                ? const SizedBox.shrink()
+                                : MushafPageWidget(
+                                    page: spread.leftPage,
+                                    settings: settings,
+                                    showPageNumbers: settings.showPageNumbers,
+                                    smartHifzHiddenLines: leftSmartHifzHiddenLines,
+                                    smartHifzManualMaskAnchors:
+                                        leftSmartHifzManualMaskAnchors,
+                                    onSmartHifzManualMaskAnchorChanged:
+                                        onLeftSmartHifzManualMaskAnchorChanged,
+                                    smartHifzRevealed: leftSmartHifzRevealed,
+                                    smartHifzEdition: leftSmartHifzEdition,
+                                    smartHifzLineCount: leftSmartHifzLineCount,
+                                    alignment: Alignment.centerRight,
+                                    turnAmount: 0,
+                                  ),
                           ),
                         ),
                         SizedBox(

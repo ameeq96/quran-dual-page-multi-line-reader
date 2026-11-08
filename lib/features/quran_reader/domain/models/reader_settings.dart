@@ -5,26 +5,38 @@ enum PagePreset {
   slate,
 }
 
-enum MushafEdition {
-  lines10,
-  lines13,
-  lines14,
-  lines15,
-  lines16,
-  lines17,
-  kanzulIman,
+class MushafEdition {
+  const MushafEdition._(this.key);
+  final String key;
+
+  static const lines10 = MushafEdition._('10_lines');
+  static const lines13 = MushafEdition._('13_lines');
+  static const lines14 = MushafEdition._('14_lines');
+  static const lines15 = MushafEdition._('15_lines');
+  static const lines16 = MushafEdition._('16_lines');
+  static const lines17 = MushafEdition._('17_lines');
+  static const kanzulIman = MushafEdition._('kanzul_iman');
+  static final Map<String, MushafEdition> _registered = {
+    for (final edition in const [lines10, lines13, lines14, lines15, lines16, lines17, kanzulIman]) edition.key: edition,
+  };
+  static final Map<String, String> _labels = {};
+  static List<MushafEdition> get values => List.unmodifiable(_registered.values);
+
+  static MushafEdition? register(String value, {String? label}) {
+    var key = value.trim().toLowerCase();
+    final lines = RegExp(r'^(?:lines)?(\d+)(?:_lines?)?$').firstMatch(key);
+    if (lines != null) key = '${lines.group(1)}_lines';
+    if (key == 'kanzuliman') key = 'kanzul_iman';
+    if (!RegExp(r'^[a-z0-9][a-z0-9_-]{0,63}$').hasMatch(key)) return null;
+    final edition = _registered.putIfAbsent(key, () => MushafEdition._(key));
+    if (label != null && label.trim().isNotEmpty) _labels[key] = label.trim();
+    return edition;
+  }
 }
 
+
 extension MushafEditionX on MushafEdition {
-  String get storageValue => switch (this) {
-        MushafEdition.lines10 => '10_lines',
-        MushafEdition.lines13 => '13_lines',
-        MushafEdition.lines14 => '14_lines',
-        MushafEdition.lines15 => '15_lines',
-        MushafEdition.lines16 => '16_lines',
-        MushafEdition.lines17 => '17_lines',
-        MushafEdition.kanzulIman => 'kanzul_iman',
-      };
+  String get storageValue => key;
 
   String get label => switch (this) {
         MushafEdition.lines10 => '10 lines',
@@ -34,6 +46,7 @@ extension MushafEditionX on MushafEdition {
         MushafEdition.lines16 => '16 lines',
         MushafEdition.lines17 => '17 lines',
         MushafEdition.kanzulIman => 'Kanzul Iman',
+        _ => MushafEdition._labels[key] ?? key.replaceAll('_', ' '),
       };
 
   String get shortLabel => switch (this) {
@@ -44,6 +57,7 @@ extension MushafEditionX on MushafEdition {
         MushafEdition.lines16 => '16',
         MushafEdition.lines17 => '17',
         MushafEdition.kanzulIman => 'KI',
+        _ => lineCount?.toString() ?? label.substring(0, label.length < 2 ? label.length : 2).toUpperCase(),
       };
 
   int? get lineCount => switch (this) {
@@ -54,6 +68,7 @@ extension MushafEditionX on MushafEdition {
         MushafEdition.lines16 => 16,
         MushafEdition.lines17 => 17,
         MushafEdition.kanzulIman => null,
+        _ => int.tryParse(RegExp(r'^\d+').stringMatch(key) ?? ''),
       };
 
   String get companyLabel => switch (this) {
@@ -64,6 +79,7 @@ extension MushafEditionX on MushafEdition {
         MushafEdition.lines16 => 'Taj Company',
         MushafEdition.lines17 => 'Taj Company',
         MushafEdition.kanzulIman => 'Kanzul Iman',
+        _ => 'Published edition',
       };
 
   String get commonRegionLabel => switch (this) {
@@ -74,6 +90,7 @@ extension MushafEditionX on MushafEdition {
         MushafEdition.lines16 => 'Pakistan, India, Bangladesh',
         MushafEdition.lines17 => 'South Asia decorative print',
         MushafEdition.kanzulIman => 'Urdu study and tafsir readers',
+        _ => 'Admin-published Quran edition',
       };
 
   String get bestUseLabel => switch (this) {
@@ -84,6 +101,7 @@ extension MushafEditionX on MushafEdition {
         MushafEdition.lines16 => 'Taj-style Mushaf experience',
         MushafEdition.lines17 => 'Dense scan comparison',
         MushafEdition.kanzulIman => 'Translation and tafsir study',
+        _ => 'Quran reading',
       };
 
   String get historySummary => switch (this) {
@@ -101,13 +119,11 @@ extension MushafEditionX on MushafEdition {
           'A denser decorative print style that is useful for edition comparison and visual research.',
         MushafEdition.kanzulIman =>
           'An Urdu translation and tafsir presentation built for reflective study, not just page memorization.',
+        _ => 'A Quran edition published by your administrator.',
       };
 
   static MushafEdition fromStorageValue(String? value) {
-    return MushafEdition.values.firstWhere(
-      (edition) => edition.storageValue == value,
-      orElse: () => MushafEdition.lines16,
-    );
+    return MushafEdition.register(value ?? '') ?? MushafEdition.lines16;
   }
 }
 
