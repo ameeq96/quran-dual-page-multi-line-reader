@@ -706,21 +706,13 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                                                 0,
                                                 bodyBottomPadding,
                                               ),
-                                              child: readerViewport,
-                                            ),
-                                            Positioned.fill(
-                                              child: IgnorePointer(
-                                                ignoring: widget
-                                                        .controller
-                                                        .settings
-                                                        .hifzFocusMode ||
-                                                    zoomActive,
-                                                child: GestureDetector(
-                                                  behavior: HitTestBehavior
-                                                      .translucent,
-                                                  onTap: widget.controller
-                                                      .toggleControlsVisibility,
-                                                ),
+                                              child: GestureDetector(
+                                                behavior: HitTestBehavior.translucent,
+                                                excludeFromSemantics: true,
+                                                onTap: settings.hifzFocusMode || zoomActive
+                                                    ? null
+                                                    : widget.controller.toggleControlsVisibility,
+                                                child: readerViewport,
                                               ),
                                             ),
                                             Positioned(

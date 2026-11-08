@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_flutter_app/features/quran_reader/data/services/reader_page_pin_store.dart';
 import 'package:my_flutter_app/features/quran_reader/presentation/widgets/reader_page_pin_overlay.dart';
+import 'package:my_flutter_app/features/quran_reader/presentation/widgets/reader_zoom_viewport.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -220,6 +221,66 @@ void main() {
     expect(marker.dx, closeTo(60, .5));
     expect(marker.dy, closeTo(210, .5));
     await tester.pumpWidget(const SizedBox.shrink());
+    image.dispose();
+  });
+
+  testWidgets('real pointer taps reach pin controls and canvas through reader zoom with semantics enabled', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final semantics = tester.ensureSemantics();
+    final image = (await tester.runAsync(() async {
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawRect(const Rect.fromLTWH(0, 0, 20, 30), Paint()..color = Colors.white);
+      final picture = recorder.endRecording();
+      try { return await picture.toImage(20, 30); }
+      finally { picture.dispose(); }
+    }))!;
+    final provider = _PinImageProvider(image);
+    var controlsTaps = 0;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Align(alignment: Alignment.topLeft,
+      child: SizedBox(width: 200, height: 300, child: GestureDetector(
+        behavior: HitTestBehavior.translucent, excludeFromSemantics: true, onTap: () => controlsTaps++,
+        child: ReaderZoomViewport(onZoomChanged: (_) {}, child: ReaderPagePinOverlay(
+          pageNumber: 1, edition: '16_lines', sourceKey: 'blob:pointer-test',
+          imageProvider: provider, originalImageProvider: provider, child: const ColoredBox(color: Colors.white)))))))));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(100, 150));
+    await tester.pumpAndSettle();
+    expect(controlsTaps, 1);
+    await tester.tap(find.byTooltip('Manual notes and mistake pins'));
+    for (var attempt = 0; attempt < 100 && find.byTooltip('Finish placing pins').evaluate().isEmpty; attempt++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 1)));
+      await tester.pump();
+    }
+    expect(find.byTooltip('Finish placing pins'), findsOneWidget);
+    expect(controlsTaps, 1);
+    await tester.tapAt(const Offset(80, 180));
+    await tester.pumpAndSettle();
+    expect(find.text('Add manual pin'), findsOneWidget);
+    expect(controlsTaps, 1);
+    await tester.enterText(find.byType(TextField), 'A real pointer annotation');
+    await tester.tap(find.text('Save pin'));
+    await tester.pumpAndSettle();
+    final store = ReaderPagePinStore(profileId: 'default', edition: '16_lines', page: 1, activeProfileId: () => 'default');
+    final pin = (await store.load()).single;
+    expect(pin.x, closeTo(.4, .001));
+    expect(pin.y, closeTo(.6, .001));
+    await tester.tap(find.byTooltip('Finish placing pins'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(100, 150));
+    await tester.pumpAndSettle();
+    expect(controlsTaps, 2);
+    final transform = tester.widget<InteractiveViewer>(find.byType(InteractiveViewer)).transformationController!;
+    transform.value = Matrix4.diagonal3Values(2, 2, 1);
+    await tester.pumpAndSettle();
+    expect(transform.value.getMaxScaleOnAxis(), 2);
+    await tester.tapAt(const Offset(50, 50));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tapAt(const Offset(50, 50));
+    await tester.pumpAndSettle();
+    expect(transform.value.getMaxScaleOnAxis(), 1);
+    expect(controlsTaps, 2);
+    await tester.pumpWidget(const SizedBox.shrink());
+    semantics.dispose();
     image.dispose();
   });
 }

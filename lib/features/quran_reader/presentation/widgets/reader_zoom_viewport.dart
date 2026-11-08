@@ -45,7 +45,7 @@ class _ReaderZoomViewportState extends State<ReaderZoomViewport> {
     if (_isZoomed == nextZoomed) {
       return;
     }
-    _isZoomed = nextZoomed;
+    setState(() => _isZoomed = nextZoomed);
     widget.onZoomChanged(nextZoomed);
   }
 
@@ -59,7 +59,7 @@ class _ReaderZoomViewportState extends State<ReaderZoomViewport> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onDoubleTap: _resetZoom,
+      onDoubleTap: _isZoomed ? _resetZoom : null,
       child: InteractiveViewer(
         transformationController: _transformationController,
         minScale: _minZoomScale,
