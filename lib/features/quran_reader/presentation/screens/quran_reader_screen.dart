@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../../app/reader_localization.dart';
 
@@ -733,7 +734,11 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
                                                 onTap: settings.hifzFocusMode || zoomActive
                                                     ? null
                                                     : widget.controller.toggleControlsVisibility,
-                                                child: readerViewport,
+                                                child: _DesktopPageNavigation(
+                                                  controller: widget.controller,
+                                                  portraitMode: isPortrait,
+                                                  child: readerViewport!,
+                                                ),
                                               ),
                                             ),
                                             Positioned(
@@ -787,6 +792,42 @@ class _QuranReaderScreenState extends State<QuranReaderScreen> {
         );
       },
     );
+  }
+}
+
+class _DesktopPageNavigation extends StatelessWidget {
+  const _DesktopPageNavigation({required this.controller,
+    required this.portraitMode, required this.child});
+
+  final QuranReaderController controller;
+  final bool portraitMode;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final desktop = switch (Theme.of(context).platform) {
+      TargetPlatform.linux || TargetPlatform.macOS || TargetPlatform.windows => true,
+      _ => false,
+    };
+    if (!desktop) return child;
+    return AnimatedBuilder(animation: controller.pageListenable, builder: (context, _) {
+      void next() => unawaited(portraitMode ? controller.nextPage() : controller.nextSpread());
+      void previous() => unawaited(portraitMode ? controller.previousPage() : controller.previousSpread());
+      final canNext = portraitMode ? controller.canGoNextPage : controller.canGoNextSpread;
+      final canPrevious = portraitMode ? controller.canGoPreviousPage : controller.canGoPreviousSpread;
+      return CallbackShortcuts(bindings: {
+        const SingleActivator(LogicalKeyboardKey.arrowLeft, includeRepeats: false): next,
+        const SingleActivator(LogicalKeyboardKey.arrowRight, includeRepeats: false): previous,
+      }, child: Focus(autofocus: true, child: Stack(fit: StackFit.expand, children: [
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 56), child: child),
+        Align(alignment: Alignment.centerLeft, child: IconButton.filledTonal(
+          tooltip: tr(context, 'Next'), onPressed: canNext ? next : null,
+          icon: const Icon(Icons.chevron_left, textDirection: TextDirection.ltr))),
+        Align(alignment: Alignment.centerRight, child: IconButton.filledTonal(
+          tooltip: tr(context, 'Previous'), onPressed: canPrevious ? previous : null,
+          icon: const Icon(Icons.chevron_right, textDirection: TextDirection.ltr))),
+      ])));
+    });
   }
 }
 
