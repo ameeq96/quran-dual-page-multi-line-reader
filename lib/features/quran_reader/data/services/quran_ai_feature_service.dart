@@ -552,10 +552,17 @@ class QuranAiFeatureService {
     final exactKey = reference != null
         ? '${int.tryParse(reference[1]!)}:${int.tryParse(reference[2]!)}'
         : isKursi ? '2:255' : null;
+    final chapter = exactKey == null ? _chapterForAiSearchQuery(query, index) : null;
     final ranked = <({_AiSearchVerse verse, int score})>[];
     if (exactKey != null) {
       final verse = index[exactKey];
       if (verse != null) ranked.add((verse: verse, score: 100000));
+    } else if (chapter != null) {
+      for (final verse in index.values) {
+        if (verse.reference.startsWith('$chapter:')) {
+          ranked.add((verse: verse, score: 100000));
+        }
+      }
     } else if (!RegExp(r'^[\d\s:]+$').hasMatch(query)) {
       final topics = _aiSearchTopics.where((topic) => topic.mentions(query)).toList();
       final tokens = query.split(' ').where((token) => token.length >= 2 &&
@@ -1183,6 +1190,36 @@ class _LineMatch {
   final int lineNumber;
   final String text;
   final double score;
+}
+
+int? _chapterForAiSearchQuery(String query, Map<String, _AiSearchVerse> index) {
+  final prefix = RegExp(r'^(?:surah|surat|sure|sura|سوره|سورت)\s*').firstMatch(query);
+  var name = prefix == null ? query : query.substring(prefix.end).trim();
+  if (prefix != null) name = name.replaceFirst(RegExp(r'^e\s+'), '');
+  final compact = name.replaceAll(' ', '');
+  if (compact.isEmpty) return null;
+  final matches = <int>{};
+  for (final verse in index.values) {
+    if (!verse.reference.endsWith(':1')) continue;
+    final chapter = int.parse(verse.reference.split(':').first);
+    final canonical = _normalizeAiSearch(verse.chapterName);
+    final aliases = <String>{
+      canonical,
+      canonical.replaceFirst(RegExp(r'^(?:al|an|ar|ash|as|at|ad|az)\s+'), ''),
+      ...switch (chapter) {
+        1 => const ['fatiha', 'fatihah', 'al fatiha', 'الفاتحة', 'فاتحة'],
+        6 => ['inam', 'inaam', 'anaam', 'al inam', 'al inaam', 'al anaam',
+          'الأنعام', if (prefix != null) 'انعام'],
+        36 => const ['yaseen', 'ya seen', 'يس'],
+        55 => const ['rehman', 'ar rehman', 'al rehman', 'al rahman', 'الرحمن'],
+        _ => const <String>[],
+      },
+    };
+    if (aliases.any((alias) => _normalizeAiSearch(alias).replaceAll(' ', '') == compact)) {
+      matches.add(chapter);
+    }
+  }
+  return matches.length == 1 ? matches.single : null;
 }
 
 String _normalizeAiSearch(String value) {
