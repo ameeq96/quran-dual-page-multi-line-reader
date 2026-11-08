@@ -108,25 +108,13 @@ class _ReaderPagePinOverlayState extends State<ReaderPagePinOverlay> {
     if (!force && stream.key == _displayStream?.key) return;
     _removeDisplayListener();
     _imageSize = null;
-    _imageIdentity = null;
-    _pins = const [];
-    _editing = false;
-    _busy = false;
-    _movingPin = null;
     _displayStream = stream;
-    _generation++;
     _displayListener = ImageStreamListener((info, _) {
       if (!mounted || !identical(stream, _displayStream)) return;
       final imageChanged = _displayImage == null || !_displayImage!.isCloneOf(info.image);
       if (imageChanged) {
         _displayImage?.dispose();
         _displayImage = info.image.clone();
-        _imageIdentity = null;
-        _pins = const [];
-        _editing = false;
-        _busy = false;
-        _movingPin = null;
-        _generation++;
         unawaited(_loadPins(_generation));
       }
       final size = Size(info.image.width.toDouble(), info.image.height.toDouble());
@@ -182,10 +170,19 @@ class _ReaderPagePinOverlayState extends State<ReaderPagePinOverlay> {
   Future<void> _loadPins(int generation) async {
     try {
       final pins = await _store.load();
-      if (!mounted || generation != _generation || pins.isEmpty) return;
+      if (!mounted || generation != _generation || (pins.isEmpty && _imageIdentity == null)) return;
       final identity = await _resolveIdentity();
       if (!mounted || generation != _generation) return;
-      setState(() { _imageIdentity = identity; _pins = pins.where((entry) => entry.imageIdentity == identity).toList(); });
+      setState(() {
+        if (_imageIdentity != null && _imageIdentity != identity) {
+          _editing = false;
+          _busy = false;
+          _movingPin = null;
+          _generation++;
+        }
+        _imageIdentity = identity;
+        _pins = pins.where((entry) => entry.imageIdentity == identity).toList();
+      });
     } catch (_) { /* Existing annotations remain stored if a scan is unavailable. */ }
   }
 
@@ -309,12 +306,12 @@ class _ReaderPagePinOverlayState extends State<ReaderPagePinOverlay> {
       if (!rect.isEmpty) for (final pin in _pins)
         Positioned(left: ReaderPinGeometry.localPoint(Offset(pin.x, pin.y), rect).dx - 16,
           top: ReaderPinGeometry.localPoint(Offset(pin.x, pin.y), rect).dy - 16,
-          child: IgnorePointer(ignoring: !_editing || _busy, child: IconButton(
+          child: IgnorePointer(ignoring: !_editing || _busy, child: SizedBox(width: 32, height: 32, child: IconButton(
             visualDensity: VisualDensity.compact, padding: EdgeInsets.zero, constraints: const BoxConstraints.tightFor(width: 32, height: 32),
             onPressed: () => _editPin(pin: pin), tooltip: tr(context, pin.kind == ReaderPagePinKind.note ? 'Manual note pin' : 'Manual mistake pin'),
             style: IconButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.surface,
               foregroundColor: pin.kind == ReaderPagePinKind.note ? const Color(0xFF146C5E) : const Color(0xFFAD3030)),
-            icon: Icon(pin.kind == ReaderPagePinKind.note ? Icons.sticky_note_2_outlined : Icons.flag_rounded, size: 19)))),
+            icon: Icon(pin.kind == ReaderPagePinKind.note ? Icons.sticky_note_2_outlined : Icons.flag_rounded, size: 19))))),
       Positioned(top: 6, right: 6, child: Material(color: Theme.of(context).colorScheme.surface.withValues(alpha: .94),
         borderRadius: BorderRadius.circular(20), child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (!_editing) IconButton(visualDensity: VisualDensity.compact,

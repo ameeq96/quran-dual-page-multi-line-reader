@@ -162,11 +162,65 @@ void main() {
     await originalProvider.evict();
     await tester.runAsync(() => tester.pumpWidget(content(_PinImageProvider(replacement, cacheKey: 'same-remote-path'))));
     await tester.pumpAndSettle();
+    for (var attempt = 0; attempt < 100 && find.byTooltip('Finish placing pins').evaluate().isNotEmpty; attempt++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 1)));
+      await tester.pump();
+    }
     await enterManualMode();
     expect(find.byTooltip('Manual note pin'), findsNothing);
     expect((await store.load()).single.imageIdentity, originalHash);
     await tester.pumpWidget(const SizedBox.shrink());
     original.dispose(); replacement.dispose();
+  });
+
+  testWidgets('pin mode and normalized placement survive viewport and decode-width changes', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final image = (await tester.runAsync(() async {
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawRect(const Rect.fromLTWH(0, 0, 20, 30), Paint()..color = Colors.white);
+      final picture = recorder.endRecording();
+      try { return await picture.toImage(20, 30); }
+      finally { picture.dispose(); }
+    }))!;
+    final original = _PinImageProvider(image);
+    Widget content(double width, int decodeWidth) => MaterialApp(home: Scaffold(body: Align(alignment: Alignment.topLeft,
+      child: SizedBox(width: width, height: width * 1.5, child: ReaderPagePinOverlay(
+        pageNumber: 1, edition: '16_lines', sourceKey: 'blob:stable-original-scan',
+        imageProvider: ResizeImage(original, width: decodeWidth), originalImageProvider: original,
+        child: const ColoredBox(color: Colors.white))))));
+    await tester.pumpWidget(content(200, 80));
+    await tester.pumpAndSettle();
+    final button = tester.widget<IconButton>(find.byWidgetPredicate((widget) =>
+        widget is IconButton && widget.tooltip == 'Manual notes and mistake pins'));
+    await tester.runAsync(() async {
+      final result = Function.apply(button.onPressed!, const []);
+      if (result is Future) await result;
+    });
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Finish placing pins'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.runAsync(() => tester.pumpWidget(content(300, 160)));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Finish placing pins'), findsOneWidget);
+    expect(find.byTooltip('Manual notes and mistake pins'), findsNothing);
+    await tester.tapAt(const Offset(90, 315));
+    await tester.pumpAndSettle();
+    expect(find.text('Add manual pin'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'A pin after controls hide');
+    await tester.tap(find.text('Save pin'));
+    await tester.pumpAndSettle();
+    final store = ReaderPagePinStore(profileId: 'default', edition: '16_lines', page: 1, activeProfileId: () => 'default');
+    final pin = (await store.load()).single;
+    expect(pin.x, closeTo(.3, .001));
+    expect(pin.y, closeTo(.7, .001));
+    await tester.runAsync(() => tester.pumpWidget(content(200, 80)));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Finish placing pins'), findsOneWidget);
+    final marker = tester.getCenter(find.byTooltip('Manual note pin'));
+    expect(marker.dx, closeTo(60, .5));
+    expect(marker.dy, closeTo(210, .5));
+    await tester.pumpWidget(const SizedBox.shrink());
+    image.dispose();
   });
 }
 
