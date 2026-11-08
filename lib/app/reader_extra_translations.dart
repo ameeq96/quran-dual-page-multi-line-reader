@@ -184,6 +184,7 @@ const readerExtraTranslations = <String, (String, String)>{
   'Finish updating background reminders before changing account.': ('اکاؤنٹ بدلنے سے پہلے پس منظر کی یاد دہانیوں کی تبدیلی مکمل ہونے دیں۔', 'Account badalne se pehle pas-e-manzar ki yaad-dihaniyon ki tabdeeli mukammal hone dein.'),
   'Background reminders require HTTPS.': ('پس منظر کی یاد دہانیوں کے لیے HTTPS ضروری ہے۔', 'Pas-e-manzar ki yaad-dihaniyon ke liye HTTPS zaroori hai.'),
   'Account request timed out. If creation or recovery completed, sign in with your password.': ('اکاؤنٹ کی درخواست کا وقت ختم ہو گیا۔ اگر اکاؤنٹ بن یا بحال ہو چکا ہو تو اپنے پاس ورڈ سے سائن اِن کریں۔', 'Account ki darkhwast ka waqt khatam ho gaya. Agar account ban ya bahaal ho chuka ho to apne password se sign in karein.'),
+  'This reminder appears while the app is open. Enable background notifications separately.': ('یہ یاددہانی ایپ کھلی ہونے پر نظر آتی ہے۔ پس منظر کی اطلاعات الگ سے فعال کریں۔', 'Yeh yaad-dihani app khuli hone par nazar aati hai. Background notifications alag se on karein.'),
 };
 
 const readerArabicTranslations = <String, String>{
@@ -941,4 +942,5 @@ const readerArabicTranslations = <String, String>{
   'Finish updating background reminders before changing account.': 'انتظر اكتمال تحديث تذكيرات الخلفية قبل تغيير الحساب.',
   'Background reminders require HTTPS.': 'تتطلب تذكيرات الخلفية HTTPS.',
   'Account request timed out. If creation or recovery completed, sign in with your password.': 'انتهت مهلة طلب الحساب. إذا اكتمل الإنشاء أو الاستعادة، فسجّل الدخول بكلمة مرورك.',
+  'This reminder appears while the app is open. Enable background notifications separately.': 'يظهر هذا التذكير أثناء فتح التطبيق. فعّل إشعارات الخلفية بشكل منفصل.',
 };

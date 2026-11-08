@@ -877,7 +877,10 @@ class _VoiceInputCard extends StatelessWidget {
           Text(tr(context, status)),
           if (capture.phase == ReaderVoiceCapturePhase.recording) ...[
             const SizedBox(height: 8),
-            LinearProgressIndicator(value: seconds / 60),
+            Semantics(
+              container: true,
+              child: LinearProgressIndicator(value: seconds / 60),
+            ),
           ],
           const SizedBox(height: 12),
           Wrap(

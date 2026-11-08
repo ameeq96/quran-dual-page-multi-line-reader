@@ -127,7 +127,9 @@ class _ReaderReminderSettingsState extends State<ReaderReminderSettings> {
               Text(
                 tr(
                   context,
-                  'Chrome cannot remind you after this app is closed.',
+                  widget.baseUrl == null
+                      ? 'Chrome cannot remind you after this app is closed.'
+                      : 'This reminder appears while the app is open. Enable background notifications separately.',
                 ),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,

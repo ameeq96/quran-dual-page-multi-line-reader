@@ -11,6 +11,21 @@ external JSAny? _evaluate(JSString source);
 
 Object? _read(String expression) => _evaluate(expression.toJS)?.dartify();
 
+String _captureDiagnostics(ReaderVoiceCapture capture) =>
+    '${capture.errorMessage}; ${_read('JSON.stringify({'
+        'recorderConstructs: window.__readerVoiceTest.recorderConstructs,'
+        'recorderStarts: window.__readerVoiceTest.recorderStarts,'
+        'speechConstructs: window.__readerVoiceTest.speechConstructs,'
+        'speechStarts: window.__readerVoiceTest.speechStarts,'
+        'constructionError: window.__readerVoiceTest.constructionError})')}';
+
+void _expectCapturing(ReaderVoiceCapture capture) {
+  expect(capture.phase, ReaderVoiceCapturePhase.recording,
+      reason: _captureDiagnostics(capture));
+  expect(_read('window.__readerVoiceTest.recorderConstructs'), 1);
+  expect(_read('window.__readerVoiceTest.hasNativeRecorder()'), isTrue);
+}
+
 void main() {
   late ReaderVoiceCapture capture;
 
@@ -27,7 +42,7 @@ void main() {
   test('recording stays local, stops tracks, and releases its object URL',
       () async {
     await capture.start();
-    expect(capture.phase, ReaderVoiceCapturePhase.recording);
+    _expectCapturing(capture);
     expect(_read('window.__readerVoiceTest.speechStarts'), 0);
     expect(_read('window.__readerVoiceTest.getUserMediaCalls'), 1);
     await capture.stop();
@@ -51,6 +66,7 @@ void main() {
     expect(capture.phase, ReaderVoiceCapturePhase.idle);
     expect(capture.hasRecording, isFalse);
     expect(_read('window.__readerVoiceTest.recorderStarts'), 0);
+    expect(_read('window.__readerVoiceTest.recorderConstructs'), 0);
     expect(_read('window.__readerVoiceTest.allTracksStopped()'), isTrue);
   });
 
@@ -58,7 +74,10 @@ void main() {
       'online recognition requires opt-in and uses the selected spoken language',
       () async {
     await capture.start(language: 'ur-PK', transcribe: true);
-    expect(_read('window.__readerVoiceTest.speechStarts'), 1);
+    _expectCapturing(capture);
+    expect(_read('window.__readerVoiceTest.speechStarts'), 1,
+        reason: _captureDiagnostics(capture));
+    expect(_read('window.__readerVoiceTest.hasNativeRecognition()'), isTrue);
     expect(_read('window.__readerVoiceTest.lastRecognition.lang'), 'ur-PK');
     _evaluate("window.__readerVoiceTest.emitTranscript('السلام عليكم')".toJS);
     expect(capture.transcript, 'السلام عليكم');
@@ -78,8 +97,8 @@ void main() {
     expect(capture.errorMessage, contains('Microphone access is blocked'));
     _evaluate('window.__readerVoiceTest.denyPermission = false'.toJS);
     await capture.start();
-    expect(capture.errorMessage, isNull);
-    expect(capture.phase, ReaderVoiceCapturePhase.recording);
+    expect(capture.errorMessage, isNull, reason: _captureDiagnostics(capture));
+    _expectCapturing(capture);
     await capture.stop();
     expect(capture.hasRecording, isTrue);
   });
@@ -87,6 +106,7 @@ void main() {
   test('an unexpected recorder stop also stops recognition and the microphone',
       () async {
     await capture.start(transcribe: true);
+    _expectCapturing(capture);
     _evaluate('window.__readerVoiceTest.lastRecorder.stop()'.toJS);
     await Future<void>.delayed(Duration.zero);
     expect(capture.hasRecording, isTrue);
@@ -97,6 +117,7 @@ void main() {
 
   test('dispose aborts recognition and ignores late capture events', () async {
     await capture.start(transcribe: true);
+    _expectCapturing(capture);
     var notifications = 0;
     capture.addListener(() => notifications++);
     capture.dispose();
@@ -123,7 +144,8 @@ const _installBrowserFakes = r'''
   const context = new AudioContext();
   const state = window.__readerVoiceTest = {
     pendingPermission: false, denyPermission: false,
-    getUserMediaCalls: 0, recorderStarts: 0, speechStarts: 0,
+    getUserMediaCalls: 0, recorderConstructs: 0, recorderStarts: 0,
+    speechConstructs: 0, speechStarts: 0, constructionError: null,
     speechStops: 0, speechAborts: 0, streams: [],
     createdUrls: [], revokedUrls: [],
     stream() {
@@ -135,11 +157,29 @@ const _installBrowserFakes = r'''
       return this.streams.length > 0 && this.streams.every(stream =>
         stream.getTracks().every(track => track.readyState === 'ended'));
     },
+    hasNativeRecorder() {
+      return this.lastRecorder instanceof original.recorder;
+    },
+    hasNativeRecognition() {
+      return this.lastRecognition instanceof
+        (original.recognition || original.webkitRecognition);
+    },
     emitTranscript(text) {
       const event = new SpeechRecognitionEvent('result');
-      Object.defineProperty(event, 'results', {
-        value: [{length: 1, isFinal: true, item: () => ({transcript: text})}],
+      const alternative = Object.create(SpeechRecognitionAlternative.prototype);
+      Object.defineProperties(alternative, {
+        transcript: {value: text}, confidence: {value: 1},
       });
+      const result = Object.create(SpeechRecognitionResult.prototype);
+      Object.defineProperties(result, {
+        length: {value: 1}, isFinal: {value: true},
+        0: {value: alternative}, item: {value: () => alternative},
+      });
+      const results = Object.create(SpeechRecognitionResultList.prototype);
+      Object.defineProperties(results, {
+        length: {value: 1}, 0: {value: result}, item: {value: () => result},
+      });
+      Object.defineProperty(event, 'results', {value: results});
       this.lastRecognition.dispatchEvent(event);
     },
     restore() {
@@ -166,37 +206,62 @@ const _installBrowserFakes = r'''
     }
     return Promise.resolve(state.stream());
   };
-  window.MediaRecorder = class extends EventTarget {
-    static isTypeSupported(type) { return type === 'audio/webm'; }
-    constructor(stream, options) {
-      super();
-      this.stream = stream;
-      this.mimeType = options.mimeType;
-      this.state = 'inactive';
-      state.lastRecorder = this;
-    }
-    start() { this.state = 'recording'; state.recorderStarts++; }
-    stop() {
-      if (this.state === 'inactive') return;
-      this.state = 'inactive';
-      queueMicrotask(() => {
-        this.dispatchEvent(new BlobEvent('dataavailable', {
-          data: new Blob(['local audio fixture'], {type: this.mimeType}),
-        }));
-        this.dispatchEvent(new Event('stop'));
+  function TestMediaRecorder(stream, options) {
+    state.recorderConstructs++;
+    try {
+      const recorder = new original.recorder(stream, options);
+      let recordingState = 'inactive';
+      Object.defineProperties(recorder, {
+        state: {get: () => recordingState},
+        start: {value: () => {
+          recordingState = 'recording';
+          state.recorderStarts++;
+        }},
+        stop: {value: () => {
+          if (recordingState === 'inactive') return;
+          recordingState = 'inactive';
+          queueMicrotask(() => {
+            recorder.dispatchEvent(new BlobEvent('dataavailable', {
+              data: new Blob(['local audio fixture'], {type: recorder.mimeType}),
+            }));
+            recorder.dispatchEvent(new Event('stop'));
+          });
+        }},
       });
+      state.lastRecorder = recorder;
+      return recorder;
+    } catch (error) {
+      state.constructionError = String(error);
+      throw error;
     }
-  };
-  window.SpeechRecognition = class extends EventTarget {
-    constructor() { super(); state.lastRecognition = this; }
-    start() { state.speechStarts++; }
-    stop() {
-      state.speechStops++;
-      queueMicrotask(() => this.dispatchEvent(new Event('end')));
+  }
+  TestMediaRecorder.prototype = original.recorder.prototype;
+  TestMediaRecorder.isTypeSupported = type =>
+    type === 'audio/webm' && original.recorder.isTypeSupported(type);
+  window.MediaRecorder = TestMediaRecorder;
+  const NativeRecognition = original.recognition || original.webkitRecognition;
+  function TestSpeechRecognition() {
+    state.speechConstructs++;
+    try {
+      const recognition = new NativeRecognition();
+      Object.defineProperties(recognition, {
+        start: {value: () => { state.speechStarts++; }},
+        stop: {value: () => {
+          state.speechStops++;
+          queueMicrotask(() => recognition.dispatchEvent(new Event('end')));
+        }},
+        abort: {value: () => { state.speechAborts++; }},
+      });
+      state.lastRecognition = recognition;
+      return recognition;
+    } catch (error) {
+      state.constructionError = String(error);
+      throw error;
     }
-    abort() { state.speechAborts++; }
-  };
-  window.webkitSpeechRecognition = window.SpeechRecognition;
+  }
+  TestSpeechRecognition.prototype = NativeRecognition.prototype;
+  window.SpeechRecognition = TestSpeechRecognition;
+  window.webkitSpeechRecognition = TestSpeechRecognition;
   URL.createObjectURL = blob => {
     const url = original.createUrl.call(URL, blob);
     state.createdUrls.push(url);
