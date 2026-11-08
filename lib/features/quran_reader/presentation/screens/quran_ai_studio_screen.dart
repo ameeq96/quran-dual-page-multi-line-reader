@@ -114,6 +114,22 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
     if (_isRunning || _voiceCapture.isBusy) {
       return;
     }
+    if (_selectedTool == QuranAiTool.smartSearch &&
+        _inputController.text.trim().isEmpty) {
+      setState(() {
+        _result = null;
+        _formattedResultBlocks = const <_AiOutputBlock>[];
+        _aiErrorMessage = switch (ReaderLocalization.instance.language) {
+          ReaderLanguage.urdu => 'تلاش کے لیے کوئی موضوع، لفظ یا سورہ:آیت نمبر لکھیں۔',
+          ReaderLanguage.romanUrdu =>
+            'Search ke liye koi topic, lafz ya Surah:Ayah number likhein.',
+          ReaderLanguage.arabic => 'اكتب موضوعًا أو كلمة أو رقم السورة:الآية للبحث.',
+          ReaderLanguage.english =>
+            'Enter a topic, word, or Surah:Ayah reference to search.',
+        };
+      });
+      return;
+    }
 
     QuranAiToolResult? nextResult;
     String? nextError;
@@ -1050,7 +1066,7 @@ class _ResultCard extends StatelessWidget {
             },
           ),
           const SizedBox(height: 12),
-          Container(
+          if (result.tool != QuranAiTool.smartSearch) Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(18),

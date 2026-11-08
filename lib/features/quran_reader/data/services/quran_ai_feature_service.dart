@@ -1,8 +1,34 @@
 import '../../domain/models/quran_ai_models.dart';
 import '../../domain/models/quran_search_result.dart';
+import '../../domain/models/quran_study_models.dart';
+import 'quran_study_data_source.dart';
 
 class QuranAiFeatureService {
   QuranAiFeatureService();
+
+  Future<Map<String, _AiSearchVerse>>? _searchIndexFuture;
+
+  Future<Map<String, _AiSearchVerse>> _searchIndex() => _searchIndexFuture ??=
+      _loadSearchIndex().catchError((Object error) {
+        _searchIndexFuture = null;
+        throw error;
+      });
+
+  Future<Map<String, _AiSearchVerse>> _loadSearchIndex() async {
+    final source = QuranStudyDataSource();
+    try {
+      await source.initialize();
+      if (source.verseCount != 6236) {
+        throw StateError('The verified Quran search corpus is incomplete.');
+      }
+      return Map.unmodifiable({
+        for (final key in source.references)
+          key: _AiSearchVerse(source.verse(key), _normalizeAiSearch),
+      });
+    } finally {
+      source.dispose();
+    }
+  }
 
   Future<QuranAiToolResult> runTool({
     required QuranAiTool tool,
@@ -184,32 +210,81 @@ class QuranAiFeatureService {
       );
     }
 
-    final terms = _expandSearchTerms(userInput);
-    final collected = <QuranSearchResult>[];
-    for (final term in terms) {
-      collected
-        ..addAll(ayahSearch(term).take(8))
-        ..addAll(pageSearch(term).take(6));
-    }
-
-    final unique = <QuranSearchResult>[];
-    final seen = <String>{};
-    final lowerQuery = userInput.toLowerCase();
-    for (final result in collected) {
-      final key =
-          '${result.pageNumber}|${result.verseKey ?? ''}|${result.title}';
-      if (seen.add(key)) {
-        unique.add(result);
+    final query = _normalizeAiSearch(userInput);
+    final index = await _searchIndex();
+    final reference = RegExp(r'(?:^|\s)(\d+)\s*:\s*(\d+)(?=\s|$)')
+        .firstMatch(query);
+    final isKursi = const ['ayatul kursi', 'ayat ul kursi', 'ayat al kursi',
+      'ayatal kursi', 'ayatulkursi', 'ayatalkursi', 'آیت الکرسی',
+      'آية الكرسي', 'اية الكرسي'].any((alias) =>
+        _hasAiSearchTerm(query, _normalizeAiSearch(alias)));
+    final exactKey = reference != null
+        ? '${int.tryParse(reference[1]!)}:${int.tryParse(reference[2]!)}'
+        : isKursi ? '2:255' : null;
+    final ranked = <({_AiSearchVerse verse, int score})>[];
+    if (exactKey != null) {
+      final verse = index[exactKey];
+      if (verse != null) ranked.add((verse: verse, score: 100000));
+    } else if (!RegExp(r'^[\d\s:]+$').hasMatch(query)) {
+      final topics = _aiSearchTopics.where((topic) => topic.mentions(query)).toList();
+      final tokens = query.split(' ').where((token) => token.length >= 2 &&
+          !_aiSearchStopwords.contains(token) &&
+          !topics.any((topic) => topic.mentions(token))).toSet();
+      if (topics.isEmpty && tokens.isEmpty &&
+          const {'allah', 'الله', 'god', 'lord'}.contains(query)) {
+        tokens.add(query);
+      }
+      final total = topics.length + tokens.length;
+      if (total > 0) {
+        for (final verse in index.values) {
+          var matched = 0;
+          var curated = 0;
+          for (final topic in topics) {
+            final curatedHit = topic.references.contains(verse.reference);
+            if (curatedHit || topic.terms.any(verse.contains)) matched++;
+            if (curatedHit) curated++;
+          }
+          matched += tokens.where(verse.contains).length;
+          final required = total == 1 ? 1 : (total * 0.67).ceil();
+          if (matched < required) continue;
+          final exactPhrase = verse.contains(query);
+          ranked.add((verse: verse, score:
+              (matched * 10000 ~/ total) + matched * 300 +
+              (exactPhrase ? 2000 : 0) + curated * 150));
+        }
       }
     }
-
-    unique.sort((a, b) {
-      final aScore = _searchScore(a, lowerQuery);
-      final bScore = _searchScore(b, lowerQuery);
-      return bScore.compareTo(aScore);
+    ranked.sort((a, b) {
+      final score = b.score.compareTo(a.score);
+      if (score != 0) return score;
+      final aKey = a.verse.reference.split(':').map(int.parse).toList();
+      final bKey = b.verse.reference.split(':').map(int.parse).toList();
+      final chapter = aKey[0].compareTo(bKey[0]);
+      return chapter != 0 ? chapter : aKey[1].compareTo(bKey[1]);
     });
-
-    final topResults = unique.take(12).toList(growable: false);
+    final topResults = <QuranSearchResult>[];
+    for (final hit in ranked) {
+      final navigation = ayahSearch(hit.verse.reference)
+          .where((result) => result.verseKey == hit.verse.reference);
+      if (navigation.isEmpty) continue;
+      final target = navigation.first;
+      final verse = hit.verse;
+      final snippet = switch (settings.responseLanguage) {
+        AiResponseLanguage.english => verse.english,
+        AiResponseLanguage.urdu => verse.urdu,
+        AiResponseLanguage.bilingual => '${verse.english}\n\n${verse.urdu}',
+      };
+      topResults.add(QuranSearchResult(
+        pageNumber: target.pageNumber,
+        referencePageNumber: target.referencePageNumber,
+        title: '${verse.reference} - ${verse.chapterName}',
+        snippet: snippet,
+        category: 'Ayah translation',
+        verseKey: verse.reference,
+        navigationNote: target.navigationNote,
+      ));
+      if (topResults.length == 12) break;
+    }
     final summary = topResults.isEmpty
         ? _localize(
             settings,
@@ -679,62 +754,6 @@ class QuranAiFeatureService {
     }
   }
 
-  Set<String> _expandSearchTerms(String query) {
-    final terms = <String>{query};
-    final lower = query.toLowerCase();
-    const keywordMap = <String, List<String>>{
-      'sabr': <String>['patience', 'steadfast', 'صبر'],
-      'patience': <String>['sabr', 'steadfast', 'صبر'],
-      'namaz': <String>['salah', 'salat', 'prayer', 'الصلاة'],
-      'salah': <String>['namaz', 'salat', 'prayer', 'الصلاة'],
-      'dua': <String>['supplication', 'ربنا', 'forgive', 'دعا'],
-      'musa': <String>['moses', 'musa alaihissalam', 'موسى'],
-      'rahmat': <String>['mercy', 'رحمة'],
-      'jannah': <String>['paradise', 'garden', 'جنة'],
-      'jahannam': <String>['hell', 'fire', 'جهنم'],
-      'zakat': <String>['charity', 'spend', 'زكاة'],
-      'roza': <String>['fasting', 'sawm', 'صوم'],
-      'iman': <String>['faith', 'believe', 'ايمان'],
-      'taqwa': <String>['god-consciousness', 'تقوى'],
-      'shukar': <String>['gratitude', 'thanks', 'شكر'],
-    };
-
-    for (final entry in keywordMap.entries) {
-      if (lower.contains(entry.key)) {
-        terms.addAll(entry.value);
-      }
-    }
-
-    if (query.contains(' ')) {
-      terms.addAll(
-        query
-            .split(RegExp(r'\s+'))
-            .where((part) => part.trim().length >= 3)
-            .map((part) => part.trim()),
-      );
-    }
-    return terms;
-  }
-
-  int _searchScore(QuranSearchResult result, String lowerQuery) {
-    final title = result.title.toLowerCase();
-    final snippet = result.snippet.toLowerCase();
-    var score = 0;
-    if (title == lowerQuery || (result.verseKey?.toLowerCase() == lowerQuery)) {
-      score += 120;
-    }
-    if (title.contains(lowerQuery)) {
-      score += 80;
-    }
-    if (snippet.contains(lowerQuery)) {
-      score += 55;
-    }
-    if (result.category.toLowerCase().contains('ayah')) {
-      score += 12;
-    }
-    return score;
-  }
-
   String _bestTheme(QuranAiPageContext context) {
     final haystack = '${context.translationUr} ${context.translationEn} '
             '${context.chapterInfo} ${context.tafsirExcerpt}'
@@ -834,3 +853,114 @@ class _LineMatch {
   final String text;
   final double score;
 }
+
+String _normalizeAiSearch(String value) {
+  const latin = {'ā': 'a', 'á': 'a', 'à': 'a', 'â': 'a', 'ä': 'a', 'ã': 'a',
+    'ī': 'i', 'í': 'i', 'ì': 'i', 'î': 'i', 'ï': 'i',
+    'ū': 'u', 'ú': 'u', 'ù': 'u', 'û': 'u', 'ü': 'u',
+    'ē': 'e', 'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e',
+    'ō': 'o', 'ó': 'o', 'ò': 'o', 'ô': 'o', 'ö': 'o',
+    'ḥ': 'h', 'ṣ': 's', 'ḍ': 'd', 'ṭ': 't', 'ẓ': 'z', 'ñ': 'n', 'ç': 'c'};
+  var text = value.toLowerCase().split('').map((char) => latin[char] ?? char).join();
+  text = text.replaceAllMapped(RegExp(r'[٠-٩۰-۹]'), (match) {
+    final code = match[0]!.codeUnitAt(0);
+    return (code - (code >= 0x6f0 ? 0x6f0 : 0x660)).toString();
+  });
+  return text
+      .replaceAll(RegExp(r'[\u0300-\u036F\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0898-\u089F\u08CA-\u08FF\u0640\u200C-\u200F]'), '')
+      .replaceAll(RegExp(r"['’‘ʿʾ]"), '')
+      .replaceAll(RegExp(r'[أإآٱ]'), 'ا')
+      .replaceAll(RegExp(r'[ىیېئ]'), 'ي')
+      .replaceAll('ؤ', 'و')
+      .replaceAll(RegExp(r'[کڪ]'), 'ك')
+      .replaceAll(RegExp(r'[ةۃہھ]'), 'ه')
+      .replaceAll(RegExp(r'[^a-z0-9\u0621-\u063A\u0641-\u064A:\s]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+bool _hasAiSearchTerm(String text, String term) {
+  if (term.isEmpty) return false;
+  if (' $text '.contains(' $term ')) return true;
+  if (!RegExp(r'^[\u0621-\u064A]+$').hasMatch(term)) return false;
+  return const ['و', 'ف', 'ب', 'ل', 'ك', 'وب', 'ول', 'فب', 'ال', 'وال', 'بال', 'لل', 'كال', 'فال']
+      .any((prefix) => ' $text '.contains(' $prefix$term '));
+}
+
+final _aiArabicWord = RegExp(r'^[\u0621-\u064A]+$');
+
+class _AiSearchVerse {
+  _AiSearchVerse(QuranStudyVerse verse, String Function(String) normalize)
+      : reference = verse.reference, chapterName = verse.chapterName,
+        english = verse.english, urdu = verse.urdu,
+        fields = [normalize(verse.english), normalize(verse.urdu), normalize(verse.arabic)];
+  final String reference;
+  final String chapterName;
+  final String english;
+  final String urdu;
+  final List<String> fields;
+  late final Set<String> _tokens = fields.expand((text) => text.split(' ')).toSet();
+  bool contains(String term) {
+    if (term.contains(' ')) return fields.any((text) => _hasAiSearchTerm(text, term));
+    if (_tokens.contains(term)) return true;
+    return _aiArabicWord.hasMatch(term) &&
+        const ['و', 'ف', 'ب', 'ل', 'ك', 'وب', 'ول', 'فب', 'ال', 'وال', 'بال', 'لل', 'كال', 'فال']
+            .any((prefix) => _tokens.contains('$prefix$term'));
+  }
+}
+
+class _AiSearchTopic {
+  _AiSearchTopic(List<String> values, {List<String> collections = const [], bool duas = false})
+      : terms = values.map(_normalizeAiSearch).toSet(),
+        references = quranStudyCollections.where((collection) =>
+            collections.contains(collection.id) || (duas && collection.isDua))
+            .expand((collection) => collection.references).toSet();
+  final Set<String> terms;
+  final Set<String> references;
+  bool mentions(String query) => terms.any((term) {
+    if (_hasAiSearchTerm(query, term)) return true;
+    if (!RegExp(r'^[a-z]+$').hasMatch(term)) return false;
+    return query.split(' ').any((token) => token.startsWith(term) &&
+        const {'kesath', 'kesaath', 'wali', 'wale', 'waliayat', 'kiayat', 'keayat'}
+            .contains(token.substring(term.length)));
+  });
+}
+
+final _aiSearchStopwords = <String>{
+  'a', 'an', 'the', 'of', 'for', 'and', 'or', 'to', 'in', 'on', 'with', 'from',
+  'me', 'us', 'is', 'are', 'some', 'can', 'you', 'that', 'this', 'all', 'my', 'your',
+  'i', 'want', 'where', 'does', 'do', 'did', 'what', 'which', 'how', 'about',
+  'talk', 'talks', 'say', 'says', 'discuss', 'discusses', 'regarding', 'related',
+  'teach', 'teaches', 'please', 'show', 'find', 'give', 'tell', 'explain',
+  'quran', 'koran', 'holy', 'verse', 'verses', 'ayah', 'ayahs', 'ayat', 'ayats', 'surah',
+  'prophet', 'alaihissalam', 'alaihissalaam', 'alaihis', 'salam', 'عليه', 'علیہ', 'السلام',
+  'ke', 'ki', 'ka', 'kay', 'ko', 'hai', 'hain', 'mein', 'main', 'mujhe', 'batao',
+  'bataiye', 'dikhao', 'dhundo', 'bare', 'baray', 'aur', 'se', 'par',
+  'wali', 'wale', 'waliayat', 'waliayaat', 'sath', 'saath', 'kesath', 'kesaath',
+  'قرآن', 'قران', 'مجھے', 'میں', 'کے', 'کی', 'کا', 'اور', 'سے', 'پر', 'متعلق',
+  'بارے', 'آیت', 'آیات', 'کوئی', 'بتاؤ', 'دکھاؤ', 'کہاں', 'کہ', 'ہے', 'ہیں', 'والی',
+  'ساتھ', 'والا', 'والے', 'بھی',
+  'القرآن', 'القران', 'عن', 'في', 'من', 'ما', 'هي', 'هو', 'التي', 'الذي', 'هل',
+  'اذكر', 'اريد', 'اعطني', 'ارني', 'ابحث', 'اين', 'اية', 'ايات', 'سورة',
+  'يتحدث', 'تتحدث', 'حول', 'مع', 'الله', 'allah', 'god', 'lord',
+}.map(_normalizeAiSearch).toSet();
+
+final _aiSearchTopics = <_AiSearchTopic>[
+  _AiSearchTopic(['prayer', 'prayers', 'salah', 'salat', 'namaz', 'نماز', 'صلاة', 'الصلاة', 'صلوة', 'الصلوة']),
+  _AiSearchTopic(['patience', 'patient', 'patiently', 'persevere', 'sabr', 'sabar', 'صبر', 'الصبر', 'صابرين'], collections: ['patience']),
+  _AiSearchTopic(['dua', 'duas', 'duaa', 'supplication', 'supplications', 'invoke', 'invocation', 'call upon', 'دعا', 'دعاء', 'الدعاء', 'ربنا'], duas: true),
+  _AiSearchTopic(['forgiveness', 'forgive', 'forgiven', 'forgiving', 'maghfirat', 'bakhshish', 'maafi', 'maaf', 'معافی', 'معاف', 'مغفرت', 'بخشش', 'استغفار', 'غفران', 'اغفر', 'غفور'], collections: ['repentance']),
+  _AiSearchTopic(['musa', 'moosa', 'moses', 'موسى', 'موسی', 'موسي']),
+  _AiSearchTopic(['pharaoh', 'firawn', 'firaun', 'فرعون']),
+  _AiSearchTopic(['mercy', 'merciful', 'rahmat', 'rehmat', 'رحمت', 'رحمة', 'رحيم'], collections: ['mercy']),
+  _AiSearchTopic(['trust', 'rely', 'reliance', 'tawakkul', 'tawakal', 'بھروسہ', 'توكل', 'توکل'], collections: ['trust']),
+  _AiSearchTopic(['parents', 'parent', 'mother', 'father', 'walidain', 'والدین', 'والدين', 'ماں', 'باپ'], collections: ['family']),
+  _AiSearchTopic(['knowledge', 'learn', 'learning', 'read', 'ilm', 'علم', 'تعلم', 'اقرأ'], collections: ['learning', 'knowledge']),
+  _AiSearchTopic(['gratitude', 'grateful', 'thank', 'thanks', 'thankful', 'shukar', 'shukr', 'شکر', 'شكر'], collections: ['gratitude', 'gratitude-dua']),
+  _AiSearchTopic(['charity', 'charities', 'alms', 'zakat', 'zakaat', 'sadaqah', 'زكاة', 'زکوۃ', 'صدقہ', 'صدقه'], collections: ['charity']),
+  _AiSearchTopic(['fasting', 'fast', 'sawm', 'roza', 'روزہ', 'روزه', 'صوم', 'صيام']),
+  _AiSearchTopic(['faith', 'believe', 'believers', 'iman', 'imaan', 'ایمان', 'ايمان']),
+  _AiSearchTopic(['taqwa', 'righteous', 'righteousness', 'god consciousness', 'تقوى', 'تقوی', 'پرہیزگاری']),
+  _AiSearchTopic(['paradise', 'jannah', 'heaven', 'جنت', 'جنة']),
+  _AiSearchTopic(['hell', 'jahannam', 'دوزخ', 'جهنم']),
+  _AiSearchTopic(['justice', 'just', 'fairness', 'عدل', 'انصاف'], collections: ['justice']),
+];

@@ -1285,9 +1285,15 @@ class QuranReaderController extends ChangeNotifier {
     QuranAiTool tool, {
     String userInput = '',
   }) async {
-    final context = await _buildCurrentAiPageContext();
+    if (tool == QuranAiTool.smartSearch) {
+      await _repository.warmSupplementalContent();
+    }
+    final context = await _buildCurrentAiPageContext(
+      forSearch: tool == QuranAiTool.smartSearch,
+    );
     QuranAiToolResult? groundedActions;
     var groundingContext = '';
+    final searchPassageKeys = <String>{};
     if (tool == QuranAiTool.smartSearch ||
         tool == QuranAiTool.bookmarkAssistant ||
         tool == QuranAiTool.hifzCoach ||
@@ -1301,31 +1307,30 @@ class QuranReaderController extends ChangeNotifier {
         ayahSearch: searchAyahsLocal,
       );
       if (tool == QuranAiTool.smartSearch) {
-        String excerpt(String text, int limit) {
-          final normalized = text.trim().replaceAll(RegExp(r'\s+'), ' ');
-          if (normalized.length <= limit) return normalized;
-          const suffix = ' [excerpt; continues]';
-          final prefix = normalized.substring(0, limit - suffix.length);
-          final boundary = prefix.lastIndexOf(' ');
-          return boundary > 0
-              ? '${prefix.substring(0, boundary)}$suffix'
-              : '[Excerpt omitted: no complete word fits.]';
-        }
-
         final hits = groundedActions.searchResults
             .where((hit) => hit.verseKey != null &&
                 RegExp(r'^\d{1,3}:\d{1,3}$').hasMatch(hit.verseKey!))
             .take(3)
             .toList(growable: false);
-        groundingContext = hits.isEmpty
+        final passages = <String>[];
+        var passageLength = 0;
+        for (final hit in hits) {
+          final passage = 'Verse key: ${hit.verseKey}\n'
+              'Title: ${hit.title}\nVerified translation:\n${hit.snippet}';
+          if (passageLength + passage.length > 7200) continue;
+          passages.add(passage);
+          searchPassageKeys.add(hit.verseKey!);
+          passageLength += passage.length;
+        }
+        groundingContext = passages.isEmpty
             ? 'Verified query-specific Quran lookup: no verified Ayah hits '
                 'were found in the local Quran data. Do not invent matching '
                 'references or treat the current page as a query match.'
-            : 'Verified query-specific Ayah hits from local Quran data. '
-                'Snippets are excerpts, not complete Ayahs. Use only these '
-                'references when explaining the search results:\n${hits.map((hit) =>
-                  'Verse key: ${hit.verseKey}\nTitle: ${excerpt(hit.title, 160)}\n'
-                  'Snippet excerpt: ${excerpt(hit.snippet, 400)}').join('\n\n')}';
+            : 'Verified query-specific Ayah translations from the bundled '
+                'Quran.com resources (English 84, Urdu 97). These are the '
+                'search results, not the currently open page. Rank only '
+                'these references for the query; the app displays their '
+                'original translations.\n\n${passages.join('\n\n')}';
       }
     }
     final remoteResult = await _adminAiProxyService.runTool(
@@ -1342,12 +1347,50 @@ class QuranReaderController extends ChangeNotifier {
     if (groundedActions == null) {
       return remoteResult;
     }
+    var output = remoteResult.output;
+    var searchResults = groundedActions.searchResults;
+    if (tool == QuranAiTool.smartSearch) {
+      try {
+        final decision = json.decode(remoteResult.output);
+        if (decision is! Map<String, dynamic> || decision.length != 1 ||
+            decision['matches'] is! List) {
+          throw const FormatException('Invalid search ranking.');
+        }
+        final keys = List<String>.from(decision['matches'] as List);
+        if (keys.length > searchPassageKeys.length ||
+            keys.toSet().length != keys.length ||
+            (searchPassageKeys.isNotEmpty && keys.isEmpty) ||
+            keys.any((key) => !searchPassageKeys.contains(key))) {
+          throw const FormatException('Unverified search references.');
+        }
+        final verifiedResults = {
+          for (final result in groundedActions.searchResults)
+            result.verseKey: result,
+        };
+        searchResults = keys.map((key) => verifiedResults[key]!).toList();
+      } catch (_) {
+        throw const QuranAdminAiException(
+            'Ollama returned an invalid Quran search ranking. Try again.');
+      }
+      final count = searchResults.length;
+      final english = count == 0
+          ? 'No matching Ayah was found. Try a clearer topic, word, or Surah:Ayah reference.'
+          : 'Found $count relevant Ayah${count == 1 ? '' : 's'}. The verified translations are shown below.';
+      final urdu = count == 0
+          ? 'کوئی متعلقہ آیت نہیں ملی۔ واضح موضوع، لفظ یا سورہ:آیت نمبر لکھ کر دوبارہ تلاش کریں۔'
+          : '$count متعلقہ آیات ملیں۔ مستند تراجم نیچے دیے گئے ہیں۔';
+      output = switch (_aiSettings.responseLanguage) {
+        AiResponseLanguage.english => english,
+        AiResponseLanguage.urdu => urdu,
+        AiResponseLanguage.bilingual => '$english\n\n$urdu',
+      };
+    }
     return QuranAiToolResult(
       tool: tool,
-      output: remoteResult.output,
+      output: output,
       sourceLabel: remoteResult.sourceLabel,
       usedOnlineModel: remoteResult.usedOnlineModel,
-      searchResults: groundedActions.searchResults,
+      searchResults: searchResults,
       bookmarkSuggestion: groundedActions.bookmarkSuggestion,
       matchedLineNumber: groundedActions.matchedLineNumber,
       matchedLineText: groundedActions.matchedLineText,
@@ -2773,8 +2816,28 @@ class QuranReaderController extends ChangeNotifier {
     }
   }
 
-  Future<QuranAiPageContext> _buildCurrentAiPageContext() async {
+  Future<QuranAiPageContext> _buildCurrentAiPageContext({
+    bool forSearch = false,
+  }) async {
     final standardPage = currentStandardPageNumber;
+    if (forSearch) {
+      return QuranAiPageContext(
+        pageNumber: _currentPageNumber,
+        standardPageNumber: standardPage,
+        pageReference: buildCurrentPageReference(),
+        mushafEditionLabel: _settings.mushafEdition.label,
+        chapterName: null,
+        chapterSummary: '',
+        chapterInfo: '',
+        tafsirExcerpt: '',
+        translationUr: '',
+        translationEn: '',
+        arabicLines: const [],
+        verseKeys: const [],
+        notes: '',
+        dailyProgressSummary: '',
+      );
+    }
     final textPage = _repository.pageForNumber(
       standardPage,
       isLeftPage: false,

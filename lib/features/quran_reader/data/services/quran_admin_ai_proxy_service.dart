@@ -62,10 +62,12 @@ class QuranAdminAiProxyService {
     }
 
     final promptContext = tool == QuranAiTool.smartSearch
-        ? 'Answer only the search query using the verified query-specific '
-            'Ayah hits below. No current-page context is supplied. Do not '
-            'invent Quran quotations or references. If verified hits are '
-            'absent or insufficient, say so.\n\n'
+        ? 'Rank the following verified Ayah search results for the query. '
+            'Return only a JSON object with a matches array of supplied '
+            'Ayah keys, best match first. Select at least one key when '
+            'results are supplied, or an empty array when none are supplied. '
+            'Do not write explanations, new references or Quran quotations. '
+            'The app displays the original translations.\n\n'
             '${groundingContext.trim().isEmpty
                 ? 'No verified Ayah hits were supplied for this query.'
                 : groundingContext.trim()}'
@@ -159,7 +161,7 @@ class QuranAdminAiProxyService {
       case QuranAiTool.voiceQna:
         return 'Answer the transcript or typed question in a clear, conversational way.';
       case QuranAiTool.smartSearch:
-        return 'Answer the search query using only its supplied verified Ayah hits, not an unrelated current page. If no verified hit answers the query, state that the evidence is insufficient. Do not invent Quran quotations, references or page numbers.';
+        return 'SEARCH_VERIFIED_KEYS_V1\nRank the supplied Ayah results by relevance to the query. Return only {"matches":["supplied Ayah key"]}. Use only supplied keys, with no duplicates. Select at least one supplied key when results exist; otherwise return {"matches":[]}. Do not generate translations or explanations.';
       case QuranAiTool.hifzCoach:
         return 'Coach the pasted memorization text using only supplied Arabic lines. State any missing context; do not claim to assess audio or invent missing Quran words.';
       case QuranAiTool.tajweedTutor:
