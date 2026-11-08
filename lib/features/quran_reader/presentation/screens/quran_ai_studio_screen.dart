@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../../app/reader_localization.dart';
 
 import '../../../../app/app_theme.dart';
+import '../../../../core/services/reader_voice_capture.dart';
 import '../../domain/models/quran_ai_models.dart';
 import '../../domain/models/quran_search_result.dart';
 import '../../domain/models/reader_settings.dart';
@@ -23,8 +26,15 @@ class QuranAiStudioScreen extends StatefulWidget {
   State<QuranAiStudioScreen> createState() => _QuranAiStudioScreenState();
 }
 
-class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
+class _QuranAiStudioScreenState extends State<QuranAiStudioScreen>
+    with WidgetsBindingObserver {
   late final TextEditingController _inputController;
+  late final ReaderVoiceCapture _voiceCapture;
+  String _voiceLanguage = 'ar-SA';
+  bool _useOnlineRecognition = false;
+  bool _voiceInputSession = false;
+  String _voiceBaseInput = '';
+  String _lastVoiceTranscript = '';
   QuranAiTool _selectedTool = QuranAiTool.explainer;
   QuranAiToolResult? _result;
   List<_AiOutputBlock> _formattedResultBlocks = const <_AiOutputBlock>[];
@@ -34,17 +44,73 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
   void initState() {
     super.initState();
     _inputController = TextEditingController();
+    _voiceCapture = ReaderVoiceCapture()..addListener(_onVoiceChanged);
+    WidgetsBinding.instance.addObserver(this);
     _selectedTool = widget.initialTool;
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _voiceCapture.removeListener(_onVoiceChanged);
+    _voiceCapture.dispose();
     _inputController.dispose();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) return;
+    if (_voiceCapture.phase == ReaderVoiceCapturePhase.recording) {
+      unawaited(_voiceCapture.stop());
+    } else if (_voiceCapture.phase == ReaderVoiceCapturePhase.requesting) {
+      _cancelVoiceCapture();
+    }
+  }
+
+  void _onVoiceChanged() {
+    if (!mounted) return;
+    if (_voiceInputSession) {
+      final transcript = _voiceCapture.transcript;
+      if (transcript != _lastVoiceTranscript) {
+        _lastVoiceTranscript = transcript;
+        final input = [_voiceBaseInput, transcript]
+            .where((text) => text.isNotEmpty)
+            .join('\n');
+        _inputController.value = TextEditingValue(
+          text: input,
+          selection: TextSelection.collapsed(offset: input.length),
+        );
+      }
+      if (!_voiceCapture.isBusy) _voiceInputSession = false;
+    }
+    setState(() {});
+  }
+
+  Future<void> _startVoiceCapture() async {
+    if (_isRunning || _voiceCapture.isBusy) return;
+    _voiceBaseInput = _inputController.text.trimRight();
+    _lastVoiceTranscript = '';
+    _voiceInputSession = true;
+    await _voiceCapture.start(
+      language: _voiceLanguage,
+      transcribe: _useOnlineRecognition,
+    );
+  }
+
+  void _cancelVoiceCapture() {
+    if (_voiceInputSession && _voiceCapture.isBusy) {
+      _inputController.value = TextEditingValue(
+        text: _voiceBaseInput,
+        selection: TextSelection.collapsed(offset: _voiceBaseInput.length),
+      );
+    }
+    _voiceInputSession = false;
+    _voiceCapture.cancel();
+  }
+
   Future<void> _runTool() async {
-    if (_isRunning) {
+    if (_isRunning || _voiceCapture.isBusy) {
       return;
     }
 
@@ -178,6 +244,7 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
                   onSelectLanguage: widget.controller.setAiResponseLanguage,
                   onSelectDepth: widget.controller.setAiResponseDepth,
                   onSelected: (tool) {
+                    _cancelVoiceCapture();
                     setState(() {
                       _selectedTool = tool;
                       _result = null;
@@ -189,12 +256,34 @@ class _QuranAiStudioScreenState extends State<QuranAiStudioScreen> {
                 _InputCard(
                   tool: _selectedTool,
                   controller: _inputController,
+                  readOnly: _voiceCapture.isBusy,
                 ),
+                if (_selectedTool == QuranAiTool.voiceQna ||
+                    _selectedTool == QuranAiTool.recitationFollow ||
+                    _selectedTool == QuranAiTool.hifzCoach ||
+                    _selectedTool == QuranAiTool.tajweedTutor) ...[
+                  const SizedBox(height: 14),
+                  _VoiceInputCard(
+                    capture: _voiceCapture,
+                    language: _voiceLanguage,
+                    onlineRecognition: _useOnlineRecognition,
+                    enabled: !_isRunning,
+                    onLanguageChanged: (language) {
+                      setState(() => _voiceLanguage = language);
+                    },
+                    onOnlineRecognitionChanged: (enabled) {
+                      setState(() => _useOnlineRecognition = enabled);
+                    },
+                    onStart: _startVoiceCapture,
+                    onStop: _voiceCapture.stop,
+                    onCancel: _cancelVoiceCapture,
+                  ),
+                ],
                 const SizedBox(height: 14),
                 ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: 56),
                   child: FilledButton.icon(
-                    onPressed: _isRunning ? null : _runTool,
+                    onPressed: _isRunning || _voiceCapture.isBusy ? null : _runTool,
                     icon: _isRunning
                         ? const ReaderSkeletonBlock(
                             width: 18,
@@ -628,10 +717,12 @@ class _InputCard extends StatelessWidget {
   const _InputCard({
     required this.tool,
     required this.controller,
+    this.readOnly = false,
   });
 
   final QuranAiTool tool;
   final TextEditingController controller;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -655,6 +746,7 @@ class _InputCard extends StatelessWidget {
           const SizedBox(height: 10),
           TextField(
             controller: controller,
+            readOnly: readOnly,
             minLines: tool.expectsUserInput ? 4 : 2,
             maxLines: tool.expectsUserInput ? 6 : 3,
             decoration: InputDecoration(
@@ -662,6 +754,183 @@ class _InputCard extends StatelessWidget {
               alignLabelWithHint: true,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VoiceInputCard extends StatelessWidget {
+  const _VoiceInputCard({
+    required this.capture,
+    required this.language,
+    required this.onlineRecognition,
+    required this.enabled,
+    required this.onLanguageChanged,
+    required this.onOnlineRecognitionChanged,
+    required this.onStart,
+    required this.onStop,
+    required this.onCancel,
+  });
+
+  final ReaderVoiceCapture capture;
+  final String language;
+  final bool onlineRecognition;
+  final bool enabled;
+  final ValueChanged<String> onLanguageChanged;
+  final ValueChanged<bool> onOnlineRecognitionChanged;
+  final Future<void> Function() onStart;
+  final Future<void> Function() onStop;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final busy = capture.isBusy;
+    final status = switch (capture.phase) {
+      ReaderVoiceCapturePhase.requesting => 'Waiting for microphone permission',
+      ReaderVoiceCapturePhase.recording => 'Recording',
+      ReaderVoiceCapturePhase.stopping => 'Finishing recording',
+      ReaderVoiceCapturePhase.ready => capture.isTranscribing
+          ? 'Finishing transcript'
+          : 'Recording ready',
+      ReaderVoiceCapturePhase.idle => 'Ready to record',
+    };
+    final seconds = capture.elapsed.inSeconds.clamp(0, 60);
+    final time = '${(seconds ~/ 60).toString().padLeft(2, '0')}:'
+        '${(seconds % 60).toString().padLeft(2, '0')} / 01:00';
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: theme.colorScheme.surface,
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.mic_rounded, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  tr(context, 'Voice input'),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Text(time, textDirection: TextDirection.ltr),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(tr(context,
+              'Record up to 60 seconds. Audio stays in memory; download a copy before leaving this screen.')),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: Text(tr(context, 'Use online speech recognition')),
+            value: onlineRecognition,
+            onChanged: enabled && !busy && capture.speechSupported
+                ? (value) => onOnlineRecognitionChanged(value ?? false)
+                : null,
+          ),
+          Text(
+            tr(context,
+                'Online recognition sends microphone audio to your browser\'s speech provider. Review the transcript before using it.'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              height: 1.5,
+            ),
+          ),
+          if (onlineRecognition) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: language,
+              decoration: InputDecoration(
+                labelText: tr(context, 'Spoken language'),
+              ),
+              items: [
+                DropdownMenuItem(value: 'ar-SA', child: Text(tr(context, 'Arabic'))),
+                DropdownMenuItem(value: 'ur-PK', child: Text(tr(context, 'Urdu'))),
+                DropdownMenuItem(value: 'en-US', child: Text(tr(context, 'English'))),
+              ],
+              onChanged: enabled && !busy
+                  ? (value) {
+                      if (value != null) onLanguageChanged(value);
+                    }
+                  : null,
+            ),
+            const SizedBox(height: 8),
+            Text(tr(context, 'The transcript is added to the input above.')),
+          ],
+          const SizedBox(height: 12),
+          Text(
+            tr(context, 'Tajweed guidance does not assess recorded pronunciation.'),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(tr(context, status)),
+          if (capture.phase == ReaderVoiceCapturePhase.recording) ...[
+            const SizedBox(height: 8),
+            LinearProgressIndicator(value: seconds / 60),
+          ],
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              if (!busy)
+                FilledButton.icon(
+                  onPressed: enabled && capture.supported ? onStart : null,
+                  icon: const Icon(Icons.mic_rounded),
+                  label: Text(tr(context,
+                      onlineRecognition ? 'Record and transcribe' : 'Record audio')),
+                ),
+              if (capture.phase == ReaderVoiceCapturePhase.recording)
+                FilledButton.icon(
+                  onPressed: onStop,
+                  icon: const Icon(Icons.stop_rounded),
+                  label: Text(tr(context, 'Stop recording')),
+                ),
+              if (busy || capture.hasRecording)
+                OutlinedButton.icon(
+                  onPressed: onCancel,
+                  icon: const Icon(Icons.close_rounded),
+                  label: Text(tr(context,
+                      busy ? 'Cancel recording' : 'Discard recording')),
+                ),
+              if (capture.hasRecording && !busy) ...[
+                OutlinedButton.icon(
+                  onPressed: capture.togglePlayback,
+                  icon: Icon(capture.isPlaying
+                      ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                  label: Text(tr(context,
+                      capture.isPlaying ? 'Pause playback' : 'Play recording')),
+                ),
+                OutlinedButton.icon(
+                  onPressed: capture.download,
+                  icon: const Icon(Icons.download_rounded),
+                  label: Text(tr(context, 'Download recording')),
+                ),
+              ],
+            ],
+          ),
+          if (!capture.supported || capture.errorMessage != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              tr(context, capture.errorMessage ??
+                  'Voice recording is available in Chrome on HTTPS or localhost.'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+                height: 1.5,
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../app/reader_localization.dart';
 
 import '../../../../app/app_theme.dart';
+import '../../domain/models/quran_page_verse.dart';
 import '../controllers/quran_reader_controller.dart';
 import '../models/reader_audio_state.dart';
 import 'reader_sheet_frame.dart';
@@ -358,6 +359,7 @@ class ReaderAudioContent extends StatelessWidget {
                                   Expanded(child: Text(tr(context, controller.recitationFollowStatus), style: theme.textTheme.bodySmall)),
                                 ]),
                               ),
+                              ReaderAudioVersePanel(verse: controller.currentAudioVerse),
                               const SizedBox(height: 8),
                               SwitchListTile.adaptive(
                                 contentPadding: EdgeInsets.zero,
@@ -512,6 +514,83 @@ class ReaderAudioContent extends StatelessWidget {
       return '${hours.toString().padLeft(2, '0')}:$minutes:$seconds';
     }
     return '$minutes:$seconds';
+  }
+}
+
+class ReaderAudioVersePanel extends StatelessWidget {
+  const ReaderAudioVersePanel({super.key, required this.verse});
+
+  final QuranPageVerse? verse;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = verse;
+    if (current == null) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.22),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: theme.colorScheme.primary.withValues(alpha: 0.16),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    tr(context, 'Audio Ayah'),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  current.verseKey,
+                  key: const ValueKey('audio-ayah-reference'),
+                  textDirection: TextDirection.ltr,
+                  style: theme.textTheme.titleSmall,
+                ),
+              ],
+            ),
+            if (current.translationEn.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(tr(context, 'English'), style: theme.textTheme.labelMedium),
+              const SizedBox(height: 4),
+              SelectableText(
+                current.translationEn,
+                key: const ValueKey('audio-ayah-en'),
+                textDirection: TextDirection.ltr,
+                style: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
+              ),
+            ],
+            if (current.translationUr.trim().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(tr(context, 'Urdu'), style: theme.textTheme.labelMedium),
+              const SizedBox(height: 4),
+              SelectableText(
+                current.translationUr,
+                key: const ValueKey('audio-ayah-ur'),
+                textDirection: TextDirection.rtl,
+                style: theme.textTheme.bodyMedium?.copyWith(height: 1.8),
+              ),
+            ],
+            if (current.translationEn.trim().isEmpty &&
+                current.translationUr.trim().isEmpty) ...[
+              const SizedBox(height: 10),
+              Text(tr(context, 'Translation unavailable for this Ayah.')),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 

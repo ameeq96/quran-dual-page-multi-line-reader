@@ -7,6 +7,7 @@ import '../../domain/models/reader_growth_models.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
 import '../widgets/reader_reminder_settings.dart';
+import '../widgets/reader_account_settings.dart';
 
 class QuranGrowthHubScreen extends StatelessWidget {
   const QuranGrowthHubScreen({
@@ -426,7 +427,7 @@ class QuranGrowthHubScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 18),
-                const _HubCard(child: ReaderReminderSettings()),
+                _HubCard(child: ReaderReminderSettings(baseUrl: controller.adminSyncBaseUrl)),
                 const SizedBox(height: 18),
                 _HubCard(
                   child: Column(
@@ -507,6 +508,8 @@ class QuranGrowthHubScreen extends StatelessWidget {
                           color: themeData.colorScheme.onSurfaceVariant,
                         ),
                       ),
+                      const SizedBox(height: 20),
+                      ReaderAccountSettings(controller: controller),
                       const SizedBox(height: 12),
                       FilledButton.tonalIcon(
                         onPressed: () {

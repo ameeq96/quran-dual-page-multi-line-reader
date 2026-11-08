@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../../../../app/reader_localization.dart';
 import '../../../../core/services/reader_reminder_service.dart';
+import 'reader_browser_reminder_settings.dart';
 
 class ReaderReminderSettings extends StatefulWidget {
-  const ReaderReminderSettings({super.key});
+  const ReaderReminderSettings({super.key, this.baseUrl});
+
+  final String? baseUrl;
 
   @override
   State<ReaderReminderSettings> createState() => _ReaderReminderSettingsState();
@@ -152,6 +155,9 @@ class _ReaderReminderSettingsState extends State<ReaderReminderSettings> {
                 icon: const Icon(Icons.refresh_rounded),
                 label: Text(tr(context, 'Check again')),
               ),
+            if (widget.baseUrl != null)
+              ReaderBrowserReminderSettings(baseUrl: widget.baseUrl!,
+                hour: _service.hour, minute: _service.minute),
           ],
         );
       },

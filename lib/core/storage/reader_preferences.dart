@@ -614,6 +614,24 @@ class ReaderPreferences {
 
   static final Map<String, Future<ReaderSyncIdentity>> _syncIdentityLoads = {};
 
+  static bool isValidSyncIdentity(ReaderSyncIdentity identity) =>
+      RegExp(r'^reader_[A-Za-z0-9_-]{32}$').hasMatch(identity.deviceId) &&
+      RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(identity.token);
+
+  Future<void> saveSyncIdentity(String baseUrl, ReaderSyncIdentity identity) async {
+    final normalized = normalizeSyncBaseUrl(baseUrl);
+    if (!isValidSyncIdentity(identity)) {
+      throw const FormatException('Invalid private sync identity.');
+    }
+    final pending = _syncIdentityLoads[normalized];
+    if (pending != null) await pending;
+    final prefs = await _prefs;
+    final key = 'reader.sync.identity.${Uri.encodeComponent(normalized)}';
+    if (!await prefs.setString(key, json.encode({'deviceId': identity.deviceId, 'token': identity.token}))) {
+      throw StateError('Unable to save the private sync identity.');
+    }
+  }
+
   Future<ReaderSyncIdentity> loadOrCreateSyncIdentity(String baseUrl) {
     final normalized = normalizeSyncBaseUrl(baseUrl);
     final pending = _syncIdentityLoads[normalized];

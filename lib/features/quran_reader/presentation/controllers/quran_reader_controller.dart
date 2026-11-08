@@ -7,12 +7,15 @@ import 'package:just_audio/just_audio.dart';
 
 import '../../../../core/services/system_ui_service.dart';
 import '../../../../core/services/reader_download_policy.dart';
+import '../../../../core/services/reader_browser_reminder_service.dart';
 import '../../../../core/storage/reader_preferences.dart';
 import '../../data/repositories/quran_reader_repository.dart';
 import '../../data/services/quran_admin_ai_proxy_service.dart';
 import '../../data/services/quran_ai_feature_service.dart';
 import '../../data/services/quran_audio_service.dart';
 import '../../data/services/quran_reader_sync_service.dart';
+import '../../data/services/reader_account_service.dart';
+import '../../data/services/reader_audio_verse_lookup.dart';
 import '../../domain/models/quran_ai_models.dart';
 import '../../domain/models/quran_asset_pack_download.dart';
 import '../../domain/models/quran_chapter_summary.dart';
@@ -21,6 +24,7 @@ import '../../domain/models/quran_navigation_marker.dart';
 import '../../domain/models/quran_page.dart';
 import '../../domain/models/quran_page_line.dart';
 import '../../domain/models/quran_page_insight.dart';
+import '../../domain/models/quran_page_verse.dart';
 import '../../domain/models/quran_reciter.dart';
 import '../../domain/models/quran_search_result.dart';
 import '../../domain/models/quran_spread.dart';
@@ -33,6 +37,18 @@ import '../../domain/models/reader_history_entry.dart';
 import '../../domain/models/reader_settings.dart';
 import '../../domain/models/reader_sync_snapshot.dart';
 import '../models/reader_audio_state.dart';
+
+class ReaderPreparedAccount {
+  const ReaderPreparedAccount._({required this.account, required this.baseUrl,
+    required this.context, required this.generation, this.snapshot, this.alreadyConnected = false});
+  final ReaderAccountIdentity account;
+  final String baseUrl;
+  final int context;
+  final int generation;
+  final ReaderSyncSnapshot? snapshot;
+  final bool alreadyConnected;
+  bool get keepsCurrentData => snapshot == null;
+}
 
 class QuranReaderController extends ChangeNotifier {
   static const String _defaultBookmarkFolder = 'General';
@@ -52,15 +68,18 @@ class QuranReaderController extends ChangeNotifier {
     required QuranAudioService audioService,
     required QuranReaderSyncService readerSyncService,
     required ReaderPreferences preferences,
+    ReaderAccountService? accountService,
   })  : _repository = repository,
         _audioService = audioService,
         _readerSyncService = readerSyncService,
+        _readerAccountService = accountService ?? ReaderAccountService(),
         _preferences = preferences,
         _aiFeatureService = QuranAiFeatureService();
 
   final QuranReaderRepository _repository;
   final QuranAudioService _audioService;
   final QuranReaderSyncService _readerSyncService;
+  final ReaderAccountService _readerAccountService;
   final ReaderPreferences _preferences;
   final ReaderDownloadPolicy _downloadPolicy = ReaderDownloadPolicy();
   StreamSubscription<bool>? _downloadNetworkSubscription;
@@ -164,6 +183,30 @@ class QuranReaderController extends ChangeNotifier {
   StreamSubscription<String>? _playbackErrorSubscription;
   String? _currentRecitationVerseKey;
   String? get currentRecitationVerseKey => _currentRecitationVerseKey;
+  QuranPageVerse? get currentAudioVerse {
+    final key = _currentRecitationVerseKey;
+    if (!isAudioEnabled || !_experienceSettings.recitationSyncEnabled ||
+        !_audioState.isPlaying || _audioState.isLoading ||
+        _audioState.isBuffering || _audioState.errorMessage != null ||
+        _audioService.isPlaybackCompleted || key == null ||
+        _audioService.loadedChapterId != _audioState.currentChapterId ||
+        _audioService.loadedReciterId != _audioState.selectedReciter?.id ||
+        _audioService.verseKeyAtPosition(
+          Duration(milliseconds: _audioState.positionMillis),
+        ) != key) {
+      return null;
+    }
+    final page = _repository.canonicalPageForVerse(key);
+    if (page == null) return null;
+    return resolveReaderAudioVerse(
+      verseKey: key,
+      chapterId: _audioState.currentChapterId,
+      active: true,
+      verses: _repository.pageInsightForPageNumber(
+        page, preferImageMode: false,
+      )?.verses ?? const <QuranPageVerse>[],
+    );
+  }
   String get recitationFollowStatus {
     if (!_experienceSettings.recitationSyncEnabled) return 'Recitation follow is off';
     if (_audioState.isLoading || _audioState.isBuffering) return 'Loading recitation…';
@@ -228,6 +271,12 @@ class QuranReaderController extends ChangeNotifier {
   Future<bool>? _syncIdentityBinding;
   Future<void> _syncStateWrites = Future<void>.value();
   Future<void> _syncOperationQueue = Future<void>.value();
+  bool _readerAccountBusy = false;
+  bool _readerAccountAdopting = false;
+  ReaderPreparedAccount? _preparedReaderAccount;
+  String? _readerAccountEmail;
+  bool get readerAccountBusy => _readerAccountBusy;
+  String? get readerAccountEmail => _readerAccountEmail;
   String get readerSyncStatusLabel => _experienceSettings.syncMode == ReaderSyncMode.localOnly
       ? 'Local only. Reader data stays on this device.' : _readerSyncStatus;
   bool get hasUnsyncedReaderChanges => _readerSyncDirty;
@@ -1783,7 +1832,7 @@ class QuranReaderController extends ChangeNotifier {
     });
   }
 
-  Future<void> restoreStateBackupJson(String source) async {
+  ReaderSyncSnapshot _validatedReaderBackup(String source, {String? deviceId}) {
     if (source.length > 10000000) throw const FormatException('Backup is too large.');
     final decoded = json.decode(source);
     if (decoded is! Map<String, dynamic>) throw const FormatException('Backup must be a JSON object.');
@@ -1918,7 +1967,7 @@ class QuranReaderController extends ChangeNotifier {
     final merged = <String, dynamic>{
       ...current,
       ...data,
-      'deviceId': _syncClientId,
+      'deviceId': deviceId ?? _syncClientId,
       'lastPageNumber': page,
       'settings': {...current['settings'] as Map<String, dynamic>, ...settings},
       'editionPageNotes': data['editionPageNotes'] ?? {
@@ -1941,6 +1990,11 @@ class QuranReaderController extends ChangeNotifier {
     final maximum = _repository.hasAssetsForEdition(snapshot.settings.mushafEdition)
         ? _repository.totalPagesForEdition(snapshot.settings.mushafEdition) : 10000;
     number(snapshot.lastPageNumber, 'lastPageNumber', 1, snapshot.settings.preferImageMode ? maximum : 604);
+    return snapshot;
+  }
+
+  Future<void> restoreStateBackupJson(String source) async {
+    final snapshot = _validatedReaderBackup(source);
     _pagePersistenceTimer?.cancel();
     _notesPersistenceTimer?.cancel();
     _cloudSyncTimer?.cancel();
@@ -2701,6 +2755,7 @@ class QuranReaderController extends ChangeNotifier {
     _adminAiProxyService.dispose();
     _audioService.dispose();
     _readerSyncService.dispose();
+    _readerAccountService.dispose();
     _repository.dispose();
     super.dispose();
   }
@@ -2845,7 +2900,7 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   bool _readerSyncContextIsCurrent(int context, {bool requireCloud = true}) {
-    if (_isDisposed || context != _syncContextGeneration || _syncBaseUrl.isEmpty ||
+    if (_isDisposed || _readerAccountBusy || context != _syncContextGeneration || _syncBaseUrl.isEmpty ||
         _syncClientId.isEmpty || _syncToken.isEmpty ||
         (requireCloud && _experienceSettings.syncMode != ReaderSyncMode.cloudReady)) {
       return false;
@@ -2861,6 +2916,7 @@ class QuranReaderController extends ChangeNotifier {
     _syncContextGeneration++;
     _cloudSyncTimer?.cancel();
     _readerSyncService.cancelPending();
+    _readerAccountService.cancelPending();
   }
 
   Future<void> _persistReaderSyncLocalState() {
@@ -2891,6 +2947,7 @@ class QuranReaderController extends ChangeNotifier {
   }
 
   Future<bool> _bindReaderSyncIdentity() async {
+    if (_readerAccountBusy) return false;
     final rawBase = adminSyncBaseUrl.trim();
     if (rawBase.isEmpty) {
       _invalidateReaderSyncContext();
@@ -3086,6 +3143,246 @@ class QuranReaderController extends ChangeNotifier {
     if (!ready) return;
     _markReaderSyncDirty();
     _scheduleCloudSyncPush(markDirty: false);
+  }
+
+  Future<ReaderSyncIdentity> readerIdentityForFeature() async {
+    if (_readerAccountBusy || !await _bindReaderSyncIdentity()) {
+      throw const ReaderAccountFailure('Reader identity is unavailable. Try again.');
+    }
+    return ReaderSyncIdentity(deviceId: _syncClientId, token: _syncToken);
+  }
+
+  Future<void> refreshReaderAccountStatus() async {
+    final identity = await readerIdentityForFeature();
+    final base = _syncBaseUrl;
+    final context = _syncContextGeneration;
+    final status = await _readerAccountService.status(base, identity);
+    if (!_isDisposed && context == _syncContextGeneration && base == _syncBaseUrl) {
+      _readerAccountEmail = status.email;
+      notifyListeners();
+    }
+  }
+
+  Future<({int context, int generation, String baseUrl, ReaderSyncIdentity identity})>
+      _beginReaderAccountTransition() async {
+    if (_readerAccountBusy) throw const ReaderAccountFailure('An account request is already in progress.');
+    final identity = await readerIdentityForFeature();
+    if (_readerAccountBusy || _isDisposed) throw const ReaderAccountFailure('Account request was cancelled.');
+    ensureReaderBrowserRemindersIdle(_syncBaseUrl);
+    _readerAccountBusy = true;
+    _invalidateReaderSyncContext();
+    final context = _syncContextGeneration;
+    await _syncOperationQueue;
+    await _syncStateWrites;
+    if (_isDisposed || context != _syncContextGeneration) {
+      cancelReaderAccountOperation();
+      throw const ReaderAccountFailure('Account request was cancelled.');
+    }
+    notifyListeners();
+    return (context: context, generation: _localChangeGeneration, baseUrl: _syncBaseUrl, identity: identity);
+  }
+
+  void _finishReaderAccountTransition() {
+    _readerAccountBusy = false;
+    _preparedReaderAccount = null;
+    if (!_isDisposed) {
+      notifyListeners();
+      _scheduleCloudSyncPush(markDirty: false);
+    }
+  }
+
+  void cancelReaderAccountOperation() {
+    if (!_readerAccountBusy) return;
+    _invalidateReaderSyncContext();
+    if (!_readerAccountAdopting) _finishReaderAccountTransition();
+  }
+
+  Future<ReaderPreparedAccount> prepareReaderAccount({required String email,
+      required String password, bool register = false, String? recoveryKey, String? pairingCode,
+      Future<void> Function(String key)? onRecoveryKey}) async {
+    final source = await _beginReaderAccountTransition();
+    bool current() => !_isDisposed && source.context == _syncContextGeneration &&
+        source.generation == _localChangeGeneration &&
+        ReaderPreferences.normalizeSyncBaseUrl(adminSyncBaseUrl) == source.baseUrl;
+    try {
+      if (register) {
+        final uploaded = await _readerSyncService.pushSnapshot(baseUrl: source.baseUrl,
+            deviceId: source.identity.deviceId, token: source.identity.token, snapshot: _buildSyncSnapshot());
+        if (!uploaded.success || !current()) {
+          throw const ReaderAccountFailure('Your reader backup could not be saved. Account creation was stopped.');
+        }
+      }
+      final ReaderAccountIdentity account;
+      if (pairingCode != null) {
+        account = await _readerAccountService.redeemPairing(source.baseUrl, pairingCode);
+      } else if (register) {
+        account = await _readerAccountService.register(source.baseUrl, source.identity, email: email, password: password);
+      } else if (recoveryKey != null) {
+        account = await _readerAccountService.recover(source.baseUrl, email: email, password: password, recoveryKey: recoveryKey);
+      } else {
+        account = await _readerAccountService.login(source.baseUrl, email: email, password: password);
+      }
+      if (register && account.identity.deviceId != source.identity.deviceId) {
+        throw const ReaderAccountFailure('The account server returned invalid data. Your local reader is unchanged.');
+      }
+      final rotatesCurrentIdentity = register ||
+          (recoveryKey != null && account.identity.deviceId == source.identity.deviceId);
+      if (rotatesCurrentIdentity) {
+        try {
+          await detachReaderBrowserReminders(baseUrl: source.baseUrl, identity: source.identity);
+        } catch (_) { /* A rotated credential must survive a reminder cleanup failure. */ }
+        var saved = false;
+        try {
+          await _preferences.saveSyncIdentity(source.baseUrl, account.identity);
+          saved = true;
+        } catch (_) { /* Keep the response available for a retry after the key is saved. */ }
+        final ownsTransition = !_isDisposed && source.context == _syncContextGeneration &&
+            _readerAccountBusy && _syncBaseUrl == source.baseUrl &&
+            ReaderPreferences.normalizeSyncBaseUrl(adminSyncBaseUrl) == source.baseUrl;
+        if (ownsTransition) {
+          _syncClientId = account.identity.deviceId;
+          _syncToken = account.identity.token;
+          _readerAccountEmail = account.email;
+          _readerSyncDirty = register ? source.generation != _localChangeGeneration : _readerSyncDirty;
+          await _persistReaderSyncLocalState();
+        } else if (!_isDisposed && _syncBaseUrl == source.baseUrl &&
+            _syncClientId == source.identity.deviceId && _syncToken == source.identity.token) {
+          // Rebind the saved rotated identity on demand; never retain its revoked token.
+          _syncToken = '';
+        }
+        if (account.recoveryKey != null && onRecoveryKey != null) await onRecoveryKey(account.recoveryKey!);
+        final prepared = ReaderPreparedAccount._(account: account, baseUrl: source.baseUrl,
+            context: _syncContextGeneration, generation: _localChangeGeneration, alreadyConnected: saved);
+        if (saved && ownsTransition && source.context == _syncContextGeneration) {
+          _readerSyncStatus = 'Reader account connected. The selected backup is ready.';
+          _finishReaderAccountTransition();
+        } else if (!saved && ownsTransition && source.context == _syncContextGeneration) {
+          _preparedReaderAccount = prepared;
+        }
+        return prepared;
+      }
+      if (account.recoveryKey != null && onRecoveryKey != null) await onRecoveryKey(account.recoveryKey!);
+      if (!current()) throw const ReaderAccountFailure('Reader data changed during the request. Try again.');
+      ReaderSyncSnapshot? snapshot;
+      if (!register) {
+        final payload = await _readerAccountService.fetchBackup(source.baseUrl, account.identity);
+        if (!current()) throw const ReaderAccountFailure('Reader data changed during the request. Try again.');
+        final required = _buildSyncSnapshot().toJson();
+        if (required.keys.any((key) => !payload.containsKey(key)) ||
+            payload['settings'] is! Map<String, dynamic> ||
+            (required['settings'] as Map<String, dynamic>).keys.any((key) => !(payload['settings'] as Map).containsKey(key)) ||
+            payload['hifzReviewEntries'] is! List ||
+            payload['updatedAtIso'] is! String || DateTime.tryParse(payload['updatedAtIso'] as String) == null) {
+          throw const ReaderAccountFailure('The account backup is incomplete. Your local reader is unchanged.');
+        }
+        snapshot = _validatedReaderBackup(json.encode({
+          ...payload, 'hifzRevisionEntries': payload['hifzReviewEntries'],
+        }), deviceId: account.identity.deviceId);
+      }
+      final prepared = ReaderPreparedAccount._(account: account, baseUrl: source.baseUrl,
+          context: source.context, generation: source.generation, snapshot: snapshot);
+      _preparedReaderAccount = prepared;
+      return prepared;
+    } catch (error) {
+      if (source.context == _syncContextGeneration) _finishReaderAccountTransition();
+      if (error is ReaderAccountFailure) rethrow;
+      throw const ReaderAccountFailure('The account backup could not be validated. Your local reader is unchanged.');
+    }
+  }
+
+  Future<void> adoptReaderAccount(ReaderPreparedAccount prepared) async {
+    bool owns() => identical(prepared, _preparedReaderAccount) && _readerAccountBusy;
+    bool sameContext() => !_isDisposed && prepared.context == _syncContextGeneration &&
+        _syncBaseUrl == prepared.baseUrl &&
+        ReaderPreferences.normalizeSyncBaseUrl(adminSyncBaseUrl) == prepared.baseUrl;
+    var expectedGeneration = prepared.generation;
+    bool current() => owns() && sameContext() && expectedGeneration == _localChangeGeneration;
+    if (!current()) {
+      if (owns()) _finishReaderAccountTransition();
+      throw const ReaderAccountFailure('Reader data changed during the request. Try again.');
+    }
+    final previous = _buildSyncSnapshot();
+    final previousIdentity = ReaderSyncIdentity(deviceId: _syncClientId, token: _syncToken);
+    final previousEmail = _readerAccountEmail;
+    final previousDirty = _readerSyncDirty;
+    var dataApplied = false;
+    var identitySaved = false;
+    _readerAccountAdopting = true;
+    try {
+      await detachReaderBrowserReminders(baseUrl: prepared.baseUrl, identity: previousIdentity);
+      if (!current()) throw const ReaderAccountFailure('Reader data changed during the request. Try again.');
+      if (prepared.snapshot != null) {
+        dataApplied = true;
+        final applied = await _applyRemoteSyncSnapshot(prepared.snapshot!, syncContext: prepared.context,
+            expectedGeneration: expectedGeneration, requireCloud: false);
+        if (!applied || !current()) throw const ReaderAccountFailure('Reader data changed during the request. Try again.');
+      }
+      await _preferences.saveSyncIdentity(prepared.baseUrl, prepared.account.identity);
+      identitySaved = true;
+      if (!current()) throw const ReaderAccountFailure('Reader data changed during the request. Try again.');
+      _syncClientId = prepared.account.identity.deviceId;
+      _syncToken = prepared.account.identity.token;
+      _readerAccountEmail = prepared.account.email;
+      _syncUsesFreshBackup = false;
+      _localChangeGeneration++;
+      expectedGeneration = _localChangeGeneration;
+      _readerSyncDirty = false;
+      await _persistReaderSyncLocalState();
+      if (!current()) throw const ReaderAccountFailure('Reader data changed during the request. Try again.');
+      if (_syncStateWriteFailed) throw const ReaderAccountFailure('Account settings could not be saved. Try again.');
+      _readerSyncStatus = 'Reader account connected. The selected backup is ready.';
+    } catch (_) {
+      // Keep this transition exclusive until its pending identity write is settled.
+      // A cancelled transition cannot overwrite another backend or a newer edit.
+      if (owns()) {
+        if (identitySaved) {
+          try {
+            final stored = await _preferences.loadOrCreateSyncIdentity(prepared.baseUrl);
+            if (stored.deviceId == prepared.account.identity.deviceId && stored.token == prepared.account.identity.token) {
+              await _preferences.saveSyncIdentity(prepared.baseUrl, previousIdentity);
+            }
+          } catch (_) { /* Preserve local data even if credential rollback storage fails. */ }
+        }
+        if (sameContext()) {
+          _syncClientId = previousIdentity.deviceId;
+          _syncToken = previousIdentity.token;
+          _readerAccountEmail = previousEmail;
+          if (dataApplied && expectedGeneration == _localChangeGeneration) {
+            try {
+              await _applyRemoteSyncSnapshot(previous, syncContext: prepared.context,
+                  expectedGeneration: expectedGeneration, requireCloud: false);
+            } catch (_) { /* In-memory rollback remains usable if persistence fails. */ }
+          }
+          if (sameContext()) {
+            _readerSyncDirty = expectedGeneration != _localChangeGeneration || dataApplied || previousDirty;
+            await _persistReaderSyncLocalState();
+          }
+        }
+      }
+      rethrow;
+    } finally {
+      _readerAccountAdopting = false;
+      if (owns()) _finishReaderAccountTransition();
+    }
+  }
+
+  Future<ReaderPairingCode> createReaderPairingCode() async {
+    final source = await _beginReaderAccountTransition();
+    try {
+      final uploaded = await _readerSyncService.pushSnapshot(baseUrl: source.baseUrl,
+          deviceId: source.identity.deviceId, token: source.identity.token, snapshot: _buildSyncSnapshot());
+      if (!uploaded.success || source.context != _syncContextGeneration || source.generation != _localChangeGeneration) {
+        throw const ReaderAccountFailure('Your reader backup could not be saved. Pairing was stopped.');
+      }
+      return await _readerAccountService.createPairing(source.baseUrl, source.identity);
+    } finally {
+      if (source.context == _syncContextGeneration) _finishReaderAccountTransition();
+    }
+  }
+
+  Future<void> cancelReaderPairingCode() async {
+    final identity = await readerIdentityForFeature();
+    await _readerAccountService.cancelPairing(_syncBaseUrl, identity);
   }
 
   ReaderRemoteAssetPack? remoteAssetPackForEdition(MushafEdition edition) {
@@ -3435,7 +3732,7 @@ class QuranReaderController extends ChangeNotifier {
   void _scheduleCloudSyncPush({bool markDirty = true}) {
     if (_isDisposed || _isLoading || _suppressSyncDirty) return;
     if (markDirty) _markReaderSyncDirty();
-    if (_experienceSettings.syncMode != ReaderSyncMode.cloudReady ||
+    if (_readerAccountBusy || _experienceSettings.syncMode != ReaderSyncMode.cloudReady ||
         !_readerSyncDirty || _syncClientId.isEmpty || _syncBaseUrl.isEmpty) {
       return;
     }
