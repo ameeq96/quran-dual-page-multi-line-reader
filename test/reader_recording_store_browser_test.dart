@@ -129,7 +129,6 @@ const _fakePlayback = r'''
   };
   function TestAudio(src) {
     const audio = new OriginalAudio();
-    audio.src = src;
     Object.defineProperties(audio, {
       play: {value: () => { state.plays++; return Promise.resolve(); }},
       pause: {value: () => {}},
