@@ -61,7 +61,15 @@ class QuranAdminAiProxyService {
       throw const QuranAdminAiException('The Ollama backend address is invalid.');
     }
 
-    final promptContext = 'The following context contains excerpts, '
+    final promptContext = tool == QuranAiTool.smartSearch
+        ? 'Answer only the search query using the verified query-specific '
+            'Ayah hits below. No current-page context is supplied. Do not '
+            'invent Quran quotations or references. If verified hits are '
+            'absent or insufficient, say so.\n\n'
+            '${groundingContext.trim().isEmpty
+                ? 'No verified Ayah hits were supplied for this query.'
+                : groundingContext.trim()}'
+        : 'The following context contains excerpts, '
         'which may describe the Surah rather than exact scanned-page '
         'Ayahs. Do not invent Quran text, references, page or line '
         'anchors, or claim acoustic assessment. State when the '
@@ -151,7 +159,7 @@ class QuranAdminAiProxyService {
       case QuranAiTool.voiceQna:
         return 'Answer the transcript or typed question in a clear, conversational way.';
       case QuranAiTool.smartSearch:
-        return 'Explain relevant Quran themes for the query using the supplied context. Do not invent verse references or page numbers; navigation uses verified Quran data separately.';
+        return 'Answer the search query using only its supplied verified Ayah hits, not an unrelated current page. If no verified hit answers the query, state that the evidence is insufficient. Do not invent Quran quotations, references or page numbers.';
       case QuranAiTool.hifzCoach:
         return 'Coach the pasted memorization text using only supplied Arabic lines. State any missing context; do not claim to assess audio or invent missing Quran words.';
       case QuranAiTool.tajweedTutor:
