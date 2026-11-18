@@ -1,6 +1,9 @@
+import '../../../../app/app_theme.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
+import '../../../../app/reader_localization.dart';
 
 import '../../../../core/constants/quran_constants.dart';
 import '../../domain/models/quran_page.dart';
@@ -140,14 +143,14 @@ class _ReaderHifzTrainerSheetState extends State<_ReaderHifzTrainerSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Smart hifz trainer',
+                  tr(context, 'Smart hifz trainer'),
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Six hide bars are ready. Drag any bar to the exact line you want to cover. The same bars also appear on the live reader page.',
+                  tr(context, 'Six hide bars are ready. Drag any bar to the exact line you want to cover. The same bars also appear on the live reader page.'),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -159,17 +162,17 @@ class _ReaderHifzTrainerSheetState extends State<_ReaderHifzTrainerSheet> {
                   children: [
                     _TrainerChip(
                       icon: Icons.menu_book_rounded,
-                      label: '${_edition.label} - Page ${page.number}',
+                      label: tr(context, '${_edition.label} - Page ${page.number}'),
                     ),
                     _TrainerChip(
                       icon: Icons.drag_indicator_rounded,
-                      label: '${_maskAnchors.length} movable bars',
+                      label: tr(context, '${_maskAnchors.length} movable bars'),
                     ),
                     _TrainerChip(
                       icon: _linesHidden
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
-                      label: _linesHidden ? 'Lines hidden' : 'Lines visible',
+                      label: tr(context, _linesHidden ? 'Lines hidden' : 'Lines visible'),
                     ),
                   ],
                 ),
@@ -186,7 +189,7 @@ class _ReaderHifzTrainerSheetState extends State<_ReaderHifzTrainerSheet> {
                             : Icons.visibility_off_outlined,
                       ),
                       label: Text(
-                        _linesHidden ? 'Show lines' : 'Hide lines',
+                        tr(context, _linesHidden ? 'Show lines' : 'Hide lines'),
                       ),
                     ),
                     OutlinedButton.icon(
@@ -194,7 +197,7 @@ class _ReaderHifzTrainerSheetState extends State<_ReaderHifzTrainerSheet> {
                         setState(_resetAnchors);
                       },
                       icon: const Icon(Icons.restart_alt_rounded),
-                      label: const Text('Reset bars'),
+                      label: Text(tr(context, 'Reset bars')),
                     ),
                   ],
                 ),
@@ -225,9 +228,9 @@ class _ReaderHifzTrainerSheetState extends State<_ReaderHifzTrainerSheet> {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  _linesHidden
+                  tr(context, _linesHidden
                       ? 'Drag any bar vertically to place it on the exact line you want to cover. Double tap the preview to reset.'
-                      : 'Lines are visible right now. Tap Hide lines to apply the same bars on the preview and the live reader page.',
+                      : 'Lines are visible right now. Tap Hide lines to apply the same bars on the preview and the live reader page.'),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -439,7 +442,8 @@ class _TrainerCard extends StatelessWidget {
             theme.colorScheme.surfaceContainer.withValues(alpha: 0.9),
           ],
         ),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(AppRadii.xl),
+        boxShadow: AppDecor.of(context).cardShadow,
         border: Border.all(color: theme.dividerColor.withValues(alpha: 0.42)),
       ),
       child: Padding(
@@ -476,7 +480,7 @@ class _TrainerChip extends StatelessWidget {
             Icon(icon, size: 16, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             Text(
-              label,
+              tr(context, label),
               style: theme.textTheme.labelLarge?.copyWith(
                 fontWeight: FontWeight.w700,
               ),

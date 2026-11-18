@@ -85,6 +85,8 @@ class ReaderSyncSnapshot {
     required this.readingHistory,
     required this.pageNotes,
     required this.favoritePages,
+    this.editionPageNotes = const {},
+    this.editionFavoritePages = const {},
     required this.bookmarks,
     required this.hifzReviewEntries,
     required this.streakState,
@@ -103,6 +105,8 @@ class ReaderSyncSnapshot {
   final List<ReaderHistoryEntry> readingHistory;
   final Map<int, String> pageNotes;
   final List<int> favoritePages;
+  final Map<String, Map<int, String>> editionPageNotes;
+  final Map<String, List<int>> editionFavoritePages;
   final List<ReaderBookmark> bookmarks;
   final List<ReaderHifzReviewEntry> hifzReviewEntries;
   final ReaderSyncStreakState streakState;
@@ -145,6 +149,9 @@ class ReaderSyncSnapshot {
       'readingHistory': readingHistory.map((entry) => entry.toJson()).toList(),
       'pageNotes': pageNotes.map((key, value) => MapEntry('$key', value)),
       'favoritePages': favoritePages,
+      'editionPageNotes': editionPageNotes.map((edition, pages) =>
+        MapEntry(edition, pages.map((page, note) => MapEntry('$page', note)))),
+      'editionFavoritePages': editionFavoritePages,
       'bookmarks': bookmarks.map((entry) => entry.toJson()).toList(),
       'hifzReviewEntries':
           hifzReviewEntries.map((entry) => entry.toJson()).toList(),
@@ -225,20 +232,31 @@ class ReaderSyncSnapshot {
       ),
       readingHistory: (json['readingHistory'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
-          .map(ReaderHistoryEntry.fromJson)
+          .map((entry) => ReaderHistoryEntry.fromJson(entry,
+            fallbackEdition: MushafEditionX.fromStorageValue(settingsJson['mushafEdition'] as String?),
+            fallbackPreferImageMode: settingsJson['preferImageMode'] as bool? ?? true))
           .toList(growable: false),
       pageNotes: pageNotes,
+      editionPageNotes: (json['editionPageNotes'] as Map<String, dynamic>? ?? const {}).map(
+        (edition, pages) => MapEntry(edition, (pages as Map<String, dynamic>).map(
+          (page, note) => MapEntry(int.parse(page), note as String)))),
+      editionFavoritePages: (json['editionFavoritePages'] as Map<String, dynamic>? ?? const {}).map(
+        (edition, pages) => MapEntry(edition, (pages as List<dynamic>).cast<int>())),
       favoritePages: (json['favoritePages'] as List<dynamic>? ?? const [])
           .map((entry) => (entry as num).toInt())
           .toList(growable: false),
       bookmarks: (json['bookmarks'] as List<dynamic>? ?? const [])
           .whereType<Map<String, dynamic>>()
-          .map(ReaderBookmark.fromJson)
+          .map((entry) => ReaderBookmark.fromJson(entry,
+            fallbackEdition: MushafEditionX.fromStorageValue(settingsJson['mushafEdition'] as String?),
+            fallbackPreferImageMode: settingsJson['preferImageMode'] as bool? ?? true))
           .toList(growable: false),
       hifzReviewEntries:
           (json['hifzReviewEntries'] as List<dynamic>? ?? const [])
               .whereType<Map<String, dynamic>>()
-              .map(ReaderHifzReviewEntry.fromJson)
+              .map((entry) => ReaderHifzReviewEntry.fromJson(entry,
+                fallbackEdition: MushafEditionX.fromStorageValue(settingsJson['mushafEdition'] as String?),
+                fallbackPreferImageMode: settingsJson['preferImageMode'] as bool? ?? true))
               .toList(growable: false),
       streakState: ReaderSyncStreakState.fromJson(streakJson),
       audioState: ReaderSyncAudioState.fromJson(audioJson),

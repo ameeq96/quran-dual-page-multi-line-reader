@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../controllers/quran_reader_controller.dart';
 
 class ReaderNowPlayingBar extends StatelessWidget {
@@ -75,7 +77,7 @@ class ReaderNowPlayingBar extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                title,
+                                tr(context, title),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.titleSmall?.copyWith(
@@ -84,7 +86,7 @@ class ReaderNowPlayingBar extends StatelessWidget {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                subtitle,
+                                tr(context, subtitle),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.bodySmall?.copyWith(
@@ -95,7 +97,7 @@ class ReaderNowPlayingBar extends StatelessWidget {
                           ),
                         ),
                         IconButton(
-                          tooltip: audio.isPlaying ? 'Pause' : 'Play',
+                          tooltip: tr(context, audio.isPlaying ? 'Pause' : 'Play'),
                           onPressed: chapter == null
                               ? null
                               : () {
@@ -112,7 +114,7 @@ class ReaderNowPlayingBar extends StatelessWidget {
                           ),
                         ),
                         IconButton(
-                          tooltip: 'Stop',
+                          tooltip: tr(context, 'Stop'),
                           onPressed: audio.currentChapterId == null
                               ? null
                               : () {

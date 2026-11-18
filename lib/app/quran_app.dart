@@ -1,7 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/services/system_ui_service.dart';
+import '../core/services/reader_reminder_service.dart';
+import '../core/services/reader_web_surah_navigation.dart';
+import '../core/prayer/prayer_reminder_service.dart';
 import '../core/storage/reader_preferences.dart';
+import '../core/storage/reader_profile_store.dart';
 import '../features/quran_reader/data/repositories/quran_reader_repository.dart';
 import '../features/quran_reader/data/services/quran_asset_resolver.dart';
 import '../features/quran_reader/data/services/quran_audio_service.dart';
@@ -13,34 +20,91 @@ import '../features/quran_reader/data/services/quran_reader_sync_service.dart';
 import '../features/quran_reader/data/services/quran_text_data_source.dart';
 import '../features/quran_reader/presentation/controllers/quran_reader_controller.dart';
 import '../features/quran_reader/presentation/screens/quran_home_screen.dart';
+import '../features/quran_reader/presentation/screens/quran_reader_screen.dart';
 import '../features/quran_reader/presentation/screens/quran_onboarding_screen.dart';
+import '../features/quran_reader/presentation/screens/worship_learning_screen.dart';
 import '../features/quran_reader/presentation/widgets/bootstrap_splash.dart';
+import '../features/quran_reader/presentation/widgets/reader_reminder_banner.dart';
+import '../features/quran_reader/presentation/widgets/reader_motion.dart';
+import '../features/quran_reader/presentation/widgets/prayer_reminder_banner.dart';
 import 'app_theme.dart';
+import 'reader_localization.dart';
 
 class QuranApp extends StatelessWidget {
   const QuranApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Quran Pak Dual Page Reader',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
-      home: const _AppBootstrap(),
+    final localization = ReaderLocalization.instance;
+    return ReaderLocalizationScope(
+      localization: localization,
+      child: AnimatedBuilder(
+        animation: Listenable.merge([localization, ReaderProfileStore.instance]),
+        builder: (context, _) => FutureBuilder<void>(
+          future: ReaderProfileStore.instance.load(),
+          builder: (context, profiles) {
+            if (profiles.hasError) {
+              return MaterialApp(home: Scaffold(body: Center(child: Text(tr(context, 'Local profiles could not be loaded. Restart the app to retry.')))));
+            }
+            if (profiles.connectionState != ConnectionState.done) {
+              return const MaterialApp(home: BootstrapSplash(nightMode: false));
+            }
+            final profileId = ReaderProfileStore.instance.activeId;
+            final webSurahNavigation = createReaderWebSurahNavigation(profileId);
+            return MaterialApp(
+          key: ValueKey(profileId),
+          title: tr(context, 'Quran Pak Dual Page Reader'),
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light(),
+          darkTheme: AppTheme.dark(),
+          themeMode: ThemeMode.system,
+          navigatorObservers: [if (webSurahNavigation != null) webSurahNavigation,
+            worshipLearningObserverFor(profileId)],
+          locale: localization.locale,
+          supportedLocales: const [Locale('en'), Locale('ur'), Locale('ar')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          builder: (context, child) => Directionality(
+            textDirection: localization.textDirection,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                child!,
+                const Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    ReaderReminderBanner(),
+                    PrayerReminderBanner(),
+                  ]),
+                ),
+              ],
+            ),
+          ),
+          home: _AppBootstrap(profileId: profileId, webSurahNavigation: webSurahNavigation),
+        );
+          },
+        ),
+      ),
     );
   }
 }
 
 class _AppBootstrap extends StatefulWidget {
-  const _AppBootstrap();
+  const _AppBootstrap({required this.profileId, this.webSurahNavigation});
+  final String profileId;
+  final ReaderWebSurahNavigation? webSurahNavigation;
 
   @override
   State<_AppBootstrap> createState() => _AppBootstrapState();
 }
 
-class _AppBootstrapState extends State<_AppBootstrap> {
+class _AppBootstrapState extends State<_AppBootstrap>
+    with WidgetsBindingObserver {
   late final QuranReaderController _controller;
   late final ReaderPreferences _preferences;
   late Future<_BootstrapPrefs> _bootstrapPrefsFuture;
@@ -50,7 +114,9 @@ class _AppBootstrapState extends State<_AppBootstrap> {
   @override
   void initState() {
     super.initState();
-    _preferences = ReaderPreferences();
+    WidgetsBinding.instance.addObserver(this);
+    ReaderLocalization.instance.addListener(_refreshReminderLanguage);
+    _preferences = ReaderPreferences(profileId: widget.profileId);
     final adminConfigService = QuranAdminConfigService(
       preferences: _preferences,
     );
@@ -71,9 +137,26 @@ class _AppBootstrapState extends State<_AppBootstrap> {
     );
     _bootstrapPrefsFuture = _loadBootstrapPrefs();
     _bootstrapFuture = _bootstrap();
+    _bindWebSurahNavigation();
+  }
+
+  void _bindWebSurahNavigation() {
+    widget.webSurahNavigation?.bind(
+      owner: this,
+      controller: _controller,
+      readyFuture: _bootstrapFuture,
+      openReader: () {
+        if (!mounted) return;
+        unawaited(Navigator.of(context).push<void>(buildReaderPageRoute<void>(
+          settings: readerWebSurahRouteSettings,
+          builder: (_) => QuranReaderScreen(controller: _controller),
+        )));
+      },
+    );
   }
 
   Future<_BootstrapPrefs> _loadBootstrapPrefs() async {
+    await ReaderLocalization.instance.loadForProfile(widget.profileId);
     try {
       final settings = await _preferences.loadSettings();
       final onboardingSeen = await _preferences.loadOnboardingSeen();
@@ -93,8 +176,43 @@ class _AppBootstrapState extends State<_AppBootstrap> {
   Future<void> _bootstrap() async {
     await SystemUiService.allowReaderOrientations();
     final prefs = await _bootstrapPrefsFuture;
+    if (!mounted) return;
+    await ReaderReminderService.instance.switchLocalProfile(widget.profileId);
+    await ReaderReminderService.instance.initialize();
+    if (!mounted) return;
+    final lifecycleState = WidgetsBinding.instance.lifecycleState;
+    await ReaderReminderService.instance.setAppActive(
+      lifecycleState == null || lifecycleState == AppLifecycleState.resumed,
+    );
+    if (!mounted) {
+      await ReaderReminderService.instance.setAppActive(false);
+      return;
+    }
     _showOnboarding = prefs.showOnboarding;
     await _controller.initialize();
+    if (mounted) unawaited(_initializePrayerReminders());
+  }
+
+  Future<void> _initializePrayerReminders() async {
+    final prayers = PrayerReminderService.instance;
+    try {
+      await prayers.switchProfile(widget.profileId, baseUrl: _controller.adminSyncBaseUrl);
+      if (!mounted) return;
+      prayers.beforeAudio = _controller.pauseAudio;
+      prayers.setAppActive(WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed);
+      _refreshPrayerLanguage();
+    } catch (_) { /* Prayer setup must not prevent Quran reading. */ }
+  }
+
+  void _refreshPrayerLanguage() {
+    final prayers = PrayerReminderService.instance;
+    if (!prayers.loaded || prayers.busy) return;
+    final code = ReaderLocalization.instance.locale.languageCode;
+    final language = const ['en', 'ur', 'ar'].contains(code) ? code : 'en';
+    if (prayers.settings.language != language) {
+      unawaited(prayers.updateSettings(prayers.settings.copyWith(language: language)));
+    }
   }
 
   Future<void> _completeOnboarding() async {
@@ -107,8 +225,30 @@ class _AppBootstrapState extends State<_AppBootstrap> {
     });
   }
 
+  void _refreshReminderLanguage() {
+    unawaited(ReaderReminderService.instance.refreshSchedule());
+    _refreshPrayerLanguage();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    PrayerReminderService.instance.setAppActive(state == AppLifecycleState.resumed);
+    unawaited(ReaderReminderService.instance.setAppActive(
+      state == AppLifecycleState.resumed,
+    ));
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_controller.refreshDownloadPolicy());
+    }
+  }
+
   @override
   void dispose() {
+    widget.webSurahNavigation?.unbind(this);
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(ReaderReminderService.instance.setAppActive(false));
+    PrayerReminderService.instance.setAppActive(false);
+    PrayerReminderService.instance.beforeAudio = null;
+    ReaderLocalization.instance.removeListener(_refreshReminderLanguage);
     _controller.dispose();
     SystemUiService.restoreDefaultUi();
     super.dispose();
@@ -144,7 +284,7 @@ class _AppBootstrapState extends State<_AppBootstrap> {
                           const Icon(Icons.error_outline_rounded, size: 56),
                           const SizedBox(height: 16),
                           Text(
-                            'Unable to prepare the reader.',
+                            tr(context, 'Unable to prepare the reader.'),
                             style: Theme.of(context).textTheme.headlineSmall,
                             textAlign: TextAlign.center,
                           ),
@@ -157,8 +297,9 @@ class _AppBootstrapState extends State<_AppBootstrap> {
                           FilledButton(
                             onPressed: () => setState(() {
                               _bootstrapFuture = _bootstrap();
+                              _bindWebSurahNavigation();
                             }),
-                            child: const Text('Retry'),
+                            child: Text(tr(context, 'Retry')),
                           ),
                         ],
                       ),

@@ -4,8 +4,66 @@ import 'reader_settings.dart';
 enum QuranAssetPackDownloadStatus {
   notDownloaded,
   downloading,
+  paused,
   ready,
   failed,
+}
+
+enum QuranPackDownloadStop { pause, cancel }
+
+enum QuranPackTransferPhase { downloading, extracting, publishing }
+
+class QuranPackTransferProgress {
+  const QuranPackTransferProgress({
+    required this.progress,
+    required this.receivedBytes,
+    this.totalBytes,
+    this.phase = QuranPackTransferPhase.downloading,
+  });
+
+  final double progress;
+  final int receivedBytes;
+  final int? totalBytes;
+  final QuranPackTransferPhase phase;
+}
+
+class QuranPartialAssetPack {
+  const QuranPartialAssetPack({
+    required this.edition,
+    required this.sourceUrl,
+    required this.version,
+    required this.receivedBytes,
+    required this.updatedAtIso,
+    this.totalBytes,
+    this.canResume = true,
+  });
+
+  final MushafEdition edition;
+  final String sourceUrl;
+  final String version;
+  final int receivedBytes;
+  final int? totalBytes;
+  final String updatedAtIso;
+  final bool canResume;
+}
+
+class QuranPackStorageInfo {
+  const QuranPackStorageInfo({
+    required this.installedBytes,
+    required this.archiveBytes,
+    required this.partialBytes,
+    required this.editionBytes,
+    this.browserUsageBytes,
+    this.browserQuotaBytes,
+  });
+
+  final int installedBytes;
+  final int archiveBytes;
+  final int partialBytes;
+  final Map<MushafEdition, int> editionBytes;
+  final int? browserUsageBytes;
+  final int? browserQuotaBytes;
+  int get totalBytes => installedBytes + archiveBytes + partialBytes;
 }
 
 class QuranZipAssetPack {
@@ -34,6 +92,7 @@ class QuranDownloadedAssetPack {
     required this.fileExtension,
     required this.availableImportedPages,
     required this.completedAtIso,
+    this.cacheGeneration,
   });
 
   final MushafEdition edition;
@@ -46,6 +105,7 @@ class QuranDownloadedAssetPack {
   final String fileExtension;
   final List<int> availableImportedPages;
   final String completedAtIso;
+  final String? cacheGeneration;
 
   ReaderRemoteAssetPack toRemoteAssetPack() {
     final sortedPages = List<int>.from(availableImportedPages)..sort();

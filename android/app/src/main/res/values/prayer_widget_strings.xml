@@ -1,0 +1,7 @@
+<resources>
+    <string name="prayer_widget_title">Prayer times</string>
+    <string name="prayer_widget_description">Five prayer times from your saved city. Tap to open Quran Reader.</string>
+    <string name="prayer_widget_setup">Choose a city in the app</string>
+    <string name="prayer_widget_refresh">Refresh</string>
+    <string name="prayer_widget_placeholder">—</string>
+</resources>

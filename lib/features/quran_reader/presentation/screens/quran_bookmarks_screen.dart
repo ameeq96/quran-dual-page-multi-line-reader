@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../../../app/app_theme.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
@@ -22,30 +24,37 @@ class QuranBookmarksScreen extends StatelessWidget {
         return Theme(
           data: settings.nightMode ? AppTheme.dark() : AppTheme.light(),
           child: Scaffold(
-            body: SafeArea(
-              child: controller.isLoading
-                  ? const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          ReaderSkeletonBlock(height: 28, width: 180),
-                          SizedBox(height: 16),
-                          ReaderSkeletonBlock(height: 120),
-                          SizedBox(height: 12),
-                          ReaderSkeletonBlock(height: 120),
-                          SizedBox(height: 12),
-                          ReaderSkeletonBlock(height: 120),
-                        ],
-                      ),
-                    )
-                  : ReaderBookmarksContent(
-                      controller: controller,
-                      showHandle: false,
-                      onSelectPage: (pageNumber) async {
-                        Navigator.of(context).pop(pageNumber);
-                      },
-                    ),
+            appBar: AppBar(title: Text(tr(context, 'Saved places'))),
+            body: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 920),
+                child: SafeArea(
+                  child: controller.isLoading
+                      ? const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ReaderSkeletonBlock(height: 28, width: 180),
+                              SizedBox(height: 16),
+                              ReaderSkeletonBlock(height: 120),
+                              SizedBox(height: 12),
+                              ReaderSkeletonBlock(height: 120),
+                              SizedBox(height: 12),
+                              ReaderSkeletonBlock(height: 120),
+                            ],
+                          ),
+                        )
+                      : ReaderBookmarksContent(
+                          controller: controller,
+                          showHandle: false,
+                          onSelectPage: (pageNumber) async {
+                            Navigator.of(context).pop(pageNumber);
+                          },
+                        ),
+                ),
+              ),
             ),
           ),
         );

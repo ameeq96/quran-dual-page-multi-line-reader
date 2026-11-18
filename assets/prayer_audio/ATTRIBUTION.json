@@ -1,0 +1,57 @@
+{
+  "version": 2,
+  "recordings": [
+    {
+      "id": "general",
+      "title": "Developer Athan 1",
+      "author": "Ahmed Khalaf",
+      "sourceUrl": "https://github.com/nandxorandor/Athan/blob/ad2bf1799add51cca4aaf1f123b1c212378c7786/app/src/main/assets/athan/developer/Developer_Athan-1.mp3",
+      "originalUrl": "https://raw.githubusercontent.com/nandxorandor/Athan/ad2bf1799add51cca4aaf1f123b1c212378c7786/app/src/main/assets/athan/developer/Developer_Athan-1.mp3",
+      "sourceDurationSeconds": 144.64,
+      "originalSha256": "48ce7a63922bc666be0d4919056a31445ace775b3b7ffc4ab07325d8edf9ddb6",
+      "assetPath": "assets/prayer_audio/adhan_general.mp3",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "licenseEvidenceUrl": "https://github.com/nandxorandor/Athan/blob/ad2bf1799add51cca4aaf1f123b1c212378c7786/LICENSE",
+      "modifications": "None. Byte-for-byte copy of the full publisher MP3; no trimming, re-encoding, speech synthesis or noise processing.",
+      "durationSeconds": 144.64,
+      "bytes": 1736351,
+      "sha256": "48ce7a63922bc666be0d4919056a31445ace775b3b7ffc4ab07325d8edf9ddb6",
+      "channels": 1,
+      "sampleRateHz": 44100,
+      "bitrateKbps": 96,
+      "decodedPeakDbfs": -1.1,
+      "decodedRmsDbfs": -13.3,
+      "attribution": "Developer Athan 1 — Ahmed Khalaf. CC BY 4.0. None. Byte-for-byte copy of the full publisher MP3; no trimming, re-encoding, speech synthesis or noise processing."
+    },
+    {
+      "id": "fajr",
+      "title": "Developer Athan 3 Fajr",
+      "author": "Ahmed Khalaf",
+      "sourceUrl": "https://github.com/nandxorandor/Athan/blob/ad2bf1799add51cca4aaf1f123b1c212378c7786/app/src/main/assets/athan/fajr/Developer_Athan-3_Fajr.mp3",
+      "originalUrl": "https://raw.githubusercontent.com/nandxorandor/Athan/ad2bf1799add51cca4aaf1f123b1c212378c7786/app/src/main/assets/athan/fajr/Developer_Athan-3_Fajr.mp3",
+      "sourceDurationSeconds": 99.46415,
+      "originalSha256": "18b43fca35558ed05de0cbf8fcf468fd606e17cacb688bfed065e45787f56378",
+      "assetPath": "assets/prayer_audio/adhan_fajr.mp3",
+      "license": "CC BY 4.0",
+      "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+      "licenseEvidenceUrl": "https://github.com/nandxorandor/Athan/blob/ad2bf1799add51cca4aaf1f123b1c212378c7786/LICENSE",
+      "modifications": "Full recording retained. Constant +12 dB audio gain and MP3 re-encoding at 44.1 kHz, mono, 96 kbps. No trimming, denoising, speech synthesis, pitch or timing changes.",
+      "durationSeconds": 99.46415,
+      "bytes": 1194665,
+      "sha256": "e509f13c4910b811fd703c8f386d3516444d3766a1e575f8da88a92a5811c9c9",
+      "channels": 1,
+      "sampleRateHz": 44100,
+      "bitrateKbps": 96,
+      "decodedPeakDbfs": -1.9,
+      "decodedRmsDbfs": -17.6,
+      "attribution": "Developer Athan 3 Fajr — Ahmed Khalaf. CC BY 4.0. Full recording retained. Constant +12 dB audio gain and MP3 re-encoding at 44.1 kHz, mono, 96 kbps. No trimming, denoising, speech synthesis, pitch or timing changes."
+    }
+  ],
+  "contentVerification": "The primary publisher identifies these named files as his own general and Fajr human Adhan recordings. Full technical decode and level checks passed. Unprompted local Whisper.cpp multilingual-base transcription corroborates the overall Adhan sequence, closing La ilaha illa Allah, and two separate Fajr tathweeb phrases; melodic-word recognition has errors. This is machine-assisted evidence, not independent human listening or a word-for-word religious certification.",
+  "sourceLicenseReview": {
+    "general": "Primary publisher LICENSE at commit ad2bf1799add51cca4aaf1f123b1c212378c7786 explicitly names Developer_Athan-1.mp3 as an original Ahmed Khalaf recording under CC BY 4.0.",
+    "fajr": "Primary publisher LICENSE at commit ad2bf1799add51cca4aaf1f123b1c212378c7786 explicitly names Developer_Athan-3_Fajr.mp3 as an original Ahmed Khalaf recording under CC BY 4.0."
+  },
+  "licenseNotice": "These human recordings are licensed separately from the app under CC BY 4.0. Retain the supplied title, Ahmed Khalaf author credit, source and license links, and modification notice when redistributing. No endorsement is implied."
+}

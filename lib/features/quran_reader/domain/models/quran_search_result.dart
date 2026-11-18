@@ -6,6 +6,7 @@ class QuranSearchResult {
     required this.snippet,
     required this.category,
     this.verseKey,
+    this.navigationNote,
   });
 
   final int pageNumber;
@@ -14,4 +15,5 @@ class QuranSearchResult {
   final String snippet;
   final String category;
   final String? verseKey;
+  final String? navigationNote;
 }

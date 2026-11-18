@@ -57,6 +57,11 @@ class QuranNavigationDataSource {
     final previousJuzs = List<QuranJuzNavigationEntry>.from(_juzs);
 
     await _initializeStandardPayload(forceRefresh: forceRefresh);
+    if (_bundledNavigationAssetPathForEdition(normalizedEdition).isEmpty) {
+      _setActiveEntries(const [], const []);
+      _isInitialized = true;
+      return;
+    }
 
     final bundledPayload = await _tryLoadBundledPayload(
       _bundledNavigationAssetPathForEdition(normalizedEdition),
@@ -322,10 +327,38 @@ class QuranNavigationDataSource {
       _legacyNavigationAssetPath,
       forceRefresh: forceRefresh,
     );
-    if (payload == null) {
+    if (payload != null) {
+      _hydrateStandardPayload(payload);
       return;
     }
-    _hydrateStandardPayload(payload);
+    final insights = await _tryLoadBundledPayload(
+      'assets/quran_pages/quran_page_insights.json',
+      forceRefresh: forceRefresh,
+    );
+    if (insights == null) return;
+    final chapters = insights['chapters'] as List<dynamic>? ?? const [];
+    final pages = insights['pages'] as List<dynamic>? ?? const [];
+    final juzStarts = <int, int>{};
+    for (final page in pages.whereType<Map<String, dynamic>>()) {
+      for (final juz in (page['juzNumbers'] as List<dynamic>? ?? const []).cast<int>()) {
+        juzStarts.putIfAbsent(juz, () => page['pageNumber'] as int);
+      }
+    }
+    final labels = await _tryLoadBundledPayload(_fallbackNavigationAssetPath, forceRefresh: forceRefresh);
+    final juzLabels = <int, Map<String, dynamic>>{for (final item in (labels?['siparas'] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>()) item['number'] as int: item};
+    _hydrateStandardPayload({
+      'surahs': chapters.whereType<Map<String, dynamic>>().map((chapter) => {
+        ...chapter,
+        'nameComplex': chapter['nameSimple'],
+        'standardStartPage': (chapter['pages'] as List<dynamic>).first,
+      }).toList(),
+      'siparas': juzStarts.entries.map((entry) => {
+        'number': entry.key,
+        'name': juzLabels[entry.key]?['name'] ?? 'Juz ${entry.key}',
+        'nameArabic': juzLabels[entry.key]?['nameArabic'] ?? '',
+        'standardStartPage': entry.value,
+      }).toList(),
+    });
   }
 
   Future<void> _warmEditionCaches({
@@ -386,6 +419,8 @@ class QuranNavigationDataSource {
         return 'assets/quran_pages/quran_navigation_index_17_line.json';
       case MushafEdition.kanzulIman:
         return 'assets/quran_pages/quran_navigation_index_kanzul_iman.json';
+      default:
+        return '';
     }
   }
 }

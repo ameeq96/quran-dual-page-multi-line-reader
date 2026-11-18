@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../controllers/quran_reader_controller.dart';
 import 'reader_sheet_frame.dart';
 
@@ -68,14 +70,14 @@ class ReaderBookmarksContent extends StatelessWidget {
                 ),
                 SizedBox(height: showHandle ? 20 : 4),
                 Text(
-                  'Bookmarks',
+                  tr(context, 'Bookmarks'),
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Open your saved pages directly from here.',
+                  tr(context, 'Open your saved pages directly from here.'),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -84,7 +86,7 @@ class ReaderBookmarksContent extends StatelessWidget {
                 if (visibleFolders.isEmpty && controller.favoritePages.isEmpty)
                   _BookmarksCard(
                     child: Text(
-                      'No bookmarks saved yet.',
+                      tr(context, 'No bookmarks saved yet.'),
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -96,7 +98,7 @@ class ReaderBookmarksContent extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Favorites',
+                          tr(context, 'Favorites'),
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
@@ -107,7 +109,7 @@ class ReaderBookmarksContent extends StatelessWidget {
                           runSpacing: 10,
                           children: controller.favoritePages.map((pageNumber) {
                             return ActionChip(
-                              label: Text('Page $pageNumber'),
+                              label: Text(tr(context, 'Page $pageNumber')),
                               onPressed: () async {
                                 if (onSelectPage != null) {
                                   await onSelectPage!(pageNumber);

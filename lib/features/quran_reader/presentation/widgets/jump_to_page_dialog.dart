@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 Future<int?> showJumpToPageDialog(
   BuildContext context, {
   required int currentPage,
@@ -14,15 +16,15 @@ Future<int?> showJumpToPageDialog(
       return StatefulBuilder(
         builder: (context, setState) {
           return AlertDialog(
-            title: const Text('Jump to page'),
+            title: Text(tr(context, 'Jump to page')),
             content: TextField(
               controller: controller,
               keyboardType: TextInputType.number,
               autofocus: true,
               decoration: InputDecoration(
-                labelText: 'Page number',
-                hintText: '1 - $maxPage',
-                errorText: errorText,
+                labelText: tr(context, 'Page number'),
+                hintText: tr(context, '1 - $maxPage'),
+                errorText: errorText == null ? null : tr(context, errorText!),
               ),
               onSubmitted: (_) {
                 final page = int.tryParse(controller.text);
@@ -38,7 +40,7 @@ Future<int?> showJumpToPageDialog(
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
+                child: Text(tr(context, 'Cancel')),
               ),
               FilledButton(
                 onPressed: () {
@@ -51,7 +53,7 @@ Future<int?> showJumpToPageDialog(
                   }
                   Navigator.of(context).pop(page);
                 },
-                child: const Text('Go'),
+                child: Text(tr(context, 'Go')),
               ),
             ],
           );

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -34,6 +35,22 @@ class QuranAdminConfigService {
         candidateBaseUrls.isEmpty ? preferredBaseUrl : candidateBaseUrls.first;
     if (candidateBaseUrls.isEmpty) {
       throw StateError('Admin API base URL is not configured.');
+    }
+
+    if (kIsWeb && !forceRefresh) {
+      final cachedBaseUrl = _normalizeBaseUrl(_currentBaseUrl);
+      final cachedConfig = _configFromJsonString(
+        await _preferences.loadAdminPublicConfigJson(),
+        publicBaseUrl: cachedBaseUrl,
+        source: ReaderAdminConfigSource.cached,
+      );
+      if (cachedConfig != null) {
+        _currentBaseUrl = cachedBaseUrl;
+        _currentConfig = cachedConfig;
+        unawaited(loadConfig(forceRefresh: true)
+            .catchError((Object _) => _currentConfig));
+        return cachedConfig;
+      }
     }
 
     for (final candidateBaseUrl in candidateBaseUrls) {
@@ -210,6 +227,7 @@ class QuranAdminConfigService {
         if (edition == null) {
           continue;
         }
+        MushafEdition.register(edition.storageValue, label: item['label'] as String?);
         editions[edition] = ReaderAdminEdition(
           edition: edition,
           label: (item['label'] as String? ?? '').trim(),
@@ -288,7 +306,7 @@ class QuranAdminConfigService {
       '16_line' || '16_lines' || 'lines16' => MushafEdition.lines16,
       '17_line' || '17_lines' || 'lines17' => MushafEdition.lines17,
       'kanzul_iman' || 'kanzuliman' => MushafEdition.kanzulIman,
-      _ => null,
+      _ => MushafEdition.register(normalized),
     };
   }
 

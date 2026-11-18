@@ -3,6 +3,8 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  disk_space_2
+  flutter_timezone
   url_launcher_linux
 )
 

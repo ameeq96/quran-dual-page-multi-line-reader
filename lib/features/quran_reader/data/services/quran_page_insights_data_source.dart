@@ -18,6 +18,7 @@ class QuranPageInsightsDataSource {
   }) : _client = client ?? http.Client();
 
   final Map<int, QuranPageInsight> _pages = <int, QuranPageInsight>{};
+  final Map<int, QuranPageInsight> _surahInsights = {};
   final Map<int, QuranChapterSummary> _chapters = <int, QuranChapterSummary>{};
   final http.Client _client;
   bool _isInitialized = false;
@@ -34,6 +35,7 @@ class QuranPageInsightsDataSource {
     }
 
     try {
+      _surahInsights.clear();
       final payload = await _loadPayload(adminConfig);
 
       final pagesJson = payload['pages'] as List<dynamic>? ?? const [];
@@ -74,6 +76,37 @@ class QuranPageInsightsDataSource {
   Iterable<QuranPageInsight> get pages => _pages.values;
 
   Iterable<QuranChapterSummary> get chapters => _chapters.values;
+
+  QuranPageInsight? insightForChapter(int chapterId) {
+    final cached = _surahInsights[chapterId];
+    if (cached != null) return cached;
+    final verses = _pages.values.expand((page) => page.verses)
+        .where((verse) => verse.chapterId == chapterId).toList()
+      ..sort((a, b) => a.verseNumber.compareTo(b.verseNumber));
+    if (verses.isEmpty) return null;
+    final insight = QuranPageInsight(
+      pageNumber: _chapters[chapterId]?.pages.first ?? 1,
+      chapterIds: [chapterId],
+      juzNumbers: verses.map((v) => v.juzNumber).toSet().toList(),
+      hizbNumbers: verses.map((v) => v.hizbNumber).toSet().toList(),
+      rubElHizbNumbers: verses.map((v) => v.rubElHizbNumber).toSet().toList(),
+      rukuNumbers: verses.map((v) => v.rukuNumber).toSet().toList(),
+      manzilNumbers: verses.map((v) => v.manzilNumber).toSet().toList(),
+      sajdahVerseKeys: verses.where((v) => v.sajdahNumber != null).map((v) => v.verseKey).toList(),
+      translationEn: verses.map((v) => '${v.verseKey}  ${v.translationEn}').join('\n\n'),
+      translationUr: verses.map((v) => '${v.verseKey}  ${v.translationUr}').join('\n\n'),
+      verses: verses,
+    );
+    _surahInsights[chapterId] = insight;
+    return insight;
+  }
+
+  int? canonicalPageForVerse(String verseKey) {
+    for (final page in _pages.values) {
+      if (page.verses.any((verse) => verse.verseKey == verseKey)) return page.pageNumber;
+    }
+    return null;
+  }
 
   Future<Map<String, dynamic>> _loadPayload(
       ReaderAdminConfig? adminConfig) async {

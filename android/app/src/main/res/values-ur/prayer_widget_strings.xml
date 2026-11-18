@@ -1,0 +1,7 @@
+<resources>
+    <string name="prayer_widget_title">نماز کے اوقات</string>
+    <string name="prayer_widget_description">آپ کے محفوظ شہر کے نماز کے اوقات۔ ایپ کھولنے کے لیے دبائیں۔</string>
+    <string name="prayer_widget_setup">ایپ میں شہر منتخب کریں</string>
+    <string name="prayer_widget_refresh">تازہ کریں</string>
+    <string name="prayer_widget_placeholder">—</string>
+</resources>

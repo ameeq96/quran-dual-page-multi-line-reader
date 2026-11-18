@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../controllers/quran_reader_controller.dart';
 
 enum _DrawerPane {
@@ -98,16 +100,16 @@ class _ReaderTranslationDrawerState extends State<ReaderTranslationDrawer> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Translation drawer',
+                                    tr(context, 'Translation drawer'),
                                     style: theme.textTheme.titleSmall?.copyWith(
                                       fontWeight: FontWeight.w800,
                                     ),
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    insight == null
+                                    tr(context, insight == null
                                         ? 'No translation on this page.'
-                                        : 'Page ${widget.controller.currentPageNumber}',
+                                        : 'Page ${widget.controller.currentPageNumber}'),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: theme.textTheme.bodySmall?.copyWith(
@@ -144,7 +146,7 @@ class _ReaderTranslationDrawerState extends State<ReaderTranslationDrawer> {
                                     .map(
                                       (pane) => ButtonSegment<_DrawerPane>(
                                         value: pane,
-                                        label: Text(pane.label),
+                                        label: Text(tr(context, pane.label)),
                                       ),
                                     )
                                     .toList(growable: false),
@@ -163,9 +165,7 @@ class _ReaderTranslationDrawerState extends State<ReaderTranslationDrawer> {
                               ),
                               child: SingleChildScrollView(
                                 child: SelectableText(
-                                  translation.isEmpty
-                                      ? 'Translation is unavailable for this page.'
-                                      : translation,
+                                  translation.isEmpty ? tr(context, 'Translation is unavailable for this page.') : translation,
                                   style: theme.textTheme.bodyMedium,
                                 ),
                               ),

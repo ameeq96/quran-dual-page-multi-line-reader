@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/reader_localization.dart';
+
 import '../../../../app/app_theme.dart';
 import '../controllers/quran_reader_controller.dart';
 
@@ -189,16 +191,13 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
                                 width: compact ? 48 : 56,
                                 height: compact ? 48 : 56,
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary.withValues(
-                                    alpha: theme.brightness == Brightness.dark
-                                        ? 0.18
-                                        : 0.12,
-                                  ),
+                                  gradient: AppDecor.of(context).heroGradient,
                                   borderRadius: BorderRadius.circular(18),
+                                  boxShadow: AppDecor.of(context).cardShadow,
                                 ),
                                 child: Icon(
                                   Icons.menu_book_rounded,
-                                  color: theme.colorScheme.primary,
+                                  color: AppDecor.of(context).gold,
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -207,7 +206,7 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Welcome to Quran Pak Dual Page Reader',
+                                      tr(context, 'Welcome to Quran Pak Dual Page Reader'),
                                       style:
                                           theme.textTheme.titleLarge?.copyWith(
                                         fontWeight: FontWeight.w900,
@@ -215,7 +214,7 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      'A quick overview of what you can use in the app.',
+                                      tr(context, 'A quick overview of what you can use in the app.'),
                                       style:
                                           theme.textTheme.bodyMedium?.copyWith(
                                         color:
@@ -227,7 +226,7 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
                               ),
                               TextButton(
                                 onPressed: _finishing ? null : _finish,
-                                child: const Text('Skip'),
+                                child: Text(tr(context, 'Skip')),
                               ),
                             ],
                           ),
@@ -281,9 +280,9 @@ class _QuranOnboardingScreenState extends State<QuranOnboardingScreen> {
                                   : Icons.arrow_forward_rounded,
                             ),
                             label: Text(
-                              _currentIndex == _items.length - 1
+                              tr(context, _currentIndex == _items.length - 1
                                   ? 'Start using the app'
-                                  : 'Next',
+                                  : 'Next'),
                             ),
                           ),
                         ],
@@ -381,12 +380,12 @@ class _OnboardingCard extends StatelessWidget {
                 ),
                 SizedBox(height: shortCard ? 12 : (compact ? 16 : 20)),
                 Text(
-                  item.title,
+                  tr(context, item.title),
                   style: titleStyle,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  item.subtitle,
+                  tr(context, item.subtitle),
                   style: subtitleStyle,
                 ),
                 SizedBox(height: shortCard ? 14 : (compact ? 18 : 22)),
@@ -418,7 +417,7 @@ class _OnboardingCard extends StatelessWidget {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                highlight,
+                                tr(context, highlight),
                                 style: theme.textTheme.bodyMedium?.copyWith(
                                   fontWeight: FontWeight.w600,
                                   color: theme.colorScheme.onSurface,
@@ -461,14 +460,14 @@ class _OnboardingCard extends StatelessWidget {
                         ),
                         SizedBox(height: compact ? 16 : 20),
                         Text(
-                          item.title,
+                          tr(context, item.title),
                           style: theme.textTheme.headlineSmall?.copyWith(
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          item.subtitle,
+                          tr(context, item.subtitle),
                           style: theme.textTheme.bodyLarge?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                             height: 1.45,
@@ -510,7 +509,7 @@ class _OnboardingCard extends StatelessWidget {
                                           const SizedBox(width: 10),
                                           Expanded(
                                             child: Text(
-                                              highlight,
+                                              tr(context, highlight),
                                               style: theme.textTheme.bodyMedium
                                                   ?.copyWith(
                                                 fontWeight: FontWeight.w600,

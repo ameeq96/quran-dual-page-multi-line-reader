@@ -1,4 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+import 'system_ui_fullscreen_stub.dart'
+    if (dart.library.js_interop) 'system_ui_fullscreen_web.dart' as browser_ui;
 
 abstract final class SystemUiService {
   static Future<void> allowReaderOrientations() {
@@ -11,6 +15,10 @@ abstract final class SystemUiService {
   }
 
   static Future<void> setFullscreen(bool enabled) async {
+    if (kIsWeb) {
+      await browser_ui.setBrowserFullscreen(enabled);
+      return;
+    }
     await SystemChrome.setEnabledSystemUIMode(
       enabled ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
     );

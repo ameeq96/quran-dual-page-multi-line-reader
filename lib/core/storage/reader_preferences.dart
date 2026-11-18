@@ -1,8 +1,11 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'reader_profile_store.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:crypto/crypto.dart';
 
 import '../../features/quran_reader/domain/models/reader_daily_progress_state.dart';
 import '../../features/quran_reader/domain/models/reader_bookmark.dart';
@@ -12,6 +15,10 @@ import '../../features/quran_reader/domain/models/reader_growth_models.dart';
 import '../../features/quran_reader/domain/models/reader_settings.dart';
 
 class ReaderPreferences {
+  ReaderPreferences({this.profileId = 'default'}) {
+    if (!ReaderProfileStore.validId(profileId)) throw ArgumentError('Invalid local profile.');
+  }
+  final String profileId;
   static const _defaultAdminPublicBaseUrl =
       'https://quran.opplexify.com';
   static const _lastPageKey = 'reader.lastPageNumber';
@@ -65,8 +72,8 @@ class ReaderPreferences {
       'reader.customFontColorEnabled';
   static const _legacyFontColorPresetKey = 'reader.fontColorPreset';
 
-  Future<SharedPreferences> get _prefs async {
-    return SharedPreferences.getInstance();
+  Future<_ProfilePreferences> get _prefs async {
+    return _ProfilePreferences(await SharedPreferences.getInstance(), profileId);
   }
 
   Future<int> loadLastPageNumber() async {
@@ -82,6 +89,17 @@ class ReaderPreferences {
     }
 
     return 1;
+  }
+
+  Future<bool> hasSavedSettings() async {
+    final prefs = await _prefs;
+    return const [
+      _mushafEditionKey, _fullscreenKey, _showPageNumbersKey, _preferImageModeKey,
+      _customBrightnessEnabledKey, _pageBrightnessKey, _nightModeKey,
+      _pageNightModeKey, _pagePresetEnabledKey, _pagePresetKey,
+      _pageOverlayEnabledKey, _pageReflectionEnabledKey, _lowMemoryModeKey,
+      _hifzFocusModeKey, _hifzMaskHeightFactorKey, _hifzRevealOnHoldKey,
+    ].any((key) => prefs.prefs.containsKey(prefs.key(key)));
   }
 
   Future<ReaderSettings> loadSettings() async {
@@ -116,7 +134,15 @@ class ReaderPreferences {
     await prefs.setInt(_legacyLastSpreadKey, (pageNumber - 1) ~/ 2);
   }
 
-  Future<void> saveSettings(ReaderSettings settings) async {
+  static Future<void> _settingsWrites = Future<void>.value();
+
+  Future<void> saveSettings(ReaderSettings settings) {
+    final operation = _settingsWrites.then((_) => _saveSettings(settings));
+    _settingsWrites = operation.then<void>((_) {}, onError: (Object error, StackTrace stack) {});
+    return operation;
+  }
+
+  Future<void> _saveSettings(ReaderSettings settings) async {
     final prefs = await _prefs;
     await prefs.setString(
         _mushafEditionKey, settings.mushafEdition.storageValue);
@@ -197,7 +223,9 @@ class ReaderPreferences {
     try {
       final jsonList = json.decode(payload) as List<dynamic>;
       return jsonList.map((entry) {
-        return ReaderHistoryEntry.fromJson(entry as Map<String, dynamic>);
+        return ReaderHistoryEntry.fromJson(entry as Map<String, dynamic>,
+          fallbackEdition: MushafEditionX.fromStorageValue(prefs.getString(_mushafEditionKey)),
+          fallbackPreferImageMode: prefs.getBool(_preferImageModeKey) ?? true);
       }).toList(growable: false);
     } catch (_) {
       return const [];
@@ -213,31 +241,44 @@ class ReaderPreferences {
 
   Future<Map<int, String>> loadPageNotes() async {
     final prefs = await _prefs;
-    final payload = prefs.getString(_pageNotesKey);
-    if (payload == null || payload.trim().isEmpty) {
-      return const {};
-    }
+    final edition = MushafEditionX.fromStorageValue(prefs.getString(_mushafEditionKey));
+    final annotationKey = (prefs.getBool(_preferImageModeKey) ?? true) ? edition.storageValue : '__canonical_text__';
+    return (await loadPageNotesByEdition())[annotationKey] ?? const {};
+  }
 
+  Future<Map<String, Map<int, String>>> loadPageNotesByEdition() async {
+    final prefs = await _prefs;
+    final all = prefs.getString('$_pageNotesKey.byEdition');
     try {
-      final jsonMap = json.decode(payload) as Map<String, dynamic>;
-      return jsonMap.map((key, value) {
-        return MapEntry(int.parse(key), value as String);
-      });
+      if (all != null) {
+        return (json.decode(all) as Map<String, dynamic>).map((edition, notes) => MapEntry(edition,
+          (notes as Map<String, dynamic>).map((page, note) => MapEntry(int.parse(page), note as String))));
+      }
+      final payload = prefs.getString(_pageNotesKey);
+      if (payload == null || payload.trim().isEmpty) return {};
+      final edition = MushafEditionX.fromStorageValue(prefs.getString(_mushafEditionKey));
+    final annotationKey = (prefs.getBool(_preferImageModeKey) ?? true) ? edition.storageValue : '__canonical_text__';
+      return {annotationKey: (json.decode(payload) as Map<String, dynamic>).map(
+        (page, note) => MapEntry(int.parse(page), note as String))};
     } catch (_) {
-      return const {};
+      return {};
     }
   }
 
   Future<void> savePageNotes(Map<int, String> notes) async {
     final prefs = await _prefs;
-    final payload = <String, String>{};
-    for (final entry in notes.entries) {
-      final value = entry.value.trim();
-      if (value.isNotEmpty) {
-        payload['${entry.key}'] = value;
-      }
-    }
-    await prefs.setString(_pageNotesKey, json.encode(payload));
+    final edition = MushafEditionX.fromStorageValue(prefs.getString(_mushafEditionKey));
+    final annotationKey = (prefs.getBool(_preferImageModeKey) ?? true) ? edition.storageValue : '__canonical_text__';
+    final all = await loadPageNotesByEdition();
+    all[annotationKey] = notes;
+    await savePageNotesByEdition(all);
+  }
+
+  Future<void> savePageNotesByEdition(Map<String, Map<int, String>> notes) async {
+    final prefs = await _prefs;
+    await prefs.setString('$_pageNotesKey.byEdition', json.encode(notes.map(
+      (edition, pages) => MapEntry(edition, pages.map((page, note) => MapEntry('$page', note))),
+    )));
   }
 
   Future<int?> loadPreferredReciterId() async {
@@ -252,16 +293,35 @@ class ReaderPreferences {
 
   Future<List<int>> loadFavoritePages() async {
     final prefs = await _prefs;
-    return prefs.getStringList(_favoritePagesKey)?.map(int.parse).toList() ??
-        const [];
+    final edition = MushafEditionX.fromStorageValue(prefs.getString(_mushafEditionKey));
+    final annotationKey = (prefs.getBool(_preferImageModeKey) ?? true) ? edition.storageValue : '__canonical_text__';
+    return (await loadFavoritePagesByEdition())[annotationKey] ?? const [];
+  }
+
+  Future<Map<String, List<int>>> loadFavoritePagesByEdition() async {
+    final prefs = await _prefs;
+    final all = prefs.getString('$_favoritePagesKey.byEdition');
+    if (all != null) {
+      return (json.decode(all) as Map<String, dynamic>).map((edition, pages) =>
+        MapEntry(edition, (pages as List<dynamic>).cast<int>()));
+    }
+    final edition = MushafEditionX.fromStorageValue(prefs.getString(_mushafEditionKey));
+    final annotationKey = (prefs.getBool(_preferImageModeKey) ?? true) ? edition.storageValue : '__canonical_text__';
+    return {annotationKey: prefs.getStringList(_favoritePagesKey)?.map(int.parse).toList() ?? <int>[]};
   }
 
   Future<void> saveFavoritePages(List<int> pages) async {
     final prefs = await _prefs;
-    await prefs.setStringList(
-      _favoritePagesKey,
-      pages.map((value) => '$value').toList(growable: false),
-    );
+    final edition = MushafEditionX.fromStorageValue(prefs.getString(_mushafEditionKey));
+    final annotationKey = (prefs.getBool(_preferImageModeKey) ?? true) ? edition.storageValue : '__canonical_text__';
+    final all = await loadFavoritePagesByEdition();
+    all[annotationKey] = pages;
+    await saveFavoritePagesByEdition(all);
+  }
+
+  Future<void> saveFavoritePagesByEdition(Map<String, List<int>> pages) async {
+    final prefs = await _prefs;
+    await prefs.setString('$_favoritePagesKey.byEdition', json.encode(pages));
   }
 
   Future<List<ReaderBookmark>> loadBookmarks() async {
@@ -275,7 +335,9 @@ class ReaderPreferences {
       final jsonList = json.decode(payload) as List<dynamic>;
       return jsonList
           .map(
-              (entry) => ReaderBookmark.fromJson(entry as Map<String, dynamic>))
+              (entry) => ReaderBookmark.fromJson(entry as Map<String, dynamic>,
+                fallbackEdition: MushafEditionX.fromStorageValue(prefs.getString(_mushafEditionKey)),
+          fallbackPreferImageMode: prefs.getBool(_preferImageModeKey) ?? true))
           .toList(growable: false);
     } catch (_) {
       return const [];
@@ -389,7 +451,9 @@ class ReaderPreferences {
       final jsonList = json.decode(payload) as List<dynamic>;
       return jsonList
           .whereType<Map<String, dynamic>>()
-          .map(ReaderHifzReviewEntry.fromJson)
+          .map((entry) => ReaderHifzReviewEntry.fromJson(entry,
+            fallbackEdition: MushafEditionX.fromStorageValue(prefs.getString(_mushafEditionKey)),
+            fallbackPreferImageMode: prefs.getBool(_preferImageModeKey) ?? true))
           .toList(growable: false);
     } catch (_) {
       return const [];
@@ -410,7 +474,8 @@ class ReaderPreferences {
     final prefs = await _prefs;
     final payload = prefs.getString(_experienceSettingsKey);
     if (payload == null || payload.trim().isEmpty) {
-      return const ReaderExperienceSettings.defaults();
+      return profileId == 'default' ? const ReaderExperienceSettings.defaults()
+          : const ReaderExperienceSettings.defaults().copyWith(syncMode: ReaderSyncMode.localOnly);
     }
 
     try {
@@ -486,6 +551,50 @@ class ReaderPreferences {
     await prefs.setString(_adminPublicConfigJsonKey, normalized);
   }
 
+  Future<({int generation, bool dirty})?> loadReaderSyncLocalState(String baseUrl) async {
+    final prefs = await _prefs;
+    final key = 'reader.sync.localState.${Uri.encodeComponent(normalizeSyncBaseUrl(baseUrl))}';
+    final payload = prefs.getString(key);
+    if (payload == null) return null;
+    try {
+      final state = json.decode(payload) as Map<String, dynamic>;
+      final generation = state['generation'];
+      final dirty = state['dirty'];
+      if (generation is! int || generation < 0 || dirty is! bool) return null;
+      return (generation: generation, dirty: dirty);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveReaderSyncLocalState(String baseUrl, {required int generation, required bool dirty}) async {
+    final prefs = await _prefs;
+    final key = 'reader.sync.localState.${Uri.encodeComponent(normalizeSyncBaseUrl(baseUrl))}';
+    if (!await prefs.setString(key, json.encode({'generation': generation, 'dirty': dirty}))) {
+      throw StateError('Unable to save the local reader sync state.');
+    }
+  }
+
+  Future<int?> loadReaderSyncRevision(String baseUrl, ReaderSyncIdentity identity) async {
+    final prefs = await _prefs;
+    final revision = prefs.getInt(_readerSyncRevisionKey(baseUrl, identity));
+    return revision != null && revision >= 0 && revision <= 9007199254740991 ? revision : null;
+  }
+
+  Future<void> saveReaderSyncRevision(String baseUrl, ReaderSyncIdentity identity, int revision) async {
+    if (!isValidSyncIdentity(identity) || revision < 0 || revision > 9007199254740991) {
+      throw const FormatException('Invalid reader sync revision.');
+    }
+    final prefs = await _prefs;
+    if (!await prefs.setInt(_readerSyncRevisionKey(baseUrl, identity), revision)) {
+      throw StateError('Unable to save the reader sync revision.');
+    }
+  }
+
+  String _readerSyncRevisionKey(String baseUrl, ReaderSyncIdentity identity) =>
+      'reader.sync.revision.${Uri.encodeComponent(normalizeSyncBaseUrl(baseUrl))}.'
+      '${identity.deviceId}.${sha256.convert(utf8.encode(identity.token))}';
+
   Future<String> loadOrCreateSyncClientId() async {
     final prefs = await _prefs;
     final existing = prefs.getString(_syncClientIdKey);
@@ -497,7 +606,7 @@ class ReaderPreferences {
     final generated = [
       'reader',
       DateTime.now().microsecondsSinceEpoch.toString(),
-      random.nextInt(1 << 32).toRadixString(16),
+      random.nextInt(0x100000000).toRadixString(16),
     ].join('-');
     await prefs.setString(_syncClientIdKey, generated);
     return generated;
@@ -532,4 +641,95 @@ class ReaderPreferences {
       settings.responseDepth.storageValue,
     );
   }
+  static String normalizeSyncBaseUrl(String value) {
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null || !['http', 'https'].contains(uri.scheme) || uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment) {
+      throw const FormatException('A valid sync server URL is required.');
+    }
+    final normalized = uri.normalizePath().replace(host: uri.host.toLowerCase()).toString();
+    return normalized.replaceFirst(RegExp(r'/+$'), '');
+  }
+
+  static final Map<String, Future<ReaderSyncIdentity>> _syncIdentityLoads = {};
+
+  static bool isValidSyncIdentity(ReaderSyncIdentity identity) =>
+      RegExp(r'^reader_[A-Za-z0-9_-]{32}$').hasMatch(identity.deviceId) &&
+      RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(identity.token);
+
+  Future<void> saveSyncIdentity(String baseUrl, ReaderSyncIdentity identity) async {
+    final normalized = normalizeSyncBaseUrl(baseUrl);
+    if (!isValidSyncIdentity(identity)) {
+      throw const FormatException('Invalid private sync identity.');
+    }
+    final cacheKey = '$profileId:$normalized';
+    final pending = _syncIdentityLoads[cacheKey];
+    if (pending != null) await pending;
+    final prefs = await _prefs;
+    final key = 'reader.sync.identity.${Uri.encodeComponent(normalized)}';
+    if (!await prefs.setString(key, json.encode({'deviceId': identity.deviceId, 'token': identity.token}))) {
+      throw StateError('Unable to save the private sync identity.');
+    }
+  }
+
+  Future<ReaderSyncIdentity> loadOrCreateSyncIdentity(String baseUrl) {
+    final normalized = normalizeSyncBaseUrl(baseUrl);
+    final cacheKey = '$profileId:$normalized';
+    final pending = _syncIdentityLoads[cacheKey];
+    if (pending != null) return pending;
+    final request = _loadOrCreateSyncIdentity(normalized);
+    _syncIdentityLoads[cacheKey] = request;
+    return request.whenComplete(() { if (identical(_syncIdentityLoads[cacheKey], request)) _syncIdentityLoads.remove(cacheKey); });
+  }
+
+  Future<ReaderSyncIdentity> _loadOrCreateSyncIdentity(String normalized) async {
+    final prefs = await _prefs;
+    final key = 'reader.sync.identity.${Uri.encodeComponent(normalized)}';
+    final stored = prefs.getString(key);
+    if (stored != null) {
+      try {
+        final record = json.decode(stored) as Map<String, dynamic>;
+        final id = record['deviceId'];
+        final token = record['token'];
+        if (id is String && RegExp(r'^reader_[A-Za-z0-9_-]{32}$').hasMatch(id) &&
+            token is String && token.length == 43 && RegExp(r'^[A-Za-z0-9_-]{43}$').hasMatch(token)) {
+          return ReaderSyncIdentity(deviceId: id.toLowerCase(), token: token);
+        }
+      } catch (_) { /* A missing credential cannot claim an existing backup. */ }
+    }
+    final random = Random.secure();
+    String secret(int count) => base64UrlEncode(List<int>.generate(count, (_) => random.nextInt(256))).replaceAll('=', '');
+    final identity = ReaderSyncIdentity(deviceId: 'reader_${secret(24).toLowerCase()}', token: secret(32));
+    if (!await prefs.setString(key, json.encode({'deviceId': identity.deviceId, 'token': identity.token}))) {
+      throw StateError('Unable to save the private sync identity.');
+    }
+    return identity;
+  }
+
+}
+
+
+class _ProfilePreferences {
+  const _ProfilePreferences(this.prefs, this.profileId);
+  final SharedPreferences prefs;
+  final String profileId;
+  String key(String value) => value == 'reader.admin.publicBaseUrl' ||
+          value == 'reader.admin.publicConfigJson' || value == 'reader.onboardingSeen'
+      ? value : ReaderProfileStore.keyFor(value, profileId);
+  String? getString(String k) => prefs.getString(key(k));
+  List<String>? getStringList(String k) => prefs.getStringList(key(k));
+  int? getInt(String k) => prefs.getInt(key(k));
+  bool? getBool(String k) => prefs.getBool(key(k));
+  double? getDouble(String k) => prefs.getDouble(key(k));
+  Future<bool> setString(String k, String v) => prefs.setString(key(k), v);
+  Future<bool> setInt(String k, int v) => prefs.setInt(key(k), v);
+  Future<bool> setBool(String k, bool v) => prefs.setBool(key(k), v);
+  Future<bool> setDouble(String k, double v) => prefs.setDouble(key(k), v);
+  Future<bool> remove(String k) => prefs.remove(key(k));
+}
+
+class ReaderSyncIdentity {
+  const ReaderSyncIdentity({required this.deviceId, required this.token});
+  final String deviceId;
+  final String token;
 }

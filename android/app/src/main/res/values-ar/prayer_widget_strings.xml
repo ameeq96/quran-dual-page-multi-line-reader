@@ -1,0 +1,7 @@
+<resources>
+    <string name="prayer_widget_title">مواقيت الصلاة</string>
+    <string name="prayer_widget_description">أوقات الصلاة حسب مدينتك المحفوظة. اضغط لفتح قارئ القرآن.</string>
+    <string name="prayer_widget_setup">اختر مدينة في التطبيق</string>
+    <string name="prayer_widget_refresh">تحديث</string>
+    <string name="prayer_widget_placeholder">—</string>
+</resources>
