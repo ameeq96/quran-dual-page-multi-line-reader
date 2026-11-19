@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import '../../../../app/reader_localization.dart';
 
 import '../../domain/models/reader_settings.dart';
+import 'app_motion.dart';
+import 'app_page_header.dart';
 
 class ReaderSettingsSheet extends StatefulWidget {
   const ReaderSettingsSheet({
@@ -106,67 +108,29 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                   : const SizedBox.shrink(),
             ),
             SizedBox(height: widget.showHandle ? 20 : 0),
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer.withValues(
-                  alpha: 0.5,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: theme.dividerColor),
-              ),
-              child: Row(
-                children: [
-                  if (!widget.showHandle) ...[
-                    IconButton.outlined(
-                      tooltip: tr(context, 'Back'),
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      icon: const Icon(Icons.arrow_back_rounded, size: 20),
-                    ),
-                    const SizedBox(width: 14),
-                  ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          tr(context, 'YOUR MUSHAF'),
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.secondary,
-                            letterSpacing: 1.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          tr(context, 'Reader settings'),
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.6,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          tr(context, 'Make room for your way of reading.'),
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            AppPageHeader(
+              eyebrow: tr(context, 'YOUR MUSHAF'),
+              title: tr(context, 'Reader settings'),
+              subtitle: tr(context, 'Make room for your way of reading.'),
+              icon: Icons.tune_rounded,
+              compact: widget.showHandle,
+              backTooltip: tr(context, 'Back'),
+              onBack: widget.showHandle
+                  ? null
+                  : () => Navigator.of(context).maybePop(),
             ),
             const SizedBox(height: 20),
-            const _InterfaceLanguageSetting(),
+            const AppStagger(index: 0, child: _InterfaceLanguageSetting()),
             const SizedBox(height: 26),
-            _SectionLabel(
-              icon: Icons.auto_awesome_rounded,
-              label: tr(context, 'Reading surface'),
+            AppStagger(
+              index: 1,
+              child: _SectionLabel(
+                icon: Icons.auto_awesome_rounded,
+                label: tr(context, 'Reading surface'),
+              ),
             ),
             const SizedBox(height: 10),
-            _SettingsCard(
+            AppStagger(index: 2, child: _SettingsCard(
               child: Column(
                 children: [
                   Padding(
@@ -336,7 +300,7 @@ class _ReaderSettingsSheetState extends State<ReaderSettingsSheet> {
                   ),
                 ],
               ),
-            ),
+            )),
             const SizedBox(height: 28),
             _SectionLabel(
               icon: Icons.tune_rounded,

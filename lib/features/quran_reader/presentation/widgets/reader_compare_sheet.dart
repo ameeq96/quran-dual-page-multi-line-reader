@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/app_theme.dart';
 import '../../../../app/reader_localization.dart';
 
 import '../../../../core/constants/quran_constants.dart';
 import '../../domain/models/quran_page.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
+import 'app_motion.dart';
 import 'mushaf_page_widget.dart';
+import 'reader_app_bar.dart';
 
 class QuranCompareScreen extends StatefulWidget {
   const QuranCompareScreen({
@@ -68,34 +71,42 @@ class _QuranCompareScreenState extends State<QuranCompareScreen> {
             top: false,
             child: ListView(
               padding: EdgeInsets.fromLTRB(
-                compact ? 12 : 16,
+                16,
                 compact ? 10 : 14,
-                compact ? 12 : 16,
+                16,
                 24,
               ),
               children: [
-                _CompareHeader(
-                  activeEdition: activeEdition,
-                  currentPageNumber: widget.controller.currentPageNumber,
+                AppStagger(
+                  index: 0,
+                  child: _CompareHeader(
+                    activeEdition: activeEdition,
+                    currentPageNumber: widget.controller.currentPageNumber,
+                  ),
                 ),
                 const SizedBox(height: 14),
-                ...widget.controller.compareEditions.map((edition) {
+                ...widget.controller.compareEditions.indexed.map((entry) {
+                  final (index, edition) = entry;
                   final page =
                       widget.controller.pageForCurrentReferenceInEdition(
                     edition,
                   );
                   final navigationPage = widget.controller
                       .navigationPageForCurrentReferenceInEdition(edition);
+                  final card = _CompareEditionCard(
+                    edition: edition,
+                    page: page,
+                    navigationPage: navigationPage,
+                    settings: previewSettings.copyWith(mushafEdition: edition),
+                    isActive: edition == activeEdition,
+                    onUseEdition: () => _useEdition(edition),
+                  );
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 14),
-                    child: _CompareEditionCard(
-                      edition: edition,
-                      page: page,
-                      navigationPage: navigationPage,
-                      settings: previewSettings.copyWith(mushafEdition: edition),
-                      isActive: edition == activeEdition,
-                      onUseEdition: () => _useEdition(edition),
-                    ),
+                    // Only the cards visible on entry are staggered.
+                    child: index < 2
+                        ? AppStagger(index: index + 1, child: card)
+                        : card,
                   );
                 }),
                 Text(
@@ -125,32 +136,33 @@ class _CompareHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.94),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.36)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              tr(context, 'Same reference across all editions'),
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+    return ReaderSheetCard(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const ReaderAccentBadge(icon: Icons.compare_rounded, size: 44),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tr(context, 'Same reference across all editions'),
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  tr(context, 'Current reader page $currentPageNumber in ${activeEdition.label}. Switch edition directly from any card below.'),
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              tr(context, 'Current reader page $currentPageNumber in ${activeEdition.label}. Switch edition directly from any card below.'),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -185,25 +197,10 @@ class _CompareEditionCard extends StatelessWidget {
     final previewWidth = compact ? 210.0 : 250.0;
     final previewHeight = previewWidth / pageAspectRatio;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: isActive
-              ? theme.colorScheme.primary.withValues(alpha: 0.38)
-              : theme.dividerColor.withValues(alpha: 0.34),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: theme.colorScheme.shadow.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
+    return ReaderSheetCard(
+      highlighted: isActive,
+      child: SizedBox(
+        width: double.infinity,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -216,8 +213,8 @@ class _CompareEditionCard extends StatelessWidget {
                     children: [
                       Text(
                         tr(context, edition.label),
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -230,25 +227,25 @@ class _CompareEditionCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                const SizedBox(width: 12),
                 DecoratedBox(
                   decoration: BoxDecoration(
                     color: isActive
-                        ? theme.colorScheme.primary.withValues(alpha: 0.14)
-                        : theme.colorScheme.surfaceContainerHighest
-                            .withValues(alpha: 0.72),
+                        ? theme.colorScheme.primaryContainer
+                        : theme.colorScheme.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
-                      vertical: 8,
+                      vertical: 6,
                     ),
                     child: Text(
                       tr(context, isActive ? 'Active' : 'Available'),
                       style: theme.textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: isActive
-                            ? theme.colorScheme.primary
+                            ? theme.colorScheme.onPrimaryContainer
                             : theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
@@ -261,8 +258,8 @@ class _CompareEditionCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(24),
+                color: theme.colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(AppRadii.md),
               ),
               child: Center(
                 child: RepaintBoundary(
@@ -283,13 +280,13 @@ class _CompareEditionCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _CompareChip(
+                ReaderInfoPill(
                   icon: Icons.menu_book_rounded,
                   label: tr(context, 'Page ${page.number}'),
                 ),
-                _CompareChip(
+                ReaderInfoPill(
                   icon: Icons.layers_outlined,
-                  label: edition.bestUseLabel,
+                  label: tr(context, edition.bestUseLabel),
                 ),
               ],
             ),
@@ -306,53 +303,21 @@ class _CompareEditionCard extends StatelessWidget {
               width: double.infinity,
               child: isActive
                   ? OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                      ),
                       onPressed: onUseEdition,
                       icon: const Icon(Icons.check_circle_outline_rounded),
                       label: Text(tr(context, 'Back to reader')),
                     )
                   : FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                      ),
                       onPressed: onUseEdition,
                       icon: const Icon(Icons.swap_horiz_rounded),
                       label: Text(tr(context, 'Use ${edition.label}')),
                     ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CompareChip extends StatelessWidget {
-  const _CompareChip({
-    required this.icon,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow.withValues(alpha: 0.8),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.28)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: theme.colorScheme.primary),
-            const SizedBox(width: 8),
-            Text(
-              tr(context, label),
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
             ),
           ],
         ),

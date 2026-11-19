@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/app_theme.dart';
 import '../../../../app/reader_localization.dart';
 
 import '../../domain/models/reader_settings.dart';
@@ -68,7 +69,7 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
     final theme = Theme.of(context);
     final size = MediaQuery.of(context).size;
     final compact = size.width < 420 || size.height < 720;
-    final isDark = theme.brightness == Brightness.dark;
+    final decor = AppDecor.of(context);
 
     return SafeArea(
       bottom: false,
@@ -82,21 +83,20 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(AppRadii.lg),
             border: Border.all(
-              color: Color.alphaBlend(
-                theme.colorScheme.secondary
-                    .withValues(alpha: isDark ? 0.18 : 0.12),
-                theme.dividerColor,
-              ),
+              color: theme.dividerColor.withValues(alpha: 0.7),
             ),
+            boxShadow: decor.floatShadow,
           ),
           child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              compact ? 12 : 16,
-              compact ? 10 : 12,
-              compact ? 10 : 12,
-              compact ? 10 : 12,
+            // Buttons carry their own 48dp touch area, so the card padding
+            // stays small and the visible pills still sit on a 10/12dp gutter.
+            padding: EdgeInsetsDirectional.fromSTEB(
+              compact ? 6 : 10,
+              compact ? 4 : 6,
+              compact ? 6 : 10,
+              compact ? 4 : 6,
             ),
             child: Column(children: [
               Expanded(child: Row(
@@ -104,17 +104,21 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                 IconButton(
                   tooltip: tr(context, 'Back'),
                   onPressed: () => Navigator.of(context).maybePop(),
-                  style: IconButton.styleFrom(
-                    foregroundColor: theme.colorScheme.primary,
-                    backgroundColor: theme.colorScheme.surfaceContainerLow,
-                    fixedSize: const Size(44, 44),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(13),
-                    ),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 48,
+                    height: 48,
                   ),
-                  icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: _PillFace(
+                    icon: Icons.arrow_back_rounded,
+                    compact: compact,
+                  ),
                 ),
-                SizedBox(width: compact ? 10 : 16),
+                SizedBox(width: compact ? 6 : 12),
                 if (size.width >= 600) ...[
                   Container(
                     width: 1,
@@ -144,9 +148,9 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                                     ? theme.textTheme.titleMedium
                                     : theme.textTheme.titleLarge)
                                 ?.copyWith(
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w700,
                               color: theme.colorScheme.onSurface,
-                              letterSpacing: -0.3,
+                              letterSpacing: -0.2,
                             ),
                           ),
                           const SizedBox(height: 2),
@@ -164,14 +168,13 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                     },
                   ),
                 ),
-                SizedBox(width: compact ? 6 : 12),
+                SizedBox(width: compact ? 4 : 8),
                 if (onToggleFullscreen != null) ...[
                   ReaderFullscreenButton(
                     fullscreenReading: controller.settings.fullscreenReading,
                     onPressed: onToggleFullscreen!,
                     compact: compact,
                   ),
-                  SizedBox(width: compact ? 4 : 8),
                 ],
                 _ActionPill(
                   icon: controller.settings.pageNightMode
@@ -185,16 +188,16 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                   compact: compact,
                 ),
-                SizedBox(width: compact ? 4 : 8),
                 _ActionPill(
                   icon: Icons.search_rounded,
                   tooltip: tr(context, 'Search'),
                   onPressed: onOpenSearch,
                   compact: compact,
                 ),
-                SizedBox(width: compact ? 4 : 8),
                 PopupMenuButton<ReaderMoreAction>(
                   tooltip: tr(context, 'More'),
+                  padding: EdgeInsets.zero,
+                  position: PopupMenuPosition.under,
                   onSelected: (value) {
                     switch (value) {
                       case ReaderMoreAction.dashboard:
@@ -330,7 +333,11 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                       color: theme.colorScheme.outlineVariant.withValues(alpha: 0.45),
                     ))),
                     child: Padding(
-                      padding: const EdgeInsets.only(top: 6),
+                      padding: EdgeInsetsDirectional.only(
+                        top: 6,
+                        start: compact ? 6 : 8,
+                        end: compact ? 6 : 8,
+                      ),
                       child: bottom!,
                     ),
                   ),
@@ -368,7 +375,7 @@ class ReaderFullscreenButton extends StatelessWidget {
     if (showLabel) {
       return FilledButton.tonalIcon(
         onPressed: onPressed,
-        style: FilledButton.styleFrom(minimumSize: const Size(44, 44)),
+        style: FilledButton.styleFrom(minimumSize: const Size(48, 48)),
         icon: Icon(icon, size: compact ? 20 : 22),
         label: Text(label),
       );
@@ -392,27 +399,14 @@ class _ActionPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Tooltip(
       message: tooltip,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(13),
-          child: Ink(
-            width: compact ? 44 : 48,
-            height: compact ? 44 : 48,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(
-              icon,
-              size: compact ? 20 : 22,
-              color: theme.colorScheme.primary,
-            ),
-          ),
+          borderRadius: BorderRadius.circular(AppRadii.md),
+          child: _PillFace(icon: icon, compact: compact),
         ),
       ),
     );
@@ -428,19 +422,53 @@ class _MorePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _PillFace(
+      icon: Icons.more_horiz_rounded,
+      compact: compact,
+      outlined: true,
+    );
+  }
+}
+
+/// A 48dp touch area with a smaller rounded pill drawn inside it, so the bar
+/// keeps comfortable targets without crowding the title on narrow phones.
+class _PillFace extends StatelessWidget {
+  const _PillFace({
+    required this.icon,
+    required this.compact,
+    this.outlined = false,
+  });
+
+  final IconData icon;
+  final bool compact;
+  final bool outlined;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Container(
-      width: compact ? 44 : 48,
-      height: compact ? 44 : 48,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(13),
-        border: Border.all(color: theme.dividerColor),
-      ),
-      child: Icon(
-        Icons.more_horiz_rounded,
-        size: compact ? 20 : 22,
-        color: theme.colorScheme.onSurface,
+    final face = compact ? 40.0 : 44.0;
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: Center(
+        child: Container(
+          width: face,
+          height: face,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(AppRadii.sm),
+            border: outlined
+                ? Border.all(color: theme.dividerColor.withValues(alpha: 0.8))
+                : null,
+          ),
+          child: Icon(
+            icon,
+            size: compact ? 20 : 22,
+            color: outlined
+                ? theme.colorScheme.onSurface
+                : theme.colorScheme.primary,
+          ),
+        ),
       ),
     );
   }
@@ -457,12 +485,221 @@ class _MenuRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Row(
       children: [
-        Icon(icon, size: 18),
-        const SizedBox(width: 10),
-        Text(tr(context, label)),
+        Icon(icon, size: 20, color: theme.colorScheme.primary),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            tr(context, label),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
+    );
+  }
+}
+
+/// Shared header for the reader's bottom sheets: drag handle, title, optional
+/// subtitle and a close button. [title] and [subtitle] are shown as given, so
+/// pass them already localized.
+class ReaderSheetHeader extends StatelessWidget {
+  const ReaderSheetHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.showHandle = true,
+  });
+
+  final String title;
+  final String? subtitle;
+
+  /// True when shown inside a modal sheet: draws the drag handle and the close
+  /// button. Full-screen hosts pass false and keep their own back navigation.
+  final bool showHandle;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final subtitle = this.subtitle;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showHandle)
+          Center(
+            child: Container(
+              width: 44,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.onSurfaceVariant
+                    .withValues(alpha: 0.32),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+          ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        title,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (subtitle != null && subtitle.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            if (showHandle) ...[
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: tr(context, 'Close'),
+                onPressed: () => Navigator.of(context).maybePop(),
+                constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+                style: IconButton.styleFrom(
+                  backgroundColor: theme.colorScheme.surfaceContainerLow,
+                  foregroundColor: theme.colorScheme.onSurfaceVariant,
+                ),
+                icon: const Icon(Icons.close_rounded, size: 22),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// The surface used for a section inside a reader sheet.
+class ReaderSheetCard extends StatelessWidget {
+  const ReaderSheetCard({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.highlighted = false,
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  /// Draws the border in the primary colour, for the selected card of a set.
+  final bool highlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(AppRadii.lg),
+        boxShadow: AppDecor.of(context).cardShadow,
+        border: Border.all(
+          color: highlighted
+              ? theme.colorScheme.primary.withValues(alpha: 0.55)
+              : theme.dividerColor.withValues(alpha: 0.7),
+          width: highlighted ? 1.4 : 1,
+        ),
+      ),
+      child: Padding(padding: padding, child: child),
+    );
+  }
+}
+
+/// Small rounded icon badge in one of the theme's accent pairs, matching the
+/// feature tiles on the home screen. Index 1 is the gold pair.
+class ReaderAccentBadge extends StatelessWidget {
+  const ReaderAccentBadge({
+    super.key,
+    required this.icon,
+    this.accentIndex = 1,
+    this.size = 40,
+  });
+
+  final IconData icon;
+  final int accentIndex;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppDecor.of(context).accentAt(accentIndex);
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: AlignmentDirectional.topStart,
+          end: AlignmentDirectional.bottomEnd,
+          colors: [
+            accent.background,
+            Color.lerp(accent.background, accent.foreground, 0.2) ??
+                accent.background,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(size * 0.32),
+      ),
+      child: Icon(icon, color: accent.foreground, size: size * 0.54),
+    );
+  }
+}
+
+/// Compact icon + label pill for read-only status inside reader sheets.
+class ReaderInfoPill extends StatelessWidget {
+  const ReaderInfoPill({super.key, required this.icon, required this.label});
+
+  final IconData icon;
+
+  /// Shown as given, so pass it already localized.
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.6)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -8,6 +8,7 @@ import '../../../../core/services/quran_study_export.dart';
 import '../../data/services/quran_study_data_source.dart';
 import '../../domain/models/quran_study_models.dart';
 import '../controllers/quran_reader_controller.dart';
+import '../widgets/app_page_header.dart';
 
 class QuranStudyScreen extends StatefulWidget {
   const QuranStudyScreen({super.key, this.initialVerseKey = '1:1', this.controller});
@@ -209,10 +210,25 @@ class _QuranStudyScreenState extends State<QuranStudyScreen> {
     final theme = Theme.of(context);
     final verse = _verse;
     return Scaffold(
-      appBar: AppBar(title: Text(tr(context, 'Quran study')),
-        actions: [IconButton(onPressed: _loading ? null : _showSources,
-          tooltip: tr(context, 'Sources and licenses'), icon: const Icon(Icons.info_outline_rounded))]),
-      body: _loading ? const Center(child: CircularProgressIndicator())
+      // Zero-height bar: keeps the status bar styling and top inset while the
+      // hero header in the body carries title, back and actions.
+      appBar: AppBar(toolbarHeight: 0, automaticallyImplyLeading: false),
+      body: SafeArea(child: Column(children: [
+        Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(20, 12, 20, 0),
+          child: Center(child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1000),
+            child: AppPageHeader(
+              title: tr(context, 'Quran study'),
+              icon: Icons.auto_stories_outlined,
+              compact: true,
+              onBack: AppPageHeader.popAction(context),
+              actions: [IconButton(onPressed: _loading ? null : _showSources,
+                tooltip: tr(context, 'Sources and licenses'), icon: const Icon(Icons.info_outline_rounded))],
+            ),
+          )),
+        ),
+        Expanded(child: _loading ? const Center(child: CircularProgressIndicator())
         : _error != null ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
           Padding(padding: const EdgeInsets.all(24), child: Text(tr(context, _error!))),
           FilledButton(onPressed: _initialize, child: Text(tr(context, 'Try again'))),
@@ -309,7 +325,7 @@ class _QuranStudyScreenState extends State<QuranStudyScreen> {
                 const SizedBox(height: 20),
               ],
             ])),
-        ))),
+        ))))])),
     );
   }
 }

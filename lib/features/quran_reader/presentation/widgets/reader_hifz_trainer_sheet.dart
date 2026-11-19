@@ -9,7 +9,9 @@ import '../../../../core/constants/quran_constants.dart';
 import '../../domain/models/quran_page.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
+import 'app_motion.dart';
 import 'mushaf_page_widget.dart';
+import 'reader_app_bar.dart';
 import 'reader_hifz_line_mask.dart';
 
 Future<void> showReaderHifzTrainerSheet(
@@ -120,42 +122,19 @@ class _ReaderHifzTrainerSheetState extends State<_ReaderHifzTrainerSheet> {
     return SafeArea(
       top: false,
       child: ListView(
-        padding: EdgeInsets.fromLTRB(
-          compact ? 16 : 20,
-          18,
-          compact ? 16 : 20,
-          24,
-        ),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
-          Center(
-            child: Container(
-              width: 54,
-              height: 5,
-              decoration: BoxDecoration(
-                color: theme.dividerColor.withValues(alpha: 0.8),
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
+          ReaderSheetHeader(
+            title: tr(context, 'Smart hifz trainer'),
+            subtitle: tr(context, 'Six hide bars are ready. Drag any bar to the exact line you want to cover. The same bars also appear on the live reader page.'),
           ),
-          const SizedBox(height: 18),
-          _TrainerCard(
+          const SizedBox(height: 12),
+          AppStagger(
+            index: 0,
+            child: _TrainerCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  tr(context, 'Smart hifz trainer'),
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  tr(context, 'Six hide bars are ready. Drag any bar to the exact line you want to cover. The same bars also appear on the live reader page.'),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -176,36 +155,46 @@ class _ReaderHifzTrainerSheetState extends State<_ReaderHifzTrainerSheet> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: _toggleLinesVisibility,
-                      icon: Icon(
-                        _linesHidden
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                      ),
-                      label: Text(
-                        tr(context, _linesHidden ? 'Show lines' : 'Hide lines'),
-                      ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 48),
                     ),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        setState(_resetAnchors);
-                      },
-                      icon: const Icon(Icons.restart_alt_rounded),
-                      label: Text(tr(context, 'Reset bars')),
+                    onPressed: _toggleLinesVisibility,
+                    icon: Icon(
+                      _linesHidden
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
                     ),
-                  ],
+                    label: Text(
+                      tr(context, _linesHidden ? 'Show lines' : 'Hide lines'),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                    ),
+                    onPressed: () {
+                      setState(_resetAnchors);
+                    },
+                    icon: const Icon(Icons.restart_alt_rounded),
+                    label: Text(tr(context, 'Reset bars')),
+                  ),
                 ),
               ],
             ),
+            ),
           ),
           const SizedBox(height: 14),
-          _TrainerCard(
+          AppStagger(
+            index: 1,
+            child: _TrainerCard(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -236,6 +225,7 @@ class _ReaderHifzTrainerSheetState extends State<_ReaderHifzTrainerSheet> {
                   ),
                 ),
               ],
+            ),
             ),
           ),
         ],
@@ -275,8 +265,8 @@ class _ManualHifzPreview extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(24),
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppRadii.md),
       ),
       child: Center(
         child: FittedBox(
@@ -430,27 +420,7 @@ class _TrainerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            theme.colorScheme.surface.withValues(alpha: 0.97),
-            theme.colorScheme.surfaceContainer.withValues(alpha: 0.9),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(AppRadii.xl),
-        boxShadow: AppDecor.of(context).cardShadow,
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.42)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: child,
-      ),
-    );
+    return ReaderSheetCard(child: child);
   }
 }
 
@@ -465,29 +435,6 @@ class _TrainerChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.82),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.36)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: theme.colorScheme.primary),
-            const SizedBox(width: 8),
-            Text(
-              tr(context, label),
-              style: theme.textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return ReaderInfoPill(icon: icon, label: tr(context, label));
   }
 }

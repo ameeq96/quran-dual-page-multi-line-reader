@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/app_theme.dart';
 import '../../../../app/reader_localization.dart';
+import 'app_motion.dart';
 
 class ReaderControlsOverlay extends StatelessWidget {
   const ReaderControlsOverlay({
@@ -18,6 +20,12 @@ class ReaderControlsOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final decor = AppDecor.of(context);
+
+    // Mushaf pages always turn right-to-left, so "next" stays on the physical
+    // left edge in every app language. The arrows are pinned to LTR so they
+    // keep pointing outwards instead of mirroring under Urdu or Arabic.
     return SafeArea(
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -60,39 +68,33 @@ class ReaderControlsOverlay extends StatelessWidget {
                   right: 0,
                   bottom: hintBottom,
                   child: Center(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surface
-                            .withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: Theme.of(context)
-                              .dividerColor
-                              .withValues(alpha: 0.66),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .shadow
-                                .withValues(alpha: 0.08),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: edgeInset),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: theme.dividerColor.withValues(alpha: 0.7),
                           ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: compact ? 13 : 18,
-                          vertical: compact ? 8 : 10,
+                          boxShadow: decor.cardShadow,
                         ),
-                        child: Text(
-                          tr(context, 'Tap anywhere to focus on reading'),
-                          style: compact
-                              ? Theme.of(context).textTheme.labelMedium
-                              : null,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: compact ? 14 : 18,
+                            vertical: compact ? 8 : 10,
+                          ),
+                          child: Text(
+                            tr(context, 'Tap anywhere to focus on reading'),
+                            textAlign: TextAlign.center,
+                            style: (compact
+                                    ? theme.textTheme.labelMedium
+                                    : theme.textTheme.bodyMedium)
+                                ?.copyWith(
+                              color: theme.colorScheme.onSurface,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -128,61 +130,63 @@ class _ReaderEdgeButton extends StatelessWidget {
     final theme = Theme.of(context);
 
     return AnimatedOpacity(
-      duration: const Duration(milliseconds: 180),
-      opacity: enabled ? 1 : 0.58,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              theme.colorScheme.surface.withValues(alpha: 0.94),
-              theme.colorScheme.surfaceContainer.withValues(alpha: 0.86),
-            ],
+      duration: AppMotion.release,
+      opacity: enabled ? 1 : 0.6,
+      child: AppPressable(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadii.lg),
+            boxShadow: AppDecor.of(context).floatShadow,
           ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: theme.dividerColor.withValues(alpha: 0.52),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: theme.colorScheme.shadow.withValues(alpha: 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 8 : 10,
-            vertical: compact ? 8 : 10,
-          ),
-          child: FilledButton.tonalIcon(
-            onPressed: enabled ? onPressed : null,
-            icon: Icon(icon, size: compact ? 20 : null),
-            label: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(tr(context, label)),
-                if (!compact)
-                  Text(
-                    tr(context, helper),
-                    style: theme.textTheme.bodySmall,
-                  ),
-              ],
-            ),
-            style: FilledButton.styleFrom(
-              elevation: 0,
-              backgroundColor: theme.colorScheme.surfaceContainerHighest
-                  .withValues(alpha: 0.34),
-              foregroundColor: theme.colorScheme.onSurface,
-              padding: EdgeInsets.symmetric(
-                horizontal: compact ? 15 : 18,
-                vertical: compact ? 11 : 14,
+          child: Material(
+            // Fully opaque so the label keeps its contrast over both the
+            // light and the night page tones.
+            color: theme.colorScheme.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadii.lg),
+              side: BorderSide(
+                color: theme.dividerColor.withValues(alpha: 0.7),
               ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(compact ? 16 : 18),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: FilledButton.tonalIcon(
+                onPressed: enabled ? onPressed : null,
+                icon: Icon(
+                  icon,
+                  size: compact ? 20 : 22,
+                  textDirection: TextDirection.ltr,
+                ),
+                label: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(tr(context, label)),
+                    if (!compact)
+                      Text(
+                        tr(context, helper),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+                style: FilledButton.styleFrom(
+                  elevation: 0,
+                  minimumSize: const Size(48, 48),
+                  backgroundColor: theme.colorScheme.surfaceContainerLow,
+                  foregroundColor: theme.colorScheme.onSurface,
+                  disabledBackgroundColor:
+                      theme.colorScheme.surfaceContainerLow,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 14 : 18,
+                    vertical: compact ? 10 : 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppRadii.md),
+                  ),
+                ),
               ),
             ),
           ),

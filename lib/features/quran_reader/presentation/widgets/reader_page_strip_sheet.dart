@@ -6,6 +6,7 @@ import '../../../../app/app_theme.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
 import 'quran_page_image_provider.dart';
+import 'reader_app_bar.dart';
 import 'reader_sheet_frame.dart';
 
 Future<void> showReaderPageStripSheet(
@@ -96,7 +97,7 @@ class ReaderPageStripContent extends StatelessWidget {
             ? 4
             : 3;
     final tileLogicalWidth =
-        ((size.width - 40 - (12 * (columns - 1))) / columns)
+        ((size.width - 32 - (12 * (columns - 1))) / columns)
             .clamp(120.0, 260.0);
     final thumbnailCacheWidth =
         (MediaQuery.of(context).devicePixelRatio * tileLogicalWidth)
@@ -107,39 +108,19 @@ class ReaderPageStripContent extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (showHandle) ...[
-              Center(
-                child: Container(
-                  width: 54,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: theme.dividerColor.withValues(alpha: 0.8),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-            ],
-            Text(
-              tr(context, 'Page thumbnails'),
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+            ReaderSheetHeader(
+              title: tr(context, 'Page thumbnails'),
+              subtitle: tr(context, 'Jump quickly by previewing the nearby Mushaf pages.'),
+              showHandle: showHandle,
             ),
-            const SizedBox(height: 6),
-            Text(
-              tr(context, 'Jump quickly by previewing the nearby Mushaf pages.'),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Expanded(
               child: GridView.builder(
+                padding: const EdgeInsets.only(top: 4, bottom: 20),
                 cacheExtent: size.height * 0.35,
                 itemCount: controller.totalPages,
                 addAutomaticKeepAlives: false,
@@ -156,21 +137,22 @@ class ReaderPageStripContent extends StatelessWidget {
                   final selected = pageNumber == controller.currentPageNumber;
 
                   return RepaintBoundary(
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(18),
-                      onTap: () => _handlePageOpen(context, pageNumber),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color:
-                              theme.colorScheme.surface.withValues(alpha: 0.95),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: selected
-                                ? theme.colorScheme.primary
-                                : theme.dividerColor.withValues(alpha: 0.5),
-                            width: selected ? 1.6 : 1,
-                          ),
+                    child: Material(
+                      color: selected
+                          ? theme.colorScheme.primaryContainer
+                          : theme.colorScheme.surface,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.md),
+                        side: BorderSide(
+                          color: selected
+                              ? theme.colorScheme.primary
+                              : theme.dividerColor.withValues(alpha: 0.7),
+                          width: selected ? 2 : 1,
                         ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => _handlePageOpen(context, pageNumber),
                         child: Column(
                           children: [
                             Expanded(
@@ -215,6 +197,9 @@ class ReaderPageStripContent extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.labelLarge?.copyWith(
                                   fontWeight: FontWeight.w700,
+                                  color: selected
+                                      ? theme.colorScheme.onPrimaryContainer
+                                      : theme.colorScheme.onSurface,
                                 ),
                               ),
                             ),

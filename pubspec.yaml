@@ -81,6 +81,16 @@ flutter:
     - assets/prayer_audio/
     - assets/asset_packs/16_line/mobile-app-source/
 
+  # Brand typefaces (SIL Open Font License, see assets/fonts/*-OFL.txt).
+  # Both are variable fonts; Flutter maps FontWeight onto the wght axis.
+  fonts:
+    - family: Outfit
+      fonts:
+        - asset: assets/fonts/Outfit.ttf
+    - family: WorkSans
+      fonts:
+        - asset: assets/fonts/WorkSans.ttf
+
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

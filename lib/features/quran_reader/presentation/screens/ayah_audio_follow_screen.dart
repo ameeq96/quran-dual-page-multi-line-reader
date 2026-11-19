@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../app/app_theme.dart';
 import '../../../../app/reader_localization.dart';
 import '../controllers/quran_reader_controller.dart';
+import '../widgets/app_motion.dart';
+import '../widgets/reader_app_bar.dart';
 import '../widgets/reader_audio_sheet.dart';
 
 class AyahAudioFollowScreen extends StatefulWidget {
@@ -72,11 +74,24 @@ class _AyahAudioFollowScreenState extends State<AyahAudioFollowScreen> {
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                    child: Card(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                    child: AppStagger(
+                      index: 0,
+                      child: ReaderSheetCard(
+                      padding: EdgeInsets.zero,
+                      child: Material(
+                      type: MaterialType.transparency,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadii.lg),
+                      ),
+                      clipBehavior: Clip.antiAlias,
                       child: ExpansionTile(
                         initiallyExpanded: false,
-                        leading: const Icon(Icons.hearing_rounded),
+                        shape: const Border(),
+                        collapsedShape: const Border(),
+                        leading: const ReaderAccentBadge(
+                          icon: Icons.hearing_rounded,
+                        ),
                         title: Text(_t('Follow the recitation')),
                         subtitle: Text(
                           _t(
@@ -102,6 +117,8 @@ class _AyahAudioFollowScreenState extends State<AyahAudioFollowScreen> {
                             ),
                           ),
                         ],
+                      ),
+                      ),
                       ),
                     ),
                   ),

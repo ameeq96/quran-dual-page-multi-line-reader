@@ -7,6 +7,7 @@ import '../../../../app/reader_localization.dart';
 import '../../domain/models/quran_asset_pack_download.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
+import '../widgets/app_page_header.dart';
 
 class QuranAssetPacksScreen extends StatelessWidget {
   const QuranAssetPacksScreen({
@@ -135,14 +136,34 @@ class QuranAssetPacksScreen extends StatelessWidget {
         return Theme(
           data: themeData,
           child: Scaffold(
-            appBar: AppBar(
-              title: Text(tr(context, 'Asset Packs')),
-            ),
+            // Zero-height bar: keeps the status bar styling and top inset
+            // while the hero header in the body carries title and back.
+            appBar: AppBar(toolbarHeight: 0, automaticallyImplyLeading: false),
             body: SafeArea(
-              child: _AssetPackList(
-                controller: controller,
-                onDownload: _downloadPack,
-                onDelete: _deletePack,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsetsDirectional.fromSTEB(
+                      16,
+                      12,
+                      16,
+                      0,
+                    ),
+                    child: AppPageHeader(
+                      title: tr(context, 'Asset Packs'),
+                      icon: Icons.cloud_download_outlined,
+                      compact: true,
+                      onBack: AppPageHeader.popAction(context),
+                    ),
+                  ),
+                  Expanded(
+                    child: _AssetPackList(
+                      controller: controller,
+                      onDownload: _downloadPack,
+                      onDelete: _deletePack,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

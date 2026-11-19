@@ -7,6 +7,8 @@ import 'package:share_plus/share_plus.dart';
 import '../../../../app/app_theme.dart';
 import '../../../../core/services/reader_file_export.dart';
 import '../controllers/quran_reader_controller.dart';
+import 'app_motion.dart';
+import 'app_page_header.dart';
 import 'reader_sheet_frame.dart';
 
 Future<void> showReaderDashboardSheet(
@@ -218,54 +220,24 @@ class ReaderDashboardContent extends StatelessWidget {
                   ),
                   SizedBox(height: sectionGap),
                 ],
-                _DashboardCard(
+                AppPageHeader(
+                  eyebrow: tr(context, 'YOUR READING JOURNAL'),
+                  title: tr(context, 'A steady connection.'),
+                  subtitle: tr(context, chapter == null
+                      ? 'Continue from page ${controller.currentPageNumber}.'
+                      : 'Continue from ${chapter.nameSimple} - Page ${controller.currentPageNumber}.'),
+                  icon: Icons.auto_stories_rounded,
+                  compact: showHandle,
+                  backTooltip: tr(context, 'Back'),
+                  onBack: showHandle
+                      ? null
+                      : () => Navigator.of(context).maybePop(),
+                ),
+                SizedBox(height: sectionGap),
+                AppStagger(index: 0, child: _DashboardCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          if (!showHandle) ...[
-                            IconButton.outlined(
-                              tooltip: tr(context, 'Back'),
-                              onPressed: () => Navigator.of(context).maybePop(),
-                              icon: const Icon(Icons.arrow_back_rounded, size: 20),
-                            ),
-                            const SizedBox(width: 14),
-                          ],
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  tr(context, 'YOUR READING JOURNAL'),
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: theme.colorScheme.secondary,
-                                    letterSpacing: 1.5,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  tr(context, 'A steady connection.'),
-                                  style: theme.textTheme.headlineSmall?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        tr(context, chapter == null
-                            ? 'Continue from page ${controller.currentPageNumber}.'
-                            : 'Continue from ${chapter.nameSimple} - Page ${controller.currentPageNumber}.'),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
                       Wrap(
                         spacing: 10,
                         runSpacing: 10,
@@ -329,9 +301,9 @@ class ReaderDashboardContent extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
+                )),
                 SizedBox(height: sectionGap),
-                _DashboardCard(
+                AppStagger(index: 1, child: _DashboardCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -398,9 +370,9 @@ class ReaderDashboardContent extends StatelessWidget {
                       _MonthHeatmap(activityCounts: activityCounts),
                     ],
                   ),
-                ),
+                )),
                 SizedBox(height: sectionGap),
-                _DashboardCard(
+                AppStagger(index: 2, child: _DashboardCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -424,9 +396,9 @@ class ReaderDashboardContent extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
+                )),
                 SizedBox(height: sectionGap),
-                _DashboardCard(
+                AppStagger(index: 3, child: _DashboardCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -476,7 +448,7 @@ class ReaderDashboardContent extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
+                )),
                 SizedBox(height: sectionGap),
                 _DashboardCard(
                   child: Column(

@@ -7,6 +7,8 @@ import '../../../../app/app_theme.dart';
 import '../../domain/models/reader_bookmark.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
+import 'app_motion.dart';
+import 'reader_app_bar.dart';
 import 'reader_skeleton.dart';
 import 'reader_sheet_frame.dart';
 
@@ -209,8 +211,8 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
         final theme = Theme.of(context);
         final size = MediaQuery.of(context).size;
         final compact = size.width < 420 || size.height < 760;
-        final pagePadding = compact ? 10.0 : 12.0;
-        final sectionGap = compact ? 10.0 : 12.0;
+        const pagePadding = 16.0;
+        final sectionGap = compact ? 12.0 : 14.0;
         final controller = widget.controller;
         final insight = controller.currentPageInsight;
         final chapter = controller.currentChapterSummary;
@@ -224,34 +226,58 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
           top: false,
           child: Padding(
             padding: EdgeInsets.only(
-              left: pagePadding,
-              right: pagePadding,
-              top: widget.showHandle ? (compact ? 10 : 12) : 4,
-              bottom: MediaQuery.of(context).viewInsets.bottom +
-                  (compact ? 12 : 14),
+              bottom: MediaQuery.of(context).viewInsets.bottom,
             ),
-            child: ListView(
+            // Built eagerly (the section count is small) so entrance animations
+            // play once instead of replaying when a card scrolls back in.
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                pagePadding,
+                widget.showHandle ? 12 : 8,
+                pagePadding,
+                compact ? 16 : 20,
+              ),
+              child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (widget.showHandle) ...[
-                  Center(
-                    child: Container(
-                      width: 54,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: theme.dividerColor.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(999),
+                ReaderSheetHeader(
+                  title: tr(context, chapter?.nameSimple ?? 'Reading insights'),
+                  subtitle: tr(context, controller.studyScopeLabel),
+                  showHandle: widget.showHandle,
+                ),
+                if (controller.isStudySurahScoped) ...[
+                  const SizedBox(height: 8),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(AppRadii.md),
+                      border: Border.all(
+                        color: theme.dividerColor.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            size: 18,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              tr(context, controller.scanMappingNotice),
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  SizedBox(height: sectionGap),
                 ],
-                _SectionCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(tr(context, chapter?.nameSimple ?? 'Reading insights'), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 6),
-                  Text(tr(context, controller.studyScopeLabel), style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-                  if (controller.isStudySurahScoped) ...[const SizedBox(height: 8), Text(tr(context, controller.scanMappingNotice), style: theme.textTheme.bodySmall)],
-                ])),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 SegmentedButton<_StudySection>(showSelectedIcon: false, segments: [
                   ButtonSegment(value: _StudySection.translation, label: Text(tr(context, 'Translation'))),
                   ButtonSegment(value: _StudySection.tafsir, label: Text(tr(context, 'Tafsir'))),
@@ -260,6 +286,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                 const SizedBox(height: 14),
                 if (_section == _StudySection.notes) ...[
                 _SectionCard(
+                  staggerIndex: 0,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -325,7 +352,9 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                         tr(context, currentBookmark == null
                             ? 'Bookmark shelf'
                             : 'Saved in ${currentBookmark.folder}'),
-                        style: theme.textTheme.labelLarge,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -348,6 +377,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                 ),
                 SizedBox(height: sectionGap),
                 _SectionCard(
+                  staggerIndex: 1,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -396,6 +426,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                 SizedBox(height: sectionGap),
                 if (insight != null)
                   _SectionCard(
+                    staggerIndex: 2,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -434,6 +465,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                   ),
                 SizedBox(height: sectionGap),
                 _SectionCard(
+                  staggerIndex: 3,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -443,7 +475,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 6),
                       Text(
                         tr(context, 'Bookmarks and favorite pages stay available across sessions.'),
                         style: theme.textTheme.bodyMedium?.copyWith(
@@ -482,10 +514,11 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: sectionGap),
                 ],
                 if (_section == _StudySection.translation) ...[
                 _SectionCard(
+                  staggerIndex: 0,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -497,6 +530,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                       ),
                       const SizedBox(height: 12),
                       SegmentedButton<_TranslationPane>(
+                        showSelectedIcon: false,
                         segments: _TranslationPane.values
                             .map(
                               (value) => ButtonSegment<_TranslationPane>(
@@ -515,7 +549,9 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                       const SizedBox(height: 12),
                       SelectableText(
                         translation.isEmpty ? tr(context, 'Translation is unavailable for this selection.') : translation,
-                        style: theme.textTheme.bodyMedium,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          height: _pane == _TranslationPane.urdu ? 1.8 : 1.6,
+                        ),
                       ),
                     ],
                   ),
@@ -526,16 +562,19 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                 _FutureTextSection(
                   title: tr(context, 'Surah overview'),
                   future: _chapterInfoFuture,
+                  staggerIndex: 0,
                 ),
                 SizedBox(height: sectionGap),
                 _FutureTextSection(
                   title: tr(context, 'Tafsir excerpt'),
                   future: _tafsirFuture,
+                  staggerIndex: 1,
                 ),
                 SizedBox(height: sectionGap),
                 ],
                 if (_section == _StudySection.notes) ...[
                 _SectionCard(
+                  staggerIndex: 4,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -555,9 +594,12 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerRight,
+                      SizedBox(
+                        width: double.infinity,
                         child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(0, 48),
+                          ),
                           onPressed: _saveCurrentNote,
                           icon: const Icon(Icons.edit_note_rounded),
                           label: Text(tr(context, 'Save note')),
@@ -593,6 +635,7 @@ class _ReaderInsightsContentState extends State<ReaderInsightsContent> {
                 ),
                 ],
               ],
+              ),
             ),
           ),
         );
@@ -702,12 +745,12 @@ class _FolderBookmarkGroup extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color:
-            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(18),
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(AppRadii.md),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.6)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -745,16 +788,19 @@ class _FutureTextSection extends StatelessWidget {
   const _FutureTextSection({
     required this.title,
     required this.future,
+    this.staggerIndex,
   });
 
   final String title;
   final Future<String?> future;
+  final int? staggerIndex;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return _SectionCard(
+      staggerIndex: staggerIndex,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -785,7 +831,7 @@ class _FutureTextSection extends StatelessWidget {
               }
               return SelectableText(
                 text,
-                style: theme.textTheme.bodyMedium,
+                style: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
               );
             },
           ),
@@ -798,28 +844,20 @@ class _FutureTextSection extends StatelessWidget {
 class _SectionCard extends StatelessWidget {
   const _SectionCard({
     required this.child,
+    this.staggerIndex,
   });
 
   final Widget child;
 
+  /// Entrance order for the first few cards of a tab; null leaves the card
+  /// static.
+  final int? staggerIndex;
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(AppRadii.lg),
-        boxShadow: AppDecor.of(context).cardShadow,
-        border: Border.all(
-          color: theme.dividerColor.withValues(alpha: 0.5),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: child,
-      ),
-    );
+    final card = ReaderSheetCard(child: child);
+    final index = staggerIndex;
+    return index == null ? card : AppStagger(index: index, child: card);
   }
 }
 

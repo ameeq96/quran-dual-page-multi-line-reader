@@ -119,6 +119,12 @@ abstract final class AppRadii {
 }
 
 abstract final class AppTheme {
+  /// Geometric display face for headlines and titles.
+  static const String displayFontFamily = 'Outfit';
+
+  /// Humanist text face for body copy and labels.
+  static const String bodyFontFamily = 'WorkSans';
+
   static ThemeData light({
     bool highContrast = false,
     bool largerText = false,
@@ -278,48 +284,58 @@ abstract final class AppTheme {
       dividerColor: effectiveDivider,
       splashFactory: InkSparkle.splashFactory,
       visualDensity: VisualDensity.standard,
+      // Work Sans for reading text; scripts it lacks (Arabic, Urdu) fall
+      // back to the platform font automatically.
+      fontFamily: bodyFontFamily,
       extensions: <ThemeExtension<dynamic>>[decor],
     );
 
     final base = baseTheme.textTheme;
     final textTheme = base.copyWith(
       displaySmall: base.displaySmall?.copyWith(
+        fontFamily: displayFontFamily,
         fontWeight: FontWeight.w700,
         letterSpacing: -0.4,
         height: 1.12,
         fontSize: 36 * scale,
       ),
       headlineLarge: base.headlineLarge?.copyWith(
+        fontFamily: displayFontFamily,
         fontWeight: FontWeight.w700,
         letterSpacing: -0.4,
         height: 1.14,
         fontSize: 32 * scale,
       ),
       headlineMedium: base.headlineMedium?.copyWith(
+        fontFamily: displayFontFamily,
         fontWeight: FontWeight.w700,
         letterSpacing: -0.3,
         height: 1.18,
         fontSize: 28 * scale,
       ),
       headlineSmall: base.headlineSmall?.copyWith(
+        fontFamily: displayFontFamily,
         fontWeight: FontWeight.w700,
         letterSpacing: -0.2,
         height: 1.22,
         fontSize: (base.headlineSmall?.fontSize ?? 24) * scale,
       ),
       titleLarge: base.titleLarge?.copyWith(
+        fontFamily: displayFontFamily,
         fontWeight: FontWeight.w700,
         letterSpacing: -0.1,
         height: 1.25,
         fontSize: (base.titleLarge?.fontSize ?? 22) * scale,
       ),
       titleMedium: base.titleMedium?.copyWith(
+        fontFamily: displayFontFamily,
         fontWeight: FontWeight.w600,
         letterSpacing: 0,
         height: 1.3,
         fontSize: (base.titleMedium?.fontSize ?? 16) * scale,
       ),
       titleSmall: base.titleSmall?.copyWith(
+        fontFamily: displayFontFamily,
         fontWeight: FontWeight.w600,
         letterSpacing: 0,
         height: 1.3,

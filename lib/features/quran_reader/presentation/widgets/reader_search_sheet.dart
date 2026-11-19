@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/app_theme.dart';
 import '../../../../app/reader_localization.dart';
 
 import '../../domain/models/quran_juz_navigation_entry.dart';
@@ -439,7 +440,7 @@ class _SearchTabSwitcher extends StatelessWidget {
           decoration: BoxDecoration(
             color: theme.colorScheme.surfaceContainerHighest
                 .withValues(alpha: 0.24),
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(AppRadii.lg),
             border: Border.all(
               color: theme.dividerColor.withValues(alpha: 0.44),
             ),
@@ -451,8 +452,8 @@ class _SearchTabSwitcher extends StatelessWidget {
                 final tab = _tabs[index];
                 return Expanded(
                   child: Padding(
-                    padding: EdgeInsets.only(
-                      right: index == _tabs.length - 1 ? 0 : (compact ? 8 : 10),
+                    padding: EdgeInsetsDirectional.only(
+                      end: index == _tabs.length - 1 ? 0 : (compact ? 8 : 10),
                     ),
                     child: _SearchTabChip(
                       label: tab.label,
@@ -493,9 +494,11 @@ class _SearchTabChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final decor = AppDecor.of(context);
     final foreground = selected
-        ? theme.colorScheme.onPrimaryContainer
+        ? decor.onHero
         : theme.colorScheme.onSurfaceVariant;
+    final iconColor = selected ? decor.gold : foreground;
     final textScaler = MediaQuery.textScalerOf(context);
     final scaleFactor = textScaler.scale(1);
     final minChipHeight = veryCompact ? 34.0 : (compact ? 44.0 : 48.0);
@@ -505,31 +508,25 @@ class _SearchTabChip extends StatelessWidget {
         : (veryCompact ? 6.0 : (compact ? 10.0 : 11.0));
 
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(AppRadii.md),
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         curve: Curves.easeOutCubic,
         constraints: BoxConstraints(minHeight: minChipHeight),
         decoration: BoxDecoration(
+          // Selected tab wears the emerald hero surface with cream text.
+          gradient: selected ? decor.heroGradient : null,
           color: selected
-              ? theme.colorScheme.primaryContainer
+              ? null
               : theme.colorScheme.surface.withValues(alpha: 0.44),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadii.md),
           border: Border.all(
             color: selected
-                ? theme.colorScheme.primary.withValues(alpha: 0.26)
+                ? decor.gold.withValues(alpha: 0.32)
                 : theme.dividerColor.withValues(alpha: 0.32),
           ),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                    blurRadius: 14,
-                    offset: const Offset(0, 6),
-                  ),
-                ]
-              : const [],
+          boxShadow: selected ? decor.cardShadow : const [],
         ),
         child: Padding(
           padding: EdgeInsets.symmetric(
@@ -544,7 +541,7 @@ class _SearchTabChip extends StatelessWidget {
                 Icon(
                   icon,
                   size: compact ? 16 : 18,
-                  color: foreground,
+                  color: iconColor,
                 ),
                 const SizedBox(width: 8),
               ],

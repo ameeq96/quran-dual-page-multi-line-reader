@@ -13,6 +13,7 @@ import '../../../../core/storage/reader_preferences.dart';
 import '../../data/services/reader_ustad_service.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
+import '../widgets/app_page_header.dart';
 
 String readerUstadText(BuildContext context, String english) {
   const labels = <String, List<String>>{
@@ -1425,14 +1426,9 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
     return Directionality(
         textDirection: ReaderLocalizationScope.of(context).textDirection,
         child: Scaffold(
-          appBar: AppBar(title: Text(_t('Private Ustad & student')), actions: [
-            IconButton(
-                tooltip: _t('Refresh'),
-                onPressed: _busy
-                    ? null
-                    : () => _service == null ? _connect() : _run(_reload),
-                icon: const Icon(Icons.refresh))
-          ]),
+          // Zero-height bar: keeps the status bar styling and top inset while
+          // the hero header in the body carries title, back and actions.
+          appBar: AppBar(toolbarHeight: 0, automaticallyImplyLeading: false),
           body: SafeArea(
               child: Center(
                   child: ConstrainedBox(
@@ -1445,8 +1441,29 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
                                     crossAxisAlignment:
                                         CrossAxisAlignment.stretch,
                                     children: [
-                                  Text(_t(
-                                      'Registered accounts only. Your Quran backup is not shared here.')),
+                                  Builder(
+                                      // Resolved under the Directionality
+                                      // above so the header mirrors in RTL.
+                                      builder: (context) => AppPageHeader(
+                                              title: _t(
+                                                  'Private Ustad & student'),
+                                              subtitle: _t(
+                                                  'Registered accounts only. Your Quran backup is not shared here.'),
+                                              icon: Icons.school_outlined,
+                                              onBack: AppPageHeader.popAction(
+                                                  context),
+                                              actions: [
+                                                IconButton(
+                                                    tooltip: _t('Refresh'),
+                                                    onPressed: _busy
+                                                        ? null
+                                                        : () => _service == null
+                                                            ? _connect()
+                                                            : _run(_reload),
+                                                    icon: const Icon(
+                                                        Icons.refresh))
+                                              ])),
+                                  const SizedBox(height: 14),
                                   SelectableText(_base,
                                       textDirection: TextDirection.ltr,
                                       style: Theme.of(context)

@@ -1,28 +1,28 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/app_theme.dart';
+
 class ReaderSkeletonBlock extends StatelessWidget {
   const ReaderSkeletonBlock({
     super.key,
     this.width,
     required this.height,
-    this.borderRadius = const BorderRadius.all(Radius.circular(14)),
-    this.alignment = Alignment.centerLeft,
+    this.borderRadius = const BorderRadius.all(Radius.circular(AppRadii.sm)),
+    this.alignment = AlignmentDirectional.centerStart,
   });
 
   final double? width;
   final double height;
   final BorderRadius borderRadius;
-  final Alignment alignment;
+  final AlignmentGeometry alignment;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final base = theme.colorScheme.surfaceContainerHighest.withValues(
-      alpha: theme.brightness == Brightness.dark ? 0.34 : 0.62,
-    );
-    final edge = theme.colorScheme.outlineVariant.withValues(
-      alpha: theme.brightness == Brightness.dark ? 0.18 : 0.18,
-    );
+    // Opaque container tones, so a block reads the same on a card, on the
+    // sheet background and on the page placeholder.
+    final base = theme.colorScheme.surfaceContainerHigh;
+    final edge = theme.colorScheme.surfaceContainerLow;
 
     return Align(
       alignment: alignment,
@@ -32,8 +32,8 @@ class ReaderSkeletonBlock extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: borderRadius,
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin: AlignmentDirectional.centerStart,
+            end: AlignmentDirectional.centerEnd,
             colors: <Color>[
               base,
               edge,
@@ -72,7 +72,9 @@ class ReaderSkeletonLines extends StatelessWidget {
           child: ReaderSkeletonBlock(
             height: lineHeight,
             width: isLast ? 220 * lastLineWidthFactor : double.infinity,
-            alignment: isLast ? Alignment.centerLeft : Alignment.center,
+            alignment: isLast
+                ? AlignmentDirectional.centerStart
+                : Alignment.center,
             borderRadius: BorderRadius.circular(999),
           ),
         );
@@ -93,28 +95,29 @@ class ReaderSkeletonResultList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tilePadding = compact ? 12.0 : 14.0;
+    final tilePadding = compact ? 12.0 : 16.0;
 
     return ListView.separated(
       padding: const EdgeInsets.all(8),
       itemCount: itemCount,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
+        final theme = Theme.of(context);
         return Container(
           padding: EdgeInsets.all(tilePadding),
           decoration: BoxDecoration(
-            color:
-                Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(18),
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(AppRadii.lg - 2),
             border: Border.all(
-              color: Theme.of(context).dividerColor.withValues(alpha: 0.4),
+              color: theme.dividerColor.withValues(alpha: 0.7),
             ),
+            boxShadow: AppDecor.of(context).cardShadow,
           ),
           child: Row(
             children: [
               const ReaderSkeletonBlock(
-                width: 42,
-                height: 42,
+                width: 44,
+                height: 44,
                 borderRadius: BorderRadius.all(Radius.circular(14)),
               ),
               const SizedBox(width: 12),
@@ -167,8 +170,8 @@ class ReaderSkeletonPage extends StatelessWidget {
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: <Color>[
-            theme.colorScheme.surface.withValues(alpha: 0.98),
-            theme.colorScheme.surfaceContainerLowest.withValues(alpha: 0.98),
+            theme.colorScheme.surface,
+            theme.colorScheme.surfaceContainerLowest,
           ],
         ),
       ),

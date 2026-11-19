@@ -95,16 +95,21 @@ class _ReaderAudioPracticePanelState extends State<ReaderAudioPracticePanel> {
               : widget.service.practiceRangeForAyah(widget.verseKey!);
           final remaining = practice.sleepUntil?.difference(DateTime.now());
           return Padding(
-              padding: const EdgeInsets.only(top: 16),
+              // The host card supplies the outer spacing.
+              padding: EdgeInsets.zero,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(tr(context, 'Audio practice'),
-                      style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Text(tr(context,
-                      'Choose an audio section, repeat it, and leave a pause to recite along.')),
-                  const SizedBox(height: 12),
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  Text(
+                      tr(context,
+                          'Choose an audio section, repeat it, and leave a pause to recite along.'),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
+                  const SizedBox(height: 14),
                   Row(children: [
                     Expanded(
                         child: TextField(
@@ -126,6 +131,7 @@ class _ReaderAudioPracticePanelState extends State<ReaderAudioPracticePanel> {
                                 labelText: tr(context, 'B · end time'),
                                 hintText: '00:10'))),
                   ]),
+                  const SizedBox(height: 4),
                   Wrap(spacing: 8, children: [
                     TextButton(
                         onPressed: !loaded || practice.active || practice.busy
@@ -189,15 +195,24 @@ class _ReaderAudioPracticePanelState extends State<ReaderAudioPracticePanel> {
                                 : (value) =>
                                     setState(() => _gapSeconds = value ?? 0))),
                   ]),
-                  const SizedBox(height: 12),
-                  Wrap(spacing: 10, runSpacing: 8, children: [
-                    FilledButton.tonal(
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.tonal(
+                        style: FilledButton.styleFrom(
+                            minimumSize: const Size(0, 48)),
                         onPressed: !loaded || practice.active || practice.busy
                             ? null
                             : _begin,
                         child: Text(tr(context, 'Start A–B practice'))),
-                    if (practice.active || practice.busy)
-                      OutlinedButton(
+                  ),
+                  if (practice.active || practice.busy) ...[
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                              minimumSize: const Size(0, 48)),
                           onPressed: () async {
                             try {
                               await practice.cancel();
@@ -210,15 +225,21 @@ class _ReaderAudioPracticePanelState extends State<ReaderAudioPracticePanel> {
                             }
                           },
                           child: Text(tr(context, 'Cancel practice'))),
-                  ]),
+                    ),
+                  ],
                   if (practice.active || practice.completed > 0) ...[
-                    const SizedBox(height: 8),
-                    Text(tr(context, 'Completed {done} of {total}', args: {
-                      'done': practice.completed,
-                      'total': practice.repetitions,
-                    })),
+                    const SizedBox(height: 10),
+                    Text(
+                        tr(context, 'Completed {done} of {total}', args: {
+                          'done': practice.completed,
+                          'total': practice.repetitions,
+                        }),
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w600)),
                     if (practice.waiting)
-                      Text(tr(context, 'Waiting between repeats')),
+                      Text(tr(context, 'Waiting between repeats'),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant)),
                   ],
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
@@ -245,15 +266,19 @@ class _ReaderAudioPracticePanelState extends State<ReaderAudioPracticePanel> {
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
                             tr(context, 'Playback pauses in {time}', args: {
-                          'time': formatReaderAudioTime(
-                              remaining.isNegative ? Duration.zero : remaining),
-                        }))),
+                              'time': formatReaderAudioTime(remaining.isNegative
+                                  ? Duration.zero
+                                  : remaining),
+                            }),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant))),
                   if (_error != null || practice.errorMessage != null)
                     Padding(
                         padding: const EdgeInsets.only(top: 8),
                         child: Text(
                             tr(context, _error ?? practice.errorMessage!),
-                            style: TextStyle(color: theme.colorScheme.error))),
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: theme.colorScheme.error))),
                 ],
               ));
         });

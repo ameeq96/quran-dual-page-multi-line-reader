@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../app/reader_localization.dart';
 
 import '../controllers/quran_reader_controller.dart';
+import 'app_motion.dart';
+import 'app_page_header.dart';
 import 'reader_sheet_frame.dart';
 
 Future<void> showReaderBookmarksSheet(
@@ -33,10 +35,18 @@ class ReaderBookmarksContent extends StatelessWidget {
     required this.controller,
     this.showHandle = false,
     this.onSelectPage,
+    this.eyebrow,
+    this.onBack,
   });
 
   final QuranReaderController controller;
   final bool showHandle;
+
+  /// Optional label shown above the header title (already localized).
+  final String? eyebrow;
+
+  /// Shows a back button in the header when non-null.
+  final VoidCallback? onBack;
   final Future<void> Function(int pageNumber)? onSelectPage;
 
   @override
@@ -69,31 +79,34 @@ class ReaderBookmarksContent extends StatelessWidget {
                       : const SizedBox.shrink(),
                 ),
                 SizedBox(height: showHandle ? 20 : 4),
-                Text(
-                  tr(context, 'Bookmarks'),
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
+                AppPageHeader(
+                  eyebrow: eyebrow,
+                  title: tr(context, 'Bookmarks'),
+                  subtitle: tr(
+                    context,
+                    'Open your saved pages directly from here.',
                   ),
+                  icon: Icons.bookmarks_rounded,
+                  compact: showHandle,
+                  onBack: onBack,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  tr(context, 'Open your saved pages directly from here.'),
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
                 if (visibleFolders.isEmpty && controller.favoritePages.isEmpty)
-                  _BookmarksCard(
-                    child: Text(
-                      tr(context, 'No bookmarks saved yet.'),
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                  AppStagger(
+                    index: 0,
+                    child: _BookmarksCard(
+                      child: Text(
+                        tr(context, 'No bookmarks saved yet.'),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ),
                 if (controller.favoritePages.isNotEmpty) ...[
-                  _BookmarksCard(
+                  AppStagger(
+                    index: 0,
+                    child: _BookmarksCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -123,6 +136,7 @@ class ReaderBookmarksContent extends StatelessWidget {
                         ),
                       ],
                     ),
+                  ),
                   ),
                   const SizedBox(height: 14),
                 ],

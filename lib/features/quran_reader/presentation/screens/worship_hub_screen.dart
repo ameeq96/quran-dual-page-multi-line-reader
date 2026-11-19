@@ -14,6 +14,8 @@ import '../../../../core/storage/reader_profile_store.dart';
 import '../../../../core/services/reader_web_surah_navigation.dart';
 import '../../../../core/worship/worship_store.dart';
 import '../controllers/quran_reader_controller.dart';
+import '../widgets/app_motion.dart';
+import '../widgets/app_page_header.dart';
 import 'ayah_audio_follow_screen.dart';
 import 'quran_reader_screen.dart';
 import 'worship_learning_screen.dart';
@@ -242,26 +244,66 @@ class _WorshipHubScreenState extends State<WorshipHubScreen> {
         'masjid' => _t('My Masjid', 'میری مسجد', 'مسجدي'),
         _ => _t('Worship companions', 'عبادت کے ساتھی', 'رفقاء العبادة'),
       };
+      final overview = _section == 'overview';
       return Directionality(
         textDirection: ReaderLocalization.instance.textDirection,
-        child: Scaffold(
-          appBar: AppBar(
-            title: Text(title),
-            leading: _section == 'overview'
-                ? null
-                : BackButton(
-                    onPressed: () => setState(() => _section = 'overview'),
-                  ),
-          ),
+        child: Builder(
+          builder: (context) {
+            // Built under the Directionality above so it mirrors in RTL.
+            final header = AppPageHeader(
+              title: title,
+              eyebrow: overview
+                  ? _s(
+                      _t(
+                        'A little worship, every day',
+                        'روزانہ تھوڑی عبادت',
+                        'عبادة يسيرة كل يوم',
+                      ),
+                    )
+                  : null,
+              subtitle: overview
+                  ? _t(
+                      'Your diary, counters and lessons stay on this device, in this reader profile.',
+                      'آپ کی ڈائری، گنتی اور اسباق اسی آلے اور پروفائل میں محفوظ ہیں۔',
+                      'يبقى سجلك وعدادك ودروسك على هذا الجهاز وفي ملفك المحلي.',
+                    )
+                  : null,
+              icon: switch (_section) {
+                'diary' => Icons.checklist_rounded,
+                'ramadan' => Icons.nights_stay_outlined,
+                'masjid' => Icons.mosque_outlined,
+                _ => Icons.spa_outlined,
+              },
+              compact: !overview,
+              onBack: overview
+                  ? AppPageHeader.popAction(context)
+                  : () => setState(() => _section = 'overview'),
+            );
+            return Scaffold(
+          // Zero-height bar: keeps the status bar styling and top inset while
+          // the hero header in the body carries title and back.
+          appBar: AppBar(toolbarHeight: 0, automaticallyImplyLeading: false),
           body: Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 840),
               child: !_ready && _error == null
-                  ? const Center(child: CircularProgressIndicator())
+                  ? Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                          child: header,
+                        ),
+                        const Expanded(
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                      ],
+                    )
                   : ListView(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
                       children: [
+                        header,
+                        const SizedBox(height: 16),
                         if (_working) const LinearProgressIndicator(),
                         if (_error != null) _notice(_error!),
                         if (!_ready && _error != null)
@@ -274,34 +316,27 @@ class _WorshipHubScreenState extends State<WorshipHubScreen> {
                             'diary' => _diary(),
                             'ramadan' => _ramadan(),
                             'masjid' => _masjid(),
-                            _ => _overview(),
+                            // Only the first rows animate in; the rest of
+                            // the list appears immediately.
+                            _ => [
+                              for (final (index, item) in _overview().indexed)
+                                index < 6
+                                    ? AppStagger(index: index, child: item)
+                                    : item,
+                            ],
                           },
                       ],
                     ),
             ),
           ),
+            );
+          },
         ),
       );
     },
   );
 
   List<Widget> _overview() => [
-    _card(
-      _t(
-        'A little worship, every day',
-        'روزانہ تھوڑی عبادت',
-        'عبادة يسيرة كل يوم',
-      ),
-      [
-        Text(
-          _t(
-            'Your diary, counters and lessons stay on this device, in this reader profile.',
-            'آپ کی ڈائری، گنتی اور اسباق اسی آلے اور پروفائل میں محفوظ ہیں۔',
-            'يبقى سجلك وعدادك ودروسك على هذا الجهاز وفي ملفك المحلي.',
-          ),
-        ),
-      ],
-    ),
     _feature(
       Icons.checklist_rounded,
       _t('Namaz & Qaza diary', 'نماز اور قضا ڈائری', 'سجل الصلاة والقضاء'),

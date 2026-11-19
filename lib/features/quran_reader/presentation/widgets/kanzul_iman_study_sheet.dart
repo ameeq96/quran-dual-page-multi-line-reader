@@ -7,7 +7,9 @@ import '../../../../core/constants/quran_constants.dart';
 import '../../domain/models/quran_page.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
+import 'app_motion.dart';
 import 'mushaf_page_widget.dart';
+import 'reader_app_bar.dart';
 import 'reader_sheet_frame.dart';
 
 Future<void> showKanzulImanStudySheet(
@@ -131,45 +133,26 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
           top: false,
           child: SingleChildScrollView(
             padding: EdgeInsets.fromLTRB(
-              compact ? 12 : 16,
-              widget.showHandle ? 18 : 6,
-              compact ? 12 : 16,
-              18,
+              16,
+              widget.showHandle ? 12 : 8,
+              16,
+              compact ? 18 : 24,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (widget.showHandle) ...[
-                  Center(
-                    child: Container(
-                      width: 54,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: theme.dividerColor.withValues(alpha: 0.8),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                ],
-                _StudyCard(
+                ReaderSheetHeader(
+                  title: tr(context, 'Kanzul Iman study mode'),
+                  subtitle: tr(context, 'Read the Quran scan alongside Kanzul Iman translation and tafsir presentation.'),
+                  showHandle: widget.showHandle,
+                ),
+                const SizedBox(height: 12),
+                AppStagger(
+                  index: 0,
+                  child: _StudyCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        tr(context, 'Kanzul Iman study mode'),
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        tr(context, 'Read the Quran scan alongside Kanzul Iman translation and tafsir presentation.'),
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -230,6 +213,7 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                         ),
                     ],
                   ),
+                  ),
                 ),
                 const SizedBox(height: 14),
                 if (combined && dualWide) ...[
@@ -286,7 +270,7 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                       Text(
                         tr(context, 'Study notes'),
                         style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -296,7 +280,7 @@ class _KanzulImanStudyContentState extends State<KanzulImanStudyContent> {
                             : 'Bundled Urdu translation for this page is not available yet, but the scanned Kanzul Iman page above remains available for study.'),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
-                          height: 1.55,
+                          height: 1.7,
                         ),
                       ),
                     ],
@@ -330,14 +314,16 @@ class _StudyPagePanel extends StatelessWidget {
     final size = MediaQuery.of(context).size;
     final compact = size.width < 420 || size.height < 760;
 
-    return _StudyCard(
+    return AppStagger(
+      index: 1,
+      child: _StudyCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             tr(context, title),
             style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 4),
@@ -352,8 +338,8 @@ class _StudyPagePanel extends StatelessWidget {
             height: compact ? 340 : 440,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(22),
+                color: theme.colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(AppRadii.md),
               ),
               child: Center(
                 child: RepaintBoundary(
@@ -379,6 +365,7 @@ class _StudyPagePanel extends StatelessWidget {
           ),
         ],
       ),
+      ),
     );
   }
 }
@@ -392,28 +379,6 @@ class _StudyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            theme.colorScheme.surface.withValues(alpha: 0.97),
-            theme.colorScheme.surfaceContainer.withValues(alpha: 0.9),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(AppRadii.xl),
-        boxShadow: AppDecor.of(context).cardShadow,
-        border: Border.all(
-          color: theme.dividerColor.withValues(alpha: 0.42),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: child,
-      ),
-    );
+    return ReaderSheetCard(child: child);
   }
 }

@@ -7,6 +7,8 @@ import '../../data/services/quran_study_data_source.dart';
 import '../../domain/models/reader_growth_models.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
+import '../widgets/app_motion.dart';
+import '../widgets/app_page_header.dart';
 import '../widgets/reader_reminder_settings.dart';
 import '../widgets/reader_local_data_settings.dart';
 import 'quran_study_screen.dart';
@@ -146,36 +148,34 @@ class QuranGrowthHubScreen extends StatelessWidget {
           data: themeData,
           child: Scaffold(
             backgroundColor: themeData.scaffoldBackgroundColor,
-            appBar: AppBar(
-              title: Text(tr(context, 'Plans & Hifz')),
-              actions: [IconButton(tooltip: tr(context, 'Profiles & restore history'), icon: const Icon(Icons.people_outline),
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => Scaffold(
-                  appBar: AppBar(title: Text(tr(context, 'Profiles & restore history'))),
-                  body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20), child: ReaderLocalDataSettings(controller: controller)))))))),
-                IconButton(tooltip: tr(context, 'Word study & collections'), icon: const Icon(Icons.auto_stories_outlined),
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const QuranStudyScreen())))],
-              centerTitle: true,
-            ),
+            // Zero-height bar: keeps the status bar styling and top inset
+            // while the hero header in the body carries title and actions.
+            appBar: AppBar(toolbarHeight: 0, automaticallyImplyLeading: false),
             body: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 940),
                 child: ListView(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
               children: [
-                _HubCard(
+                AppPageHeader(
+                  eyebrow: tr(context, 'YOUR READING JOURNEY'),
+                  title: tr(context, 'Plans & Hifz'),
+                  icon: Icons.insights_outlined,
+                  compact: true,
+                  onBack: AppPageHeader.popAction(context),
+                  actions: [IconButton(tooltip: tr(context, 'Profiles & restore history'), icon: const Icon(Icons.people_outline),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => Scaffold(
+                  appBar: AppBar(title: Text(tr(context, 'Profiles & restore history'))),
+                  body: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20), child: ReaderLocalDataSettings(controller: controller)))))))),
+                IconButton(tooltip: tr(context, 'Word study & collections'), icon: const Icon(Icons.auto_stories_outlined),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const QuranStudyScreen())))],
+                ),
+                const SizedBox(height: 16),
+                AppStagger(index: 0, child: _HubCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        tr(context, 'YOUR READING JOURNEY'),
-                        style: themeData.textTheme.labelSmall?.copyWith(
-                          color: themeData.colorScheme.secondary,
-                          letterSpacing: 1.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
                       Text(
                         tr(context, 'A steady practice.'),
                         style: themeData.textTheme.headlineSmall?.copyWith(
@@ -216,9 +216,9 @@ class QuranGrowthHubScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                ),
+                )),
                 const SizedBox(height: 18),
-                _HubCard(
+                AppStagger(index: 1, child: _HubCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -304,9 +304,9 @@ class QuranGrowthHubScreen extends StatelessWidget {
                       ],
                     ],
                   ),
-                ),
+                )),
                 const SizedBox(height: 18),
-                _HubCard(
+                AppStagger(index: 2, child: _HubCard(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -451,7 +451,7 @@ class QuranGrowthHubScreen extends StatelessWidget {
                         ),
                     ],
                   ),
-                ),
+                )),
                 const SizedBox(height: 18),
                 _HubCard(child: ReaderReminderSettings(baseUrl: controller.adminSyncBaseUrl)),
                 const SizedBox(height: 18),

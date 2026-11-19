@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/app_theme.dart';
 import '../../../../app/reader_localization.dart';
 
 import '../controllers/quran_reader_controller.dart';
+import 'reader_app_bar.dart';
 
 enum _DrawerPane {
   english('English'),
@@ -45,11 +47,11 @@ class _ReaderTranslationDrawerState extends State<ReaderTranslationDrawer> {
             ? insight?.translationEn ?? ''
             : insight?.translationUr ?? '';
 
-        return AnimatedPositioned(
+        return AnimatedPositionedDirectional(
           duration: const Duration(milliseconds: 240),
           curve: Curves.easeOutCubic,
-          left: widget.compact ? 10 : 18,
-          right: widget.compact ? 10 : 18,
+          start: widget.compact ? 12 : 16,
+          end: widget.compact ? 12 : 16,
           bottom: widget.bottomInset,
           child: IgnorePointer(
             ignoring: false,
@@ -58,20 +60,14 @@ class _ReaderTranslationDrawerState extends State<ReaderTranslationDrawer> {
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 240),
                 curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surface.withValues(alpha: 0.96),
-                  borderRadius: BorderRadius.circular(24),
+                  color: theme.colorScheme.surface,
+                  borderRadius: BorderRadius.circular(AppRadii.xl - 4),
                   border: Border.all(
-                    color: theme.dividerColor.withValues(alpha: 0.5),
+                    color: theme.dividerColor.withValues(alpha: 0.7),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: theme.colorScheme.shadow.withValues(alpha: 0.12),
-                      blurRadius: 24,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
+                  boxShadow: AppDecor.of(context).floatShadow,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -82,19 +78,21 @@ class _ReaderTranslationDrawerState extends State<ReaderTranslationDrawer> {
                           _expanded = !_expanded;
                         });
                       },
-                      borderRadius: BorderRadius.circular(18),
-                      child: Padding(
+                      borderRadius: BorderRadius.circular(AppRadii.md),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 48),
+                        child: Padding(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
+                          horizontal: 8,
                           vertical: 4,
                         ),
                         child: Row(
                           children: [
-                            Icon(
-                              Icons.translate_rounded,
-                              color: theme.colorScheme.primary,
+                            const ReaderAccentBadge(
+                              icon: Icons.translate_rounded,
+                              size: 36,
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,7 +100,8 @@ class _ReaderTranslationDrawerState extends State<ReaderTranslationDrawer> {
                                   Text(
                                     tr(context, 'Translation drawer'),
                                     style: theme.textTheme.titleSmall?.copyWith(
-                                      fontWeight: FontWeight.w800,
+                                      fontWeight: FontWeight.w700,
+                                      color: theme.colorScheme.onSurface,
                                     ),
                                   ),
                                   const SizedBox(height: 2),
@@ -123,8 +122,10 @@ class _ReaderTranslationDrawerState extends State<ReaderTranslationDrawer> {
                               _expanded
                                   ? Icons.keyboard_arrow_down_rounded
                                   : Icons.keyboard_arrow_up_rounded,
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ],
+                        ),
                         ),
                       ),
                     ),
@@ -134,12 +135,12 @@ class _ReaderTranslationDrawerState extends State<ReaderTranslationDrawer> {
                           ? CrossFadeState.showFirst
                           : CrossFadeState.showSecond,
                       firstChild: Padding(
-                        padding: const EdgeInsets.only(top: 10),
+                        padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Align(
-                              alignment: Alignment.centerLeft,
+                              alignment: AlignmentDirectional.centerStart,
                               child: SegmentedButton<_DrawerPane>(
                                 showSelectedIcon: false,
                                 segments: _DrawerPane.values
@@ -166,7 +167,9 @@ class _ReaderTranslationDrawerState extends State<ReaderTranslationDrawer> {
                               child: SingleChildScrollView(
                                 child: SelectableText(
                                   translation.isEmpty ? tr(context, 'Translation is unavailable for this page.') : translation,
-                                  style: theme.textTheme.bodyMedium,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    height: 1.6,
+                                  ),
                                 ),
                               ),
                             ),

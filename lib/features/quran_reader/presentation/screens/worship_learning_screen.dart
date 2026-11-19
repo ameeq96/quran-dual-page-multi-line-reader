@@ -7,6 +7,7 @@ import '../../../../app/reader_localization.dart';
 import '../../../../core/worship/worship_content.dart';
 import '../../../../core/worship/worship_store.dart';
 import '../../../../core/worship/worship_speech.dart';
+import '../widgets/app_page_header.dart';
 
 final _worshipLearningObservers =
     <String, RouteObserver<ModalRoute<dynamic>>>{};
@@ -277,15 +278,19 @@ class _WorshipLearningScreenState extends State<WorshipLearningScreen>
     ),
   );
 
-  Widget _card({required Widget child, bool accent = false}) {
+  /// Emerald intro banner that opens each tab.
+  Widget _hero(IconData icon, String title, String subtitle) => Padding(
+    padding: const EdgeInsets.only(bottom: 14),
+    child: AppPageHeader(title: title, subtitle: subtitle, icon: icon),
+  );
+
+  Widget _card({required Widget child}) {
     final theme = Theme.of(context);
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: accent
-            ? theme.colorScheme.primaryContainer
-            : theme.colorScheme.surface,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: theme.dividerColor),
       ),
@@ -409,21 +414,19 @@ class _WorshipLearningScreenState extends State<WorshipLearningScreen>
   );
 
   Widget _azkar() => _page('worship-azkar', [
-    _card(
-      accent: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _heading(
+    _hero(
+      Icons.spa_outlined,
             _t('A moment of remembrance', 'ذکر کے چند لمحے', 'لحظات من الذكر'),
-          ),
-          Text(
             _t(
               'Referenced morning, evening, after-prayer and bedtime practice.',
               'حوالوں کے ساتھ صبح، شام، نماز کے بعد اور سونے سے پہلے کے اذکار۔',
               'أذكار موثقة للصباح والمساء وبعد الصلاة وقبل النوم.',
             ),
-          ),
+    ),
+    _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           _note(
             _t(
               'Counters save your current practice session on this profile. Reset for another session; they do not reset automatically each day.',
@@ -554,25 +557,23 @@ class _WorshipLearningScreenState extends State<WorshipLearningScreen>
   }
 
   Widget _kids() => _page('worship-kids', [
-    _card(
-      accent: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _heading(
+    _hero(
+      Icons.school_outlined,
             _t(
               'Small steps, steady learning',
               'چھوٹے قدم، مسلسل سیکھنا',
               'خطوات صغيرة وتعلّم مستمر',
             ),
-          ),
-          Text(
             _t(
               'Letter recognition, short Surahs and practice with a trusted adult.',
               'حروف کی پہچان، چھوٹی سورتیں اور بڑے کی نگرانی میں مشق۔',
               'تعرّف الحروف، والسور القصيرة، والتدرّب مع شخص موثوق.',
             ),
-          ),
+    ),
+    _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           _note(
             _t(
               'Tap a letter to hear its name with a device Arabic voice, where available. A teacher should model Quranic sounds. Lesson ticks record practice, not certified recitation ability.',
@@ -723,21 +724,19 @@ class _WorshipLearningScreenState extends State<WorshipLearningScreen>
   }
 
   Widget _guide() => _page('worship-guide', [
-    _card(
-      accent: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _heading(
+    _hero(
+      Icons.menu_book_outlined,
             _t('Choose your school', 'اپنی فقہ منتخب کریں', 'اختر مذهبك'),
-          ),
-          Text(
             _t(
               'No school is selected automatically. This choice is shared with your worship records.',
               'کوئی فقہ خودکار منتخب نہیں ہوتی۔ یہ انتخاب عبادت کے ریکارڈ میں بھی استعمال ہوتا ہے۔',
               'لا يُختار مذهب تلقائيًا. يُستخدم هذا الاختيار أيضًا في سجلات عبادتك.',
             ),
-          ),
+    ),
+    _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           const SizedBox(height: 14),
           DropdownButtonFormField<String>(
             key: ValueKey(widget.store.fiqh),

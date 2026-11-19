@@ -5,6 +5,7 @@ import '../../../../app/reader_localization.dart';
 import '../../../../app/app_theme.dart';
 import '../../domain/models/quran_juz_navigation_entry.dart';
 import '../../domain/models/quran_surah_navigation_entry.dart';
+import '../widgets/app_page_header.dart';
 import '../widgets/reader_search_sheet.dart';
 
 class QuranSearchScreen extends StatelessWidget {
@@ -44,23 +45,51 @@ class QuranSearchScreen extends StatelessWidget {
         builder: (context) {
           return Scaffold(
             resizeToAvoidBottomInset: false,
-            appBar: AppBar(title: Text(tr(context, title))),
+            // Zero-height bar: keeps the status bar styling and top inset
+            // while the hero header in the body carries title and back.
+            appBar: AppBar(toolbarHeight: 0, automaticallyImplyLeading: false),
             body: Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 920),
                 child: SafeArea(
-                  child: ReaderSearchContent(
-                    surahs: surahs,
-                    juzs: juzs,
-                    initialTab: initialTab,
-                    showHandle: false,
-                    showTabs: showTabs,
-                    applyKeyboardInset: false,
-                    surahPageResolver: surahPageResolver,
-                    juzPageResolver: juzPageResolver,
-                    surahSearch: surahSearch,
-                    juzSearch: juzSearch,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final content = ReaderSearchContent(
+                        surahs: surahs,
+                        juzs: juzs,
+                        initialTab: initialTab,
+                        showHandle: false,
+                        showTabs: showTabs,
+                        applyKeyboardInset: false,
+                        surahPageResolver: surahPageResolver,
+                        juzPageResolver: juzPageResolver,
+                        surahSearch: surahSearch,
+                        juzSearch: juzSearch,
+                      );
+                      // Very short viewports keep the list usable by
+                      // dropping to the slimmest header.
+                      final roomy = constraints.maxHeight >= 420;
+                      return Column(
+                        children: [
+                          Padding(
+                            padding: EdgeInsetsDirectional.fromSTEB(
+                              20,
+                              roomy ? 12 : 6,
+                              20,
+                              0,
+                            ),
+                            child: AppPageHeader(
+                              title: tr(context, title),
+                              icon: roomy ? Icons.search_rounded : null,
+                              compact: true,
+                              onBack: AppPageHeader.popAction(context),
+                            ),
+                          ),
+                          Expanded(child: content),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),

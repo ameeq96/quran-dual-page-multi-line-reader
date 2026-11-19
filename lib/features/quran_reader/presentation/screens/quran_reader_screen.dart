@@ -1083,12 +1083,26 @@ class _ReaderAvailabilityNoticeState extends State<_ReaderAvailabilityNotice>
               child: ConstrainedBox(
                 constraints: const BoxConstraints(minHeight: 36),
                 child: Row(children: [
-                Icon(stored ? Icons.offline_pin_rounded : disconnected
-                    ? Icons.cloud_off_rounded : Icons.cloud_outlined,
-                  size: 18, color: theme.colorScheme.primary),
-                const SizedBox(width: 8),
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: disconnected && !stored
+                        ? theme.colorScheme.errorContainer
+                        : theme.colorScheme.primaryContainer,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(stored ? Icons.offline_pin_rounded : disconnected
+                      ? Icons.cloud_off_rounded : Icons.cloud_outlined,
+                    size: 16,
+                    color: disconnected && !stored
+                        ? theme.colorScheme.onErrorContainer
+                        : theme.colorScheme.onPrimaryContainer),
+                ),
+                const SizedBox(width: 10),
                 Expanded(child: Text(tr(context, label),
                   maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurface,
                     fontWeight: FontWeight.w600,
@@ -1121,15 +1135,21 @@ class _ReaderAvailabilityNoticeState extends State<_ReaderAvailabilityNotice>
           bottom: false,
           child: Padding(
             padding: EdgeInsets.fromLTRB(compact ? 8 : 12, 4, compact ? 8 : 12, 8),
-            child: Material(
-              color: theme.colorScheme.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(22),
-                side: BorderSide(
-                  color: theme.colorScheme.outlineVariant.withValues(alpha: 0.55),
-                ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadii.lg),
+                boxShadow: AppDecor.of(context).cardShadow,
               ),
-              child: content,
+              child: Material(
+                color: theme.colorScheme.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadii.lg),
+                  side: BorderSide(
+                    color: theme.dividerColor.withValues(alpha: 0.7),
+                  ),
+                ),
+                child: content,
+              ),
             ),
           ),
         );
