@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../app/app_theme.dart';
 import '../../../../app/reader_localization.dart';
 
 import '../controllers/quran_reader_controller.dart';
@@ -33,20 +34,14 @@ class ReaderBottomDock extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(AppRadii.xl - 4),
                 border: Border.all(
                   color: Color.alphaBlend(
                     theme.colorScheme.secondary.withValues(alpha: 0.12),
                     theme.dividerColor,
                   ),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.07),
-                    blurRadius: 24,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
+                boxShadow: AppDecor.of(context).floatShadow,
               ),
               child: Padding(
                 padding: EdgeInsets.all(compact ? 6 : 8),

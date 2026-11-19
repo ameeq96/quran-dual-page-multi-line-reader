@@ -30,6 +30,7 @@ import 'quran_settings_screen.dart';
 import 'quran_study_screen.dart';
 import 'prayer_settings_screen.dart';
 import 'worship_hub_screen.dart';
+import '../widgets/app_motion.dart';
 
 class QuranHomeScreen extends StatelessWidget {
   const QuranHomeScreen({
@@ -535,27 +536,23 @@ class QuranHomeScreen extends StatelessWidget {
                 backgroundColor: theme.scaffoldBackgroundColor,
                 bottomNavigationBar: desktop
                     ? null
-                    : DecoratedBox(
+                    : SafeArea(
+                        top: false,
+                        minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                        child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: theme.colorScheme.surface,
-                          border: Border(
-                            top: BorderSide(
-                              color: theme.dividerColor.withValues(alpha: 0.7),
-                            ),
+                          borderRadius: BorderRadius.circular(AppRadii.xl),
+                          border: Border.all(
+                            color: theme.dividerColor.withValues(alpha: 0.8),
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: theme.colorScheme.shadow.withValues(
-                                alpha: theme.brightness == Brightness.dark
-                                    ? 0.4
-                                    : 0.07,
-                              ),
-                              blurRadius: 24,
-                              offset: const Offset(0, -6),
-                            ),
-                          ],
+                          boxShadow: AppDecor.of(context).floatShadow,
                         ),
+                        child: ClipRRect(
+                        borderRadius: BorderRadius.circular(AppRadii.xl),
                         child: NavigationBar(
+                          backgroundColor: Colors.transparent,
+                          height: 68,
                           selectedIndex: 0,
                           onDestinationSelected: selectDestination,
                           destinations: [
@@ -578,8 +575,17 @@ class QuranHomeScreen extends StatelessWidget {
                             ),
                           ],
                         ),
+                        ),
+                        ),
                       ),
-                body: SafeArea(
+                extendBody: true,
+                body: Stack(
+                  children: [
+                    const Positioned.fill(
+                      child: IgnorePointer(child: _HomeAura()),
+                    ),
+                    SafeArea(
+                  bottom: false,
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -591,7 +597,7 @@ class QuranHomeScreen extends StatelessWidget {
                             desktop ? 40 : 20,
                             desktop ? 28 : 20,
                             desktop ? 40 : 20,
-                            32,
+                            desktop ? 32 : 124,
                           ),
                           child: Center(
                             child: ConstrainedBox(
@@ -599,20 +605,32 @@ class QuranHomeScreen extends StatelessWidget {
                               child: LayoutBuilder(
                                 builder: (context, constraints) {
                                   final wide = constraints.maxWidth >= 820;
-                                  final hero = _HomeTopCard(
+                                  final totalPages = controller.totalPages;
+                                  final hero = AppStagger(
+                                    index: 0,
+                                    child: _HomeTopCard(
+                                    progress: totalPages <= 0
+                                        ? 0
+                                        : (controller.currentPageNumber /
+                                                  totalPages)
+                                              .clamp(0.0, 1.0),
                                     title: chapterLabel,
                                     subtitle: tr(context, '$editionLabel · $pageLabel'),
                                     page: controller.currentPage,
                                     compact: !wide,
                                     onResume: () => _openReader(context),
+                                  ),
                                   );
-                                  final rhythm = _DailyFocusCard(
+                                  final rhythm = AppStagger(
+                                    index: 2,
+                                    child: _DailyFocusCard(
                                     pages: controller.dailyTargetPages,
                                     completedPages:
                                         controller.dailyProgressPages,
                                     streakDays: controller.readingStreakCount,
                                     compact: !wide,
                                     onTap: () => _openDashboardPage(context),
+                                  ),
                                   );
                                   return Column(
                                     crossAxisAlignment:
@@ -848,12 +866,15 @@ class QuranHomeScreen extends StatelessWidget {
                                             children: [
                                               for (final (index, action)
                                                   in actions.indexed)
-                                                _HomeMenuTile(
-                                                  icon: action.icon,
-                                                  title: action.title,
-                                                  subtitle: action.subtitle,
-                                                  onTap: action.onTap,
-                                                  accentIndex: index,
+                                                AppStagger(
+                                                  index: 3 + index,
+                                                  child: _HomeMenuTile(
+                                                    icon: action.icon,
+                                                    title: action.title,
+                                                    subtitle: action.subtitle,
+                                                    onTap: action.onTap,
+                                                    accentIndex: index,
+                                                  ),
                                                 ),
                                             ],
                                           );
@@ -898,11 +919,52 @@ class QuranHomeScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+                  ],
+                ),
               );
             },
           ),
         );
       },
+    );
+  }
+}
+
+/// Soft emerald and gold light behind the top of the home screen.
+class _HomeAura extends StatelessWidget {
+  const _HomeAura();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final dark = theme.brightness == Brightness.dark;
+    final decor = AppDecor.of(context);
+    Widget glow(Color color, double size) => Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [color, color.withValues(alpha: 0)],
+        ),
+      ),
+    );
+    return Stack(
+      children: [
+        PositionedDirectional(
+          top: -170,
+          start: -130,
+          child: glow(
+            theme.colorScheme.primary.withValues(alpha: dark ? 0.22 : 0.13),
+            460,
+          ),
+        ),
+        PositionedDirectional(
+          top: -120,
+          end: -150,
+          child: glow(decor.gold.withValues(alpha: dark ? 0.12 : 0.26), 400),
+        ),
+      ],
     );
   }
 }
@@ -1055,7 +1117,9 @@ class _HomeTopCard extends StatelessWidget {
     required this.page,
     required this.compact,
     required this.onResume,
+    this.progress = 0,
   });
+  final double progress;
   final String title;
   final String subtitle;
   final QuranPage page;
@@ -1171,6 +1235,35 @@ class _HomeTopCard extends StatelessWidget {
                               color: cream.withValues(alpha: 0.78),
                             ),
                           ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(999),
+                                  child: LinearProgressIndicator(
+                                    value: progress,
+                                    minHeight: 6,
+                                    color: gold,
+                                    backgroundColor: Colors.white.withValues(
+                                      alpha: 0.16,
+                                    ),
+                                    semanticsLabel: tr(context, subtitle),
+                                    semanticsValue:
+                                        '${(progress * 100).round()}%',
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                '${(progress * 100).round()}%',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: gold,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
                           if (!compact) ...[const SizedBox(height: 23), button],
                         ],
                       ),
@@ -1179,7 +1272,9 @@ class _HomeTopCard extends StatelessWidget {
                     Semantics(
                       label: tr(context, 'Preview of your original Mushaf page'),
                       image: true,
-                      child: Container(
+                      child: Transform.rotate(
+                        angle: 0.045,
+                        child: Container(
                         width: compact ? 88 : 132,
                         height: compact ? 132 : 196,
                         padding: const EdgeInsets.all(6),
@@ -1214,6 +1309,7 @@ class _HomeTopCard extends StatelessWidget {
                                   size: 36,
                                 ),
                               ),
+                      ),
                       ),
                     ),
                   ],
@@ -1763,7 +1859,8 @@ class _HomeMenuTile extends StatelessWidget {
     final theme = Theme.of(context);
     final decor = AppDecor.of(context);
     final accent = decor.accentAt(accentIndex);
-    return DecoratedBox(
+    return AppPressable(
+      child: DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadii.lg - 2),
         boxShadow: decor.cardShadow,
@@ -1785,7 +1882,19 @@ class _HomeMenuTile extends StatelessWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: accent.background,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        accent.background,
+                        Color.lerp(
+                              accent.background,
+                              accent.foreground,
+                              0.2,
+                            ) ??
+                            accent.background,
+                      ],
+                    ),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(icon, color: accent.foreground, size: 23),
@@ -1845,6 +1954,7 @@ class _HomeMenuTile extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 }
@@ -1961,7 +2071,8 @@ class _QuickAction extends StatelessWidget {
       'Juz' => '30 sections',
       _ => 'Find an ayah',
     };
-    return DecoratedBox(
+    return AppPressable(
+      child: DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadii.lg - 2),
         boxShadow: decor.cardShadow,
@@ -2014,6 +2125,7 @@ class _QuickAction extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 }
