@@ -6,14 +6,12 @@ import '../../../../app/prayer_translations.dart';
 import '../../../../app/app_theme.dart';
 import '../../../../core/services/reader_web_surah_navigation.dart';
 import '../../domain/models/reader_admin_config.dart';
-import '../../domain/models/quran_page.dart';
 import '../../domain/models/quran_ai_models.dart';
 import '../../domain/models/reader_settings.dart';
 import '../controllers/quran_reader_controller.dart';
 import '../widgets/kanzul_iman_study_sheet.dart';
 import '../widgets/jump_to_page_dialog.dart';
 import '../widgets/reader_audio_sheet.dart';
-import '../widgets/quran_page_image_provider.dart';
 import '../widgets/reader_compare_sheet.dart';
 import '../widgets/reader_dashboard_sheet.dart';
 import '../widgets/reader_insights_sheet.dart';
@@ -31,6 +29,8 @@ import 'quran_study_screen.dart';
 import 'prayer_settings_screen.dart';
 import 'worship_hub_screen.dart';
 import '../widgets/app_motion.dart';
+import '../widgets/home/home_hero_card.dart';
+import '../widgets/home/home_sections.dart';
 
 class QuranHomeScreen extends StatelessWidget {
   const QuranHomeScreen({
@@ -421,39 +421,39 @@ class QuranHomeScreen extends StatelessWidget {
                 }
               }
 
-              final actions = <_HomeMenuTile>[
-                _HomeMenuTile(
+              final actions = <HomeMenuTile>[
+                HomeMenuTile(
                   icon: Icons.dashboard_outlined,
                   title: tr(context, 'Dashboard'),
                   subtitle: tr(context, 'Your reading at a glance'),
                   onTap: () => _openDashboardPage(context),
                 ),
-                _HomeMenuTile(
+                HomeMenuTile(
                   icon: Icons.bookmark_border_rounded,
                   title: tr(context, 'Bookmarks'),
                   subtitle: tr(context, 'Return to a meaningful place'),
                   onTap: () => _openBookmarksPage(context),
                 ),
-                _HomeMenuTile(
+                HomeMenuTile(
                   icon: Icons.pin_outlined,
                   title: tr(context, 'Go to page'),
                   subtitle: tr(context, 'Pick up exactly where you want'),
                   onTap: () => _openPageJumpDialog(context),
                 ),
                 if (controller.isAudioEnabled)
-                  _HomeMenuTile(
+                  HomeMenuTile(
                     icon: Icons.headphones_outlined,
                     title: tr(context, 'Recitation'),
                     subtitle: tr(context, 'Listen with your favourite qari'),
                     onTap: () => _openAudioPage(context),
                   ),
-                _HomeMenuTile(
+                HomeMenuTile(
                   icon: Icons.mosque_outlined,
                   title: prayerText(context, 'Namaz & Azan'),
                   subtitle: prayerText(context, 'Prayer times and Azan reminders'),
                   onTap: () => _openPrayerSettings(context),
                 ),
-                _HomeMenuTile(
+                HomeMenuTile(
                   icon: Icons.explore_outlined,
                   title: switch (ReaderLocalization.instance.language) {
                     ReaderLanguage.urdu => 'عبادت کے ساتھی',
@@ -470,13 +470,13 @@ class QuranHomeScreen extends StatelessWidget {
                   )),
                 ),
                 if (controller.isPlansPacksEnabled) ...[
-                  _HomeMenuTile(
+                  HomeMenuTile(
                     icon: Icons.event_note_outlined,
                     title: tr(context, 'Plans & Hifz'),
                     subtitle: tr(context, 'Build a steady reading habit'),
                     onTap: () => _openGrowthHubPage(context),
                   ),
-                  _HomeMenuTile(
+                  HomeMenuTile(
                     icon: Icons.download_outlined,
                     title: tr(context, 'Asset Packs'),
                     subtitle: tr(context, 'Keep your Mushaf within reach'),
@@ -484,47 +484,47 @@ class QuranHomeScreen extends StatelessWidget {
                   ),
                 ],
                 if (controller.isInsightsEnabled)
-                  _HomeMenuTile(
+                  HomeMenuTile(
                     icon: Icons.auto_stories_outlined,
                     title: tr(context, 'Insights'),
                     subtitle: tr(context, 'Translation, notes and reflection'),
                     onTap: () => _openInsightsPage(context),
                   ),
                 if (controller.isAiStudioEnabled)
-                  _HomeMenuTile(
+                  HomeMenuTile(
                     icon: Icons.auto_awesome_outlined,
                     title: tr(context, 'AI Studio'),
                     subtitle: tr(context, 'Explore your study questions'),
                     onTap: () => _openAiStudioPage(context),
                   ),
                 if (controller.isPageStripEnabled)
-                  _HomeMenuTile(
+                  HomeMenuTile(
                     icon: Icons.grid_view_outlined,
                     title: tr(context, 'Page Thumbnails'),
                     subtitle: tr(context, 'Find your place visually'),
                     onTap: () => _openPageStripPage(context),
                   ),
                 if (controller.isCompareEnabled)
-                  _HomeMenuTile(
+                  HomeMenuTile(
                     icon: Icons.compare_outlined,
                     title: tr(context, 'Compare Editions'),
                     subtitle: tr(context, 'Study Mushaf pages side by side'),
                     onTap: () => _openComparePage(context),
                   ),
                 if (controller.isKanzulStudyEnabled)
-                  _HomeMenuTile(
+                  HomeMenuTile(
                     icon: Icons.translate_rounded,
                     title: tr(context, 'Kanzul Iman Study'),
                     subtitle: tr(context, 'Read with a deeper understanding'),
                     onTap: () => _openKanzulStudyPage(context),
                   ),
-                _HomeMenuTile(
+                HomeMenuTile(
                   icon: Icons.menu_book_outlined,
                   title: tr(context, 'Word study & collections'),
                   subtitle: tr(context, 'Translation, notes and reflection'),
                   onTap: () => Navigator.of(context).push(buildReaderPageRoute<void>(builder: (_) => QuranStudyScreen(controller: controller))),
                 ),
-                _HomeMenuTile(
+                HomeMenuTile(
                   icon: Icons.tune_rounded,
                   title: tr(context, 'Settings'),
                   subtitle: tr(context, 'Make your reading space your own'),
@@ -608,162 +608,41 @@ class QuranHomeScreen extends StatelessWidget {
                                   final totalPages = controller.totalPages;
                                   final hero = AppStagger(
                                     index: 0,
-                                    child: _HomeTopCard(
-                                    progress: totalPages <= 0
-                                        ? 0
-                                        : (controller.currentPageNumber /
-                                                  totalPages)
-                                              .clamp(0.0, 1.0),
-                                    title: chapterLabel,
-                                    subtitle: tr(context, '$editionLabel · $pageLabel'),
-                                    page: controller.currentPage,
-                                    compact: !wide,
-                                    onResume: () => _openReader(context),
-                                  ),
+                                    child: HomeHeroCard(
+                                      progress: totalPages <= 0
+                                          ? 0
+                                          : (controller.currentPageNumber /
+                                                    totalPages)
+                                                .clamp(0.0, 1.0),
+                                      title: chapterLabel,
+                                      subtitle: tr(context, '$editionLabel · $pageLabel'),
+                                      page: controller.currentPage,
+                                      compact: !wide,
+                                      currentPage: controller.currentPageNumber,
+                                      totalPages: totalPages,
+                                      onResume: () => _openReader(context),
+                                    ),
                                   );
                                   final rhythm = AppStagger(
                                     index: 2,
-                                    child: _DailyFocusCard(
-                                    pages: controller.dailyTargetPages,
-                                    completedPages:
-                                        controller.dailyProgressPages,
-                                    streakDays: controller.readingStreakCount,
-                                    compact: !wide,
-                                    onTap: () => _openDashboardPage(context),
-                                  ),
+                                    child: HomeDailyFocusCard(
+                                      pages: controller.dailyTargetPages,
+                                      completedPages:
+                                          controller.dailyProgressPages,
+                                      streakDays: controller.readingStreakCount,
+                                      compact: !wide,
+                                      onTap: () => _openDashboardPage(context),
+                                    ),
                                   );
-                                  return Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.all(10),
-                                            decoration: BoxDecoration(
-                                              gradient: AppDecor.of(
-                                                context,
-                                              ).heroGradient,
-                                              borderRadius:
-                                                  BorderRadius.circular(16),
-                                              boxShadow: AppDecor.of(
-                                                context,
-                                              ).cardShadow,
-                                            ),
-                                            child: Icon(
-                                              Icons.menu_book_rounded,
-                                              color: AppDecor.of(context).gold,
-                                              size: 24,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  tr(context, controller.homeHeroTitle),
-                                                  maxLines: 2,
-                                                  style: theme
-                                                      .textTheme
-                                                      .titleSmall
-                                                      ?.copyWith(
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                      ),
-                                                ),
-                                                const SizedBox(height: 3),
-                                                Text(
-                                                  tr(context, 'READ · REFLECT · RETURN'),
-                                                  style: theme
-                                                      .textTheme
-                                                      .labelSmall
-                                                      ?.copyWith(
-                                                        color: theme
-                                                            .colorScheme
-                                                            .secondary,
-                                                        letterSpacing: 1.4,
-                                                        fontSize: 10,
-                                                      ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          const SizedBox(width: 10),
-                                          IconButton.filledTonal(
-                                            tooltip: tr(context, 'Reading settings'),
-                                            onPressed: () =>
-                                                _openSettingsPage(context),
-                                            icon: const Icon(
-                                              Icons.tune_rounded,
-                                              size: 20,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      SizedBox(height: desktop ? 30 : 24),
-                                      Text(
-                                        tr(context, 'Assalamu Alaikum'),
-                                        style: theme.textTheme.headlineMedium
-                                            ?.copyWith(
-                                              color:
-                                                  theme.colorScheme.onSurface,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        tr(context, controller.homeHeroSubtitle(
-                                          chapterLabel: chapterLabel,
-                                          pageLabel: pageLabel,
-                                          editionLabel: editionLabel,
-                                        )),
-                                        style: theme.textTheme.bodyMedium
-                                            ?.copyWith(
-                                              color: theme
-                                                  .colorScheme
-                                                  .onSurfaceVariant,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 22),
-                                      if (wide)
-                                        IntrinsicHeight(
-                                          child: Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.stretch,
-                                            children: [
-                                              Expanded(flex: 7, child: hero),
-                                              const SizedBox(width: 18),
-                                              Expanded(flex: 4, child: rhythm),
-                                            ],
-                                          ),
-                                        )
-                                      else
-                                        hero,
-                                      const SizedBox(height: 18),
-                                      _EditionSelectorCard(
-                                        editions:
-                                            controller.availableImageEditions,
-                                        selectedEdition: settings.mushafEdition,
-                                        isEditionReady:
-                                            controller.isMushafEditionReady,
-                                        isEditionDownloading:
-                                            controller.isOfflinePackDownloading,
-                                        downloadProgressForEdition: controller
-                                            .offlinePackProgressForEdition,
-                                        onSelectEdition:
-                                            controller.selectMushafEdition,
-                                        onDownloadEdition: (edition) =>
-                                            _openAssetPacksPage(context),
-                                        nightMode: settings.nightMode,
-                                        onToggleNightMode:
-                                            controller.toggleNightMode,
-                                      ),
-                                      const SizedBox(height: 20),
-                                      Row(
+                                  final quickActions = AppStagger(
+                                    index: 1,
+                                    child: IntrinsicHeight(
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
                                         children: [
                                           Expanded(
-                                            child: _QuickAction(
+                                            child: HomeQuickAction(
                                               icon: Icons.menu_book_outlined,
                                               label: 'Surah',
                                               onTap: () => _openSearchPage(
@@ -773,9 +652,9 @@ class QuranHomeScreen extends StatelessWidget {
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(width: 10),
+                                          const SizedBox(width: 12),
                                           Expanded(
-                                            child: _QuickAction(
+                                            child: HomeQuickAction(
                                               icon: Icons.layers_outlined,
                                               label: 'Juz',
                                               onTap: () => _openSearchPage(
@@ -785,9 +664,9 @@ class QuranHomeScreen extends StatelessWidget {
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(width: 10),
+                                          const SizedBox(width: 12),
                                           Expanded(
-                                            child: _QuickAction(
+                                            child: HomeQuickAction(
                                               icon: Icons.search_rounded,
                                               label: 'Search',
                                               onTap: () =>
@@ -806,80 +685,257 @@ class QuranHomeScreen extends StatelessWidget {
                                           ),
                                         ],
                                       ),
+                                    ),
+                                  );
+                                  final editionSelector = AppStagger(
+                                    index: 3,
+                                    child: HomeEditionSelector(
+                                      editions:
+                                          controller.availableImageEditions,
+                                      selectedEdition: settings.mushafEdition,
+                                      isEditionReady:
+                                          controller.isMushafEditionReady,
+                                      isEditionDownloading:
+                                          controller.isOfflinePackDownloading,
+                                      downloadProgressForEdition: controller
+                                          .offlinePackProgressForEdition,
+                                      onSelectEdition:
+                                          controller.selectMushafEdition,
+                                      onDownloadEdition: (edition) =>
+                                          _openAssetPacksPage(context),
+                                      nightMode: settings.nightMode,
+                                      onToggleNightMode:
+                                          controller.toggleNightMode,
+                                    ),
+                                  );
+                                  final announcements = controller
+                                      .adminAnnouncements
+                                      .where((item) => item.active)
+                                      .toList(growable: false);
+
+                                  // Feature tiles: the first four lead as
+                                  // illustrated cards, the rest follow as a
+                                  // calmer grid. Order is unchanged.
+                                  final textScale = MediaQuery.textScalerOf(
+                                    context,
+                                  ).scale(1);
+                                  final roomy = constraints.maxWidth >= 900;
+                                  final single =
+                                      constraints.maxWidth < 320 ||
+                                      (textScale > 1.3 &&
+                                          constraints.maxWidth < 420);
+                                  final columns = roomy
+                                      ? 3
+                                      : single
+                                      ? 1
+                                      : 2;
+                                  final featuredColumns = roomy
+                                      ? 4
+                                      : single
+                                      ? 1
+                                      : 2;
+                                  final tileWidth =
+                                      (constraints.maxWidth -
+                                          12 * (columns - 1)) /
+                                      columns;
+                                  final featuredCount = actions.length < 4
+                                      ? actions.length
+                                      : 4;
+                                  // A tile left alone on the last row takes
+                                  // the full width, so it lays out sideways.
+                                  final loneLast =
+                                      (actions.length - featuredCount) %
+                                          columns ==
+                                      1;
+                                  Widget tile(int index, {required bool featured}) {
+                                    final action = actions[index];
+                                    return AppStagger(
+                                      index: 4 + index,
+                                      child: HomeMenuTile(
+                                        icon: action.icon,
+                                        title: action.title,
+                                        subtitle: action.subtitle,
+                                        onTap: action.onTap,
+                                        accentIndex: index,
+                                        featured: featured,
+                                        horizontal: featured
+                                            ? roomy
+                                            : tileWidth >= 250 ||
+                                                  (loneLast &&
+                                                      index ==
+                                                          actions.length - 1),
+                                      ),
+                                    );
+                                  }
+
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          const HomeLogoBadge(),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  tr(context, controller.homeHeroTitle),
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: theme
+                                                      .textTheme
+                                                      .titleMedium
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        height: 1.2,
+                                                      ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  tr(context, 'READ · REFLECT · RETURN'),
+                                                  style: theme
+                                                      .textTheme
+                                                      .labelSmall
+                                                      ?.copyWith(
+                                                        color: theme
+                                                            .colorScheme
+                                                            .secondary,
+                                                        letterSpacing: 1.6,
+                                                        fontSize: 10,
+                                                      ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          DecoratedBox(
+                                            decoration: BoxDecoration(
+                                              color: theme.colorScheme.surface,
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: theme.dividerColor
+                                                    .withValues(alpha: 0.8),
+                                              ),
+                                              boxShadow: AppDecor.of(
+                                                context,
+                                              ).cardShadow,
+                                            ),
+                                            child: IconButton(
+                                              tooltip: tr(context, 'Reading settings'),
+                                              onPressed: () =>
+                                                  _openSettingsPage(context),
+                                              style: IconButton.styleFrom(
+                                                shape: const CircleBorder(),
+                                              ),
+                                              icon: const Icon(
+                                                Icons.tune_rounded,
+                                                size: 20,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      SizedBox(height: desktop ? 32 : 24),
+                                      Text(
+                                        tr(context, 'Assalamu Alaikum'),
+                                        textScaler: MediaQuery.textScalerOf(
+                                          context,
+                                        ).clamp(maxScaleFactor: 1.3),
+                                        style: theme.textTheme.headlineMedium
+                                            ?.copyWith(
+                                              color:
+                                                  theme.colorScheme.onSurface,
+                                              fontSize:
+                                                  (theme
+                                                          .textTheme
+                                                          .headlineMedium
+                                                          ?.fontSize ??
+                                                      28) *
+                                                  (wide ? 1.2 : 1.08),
+                                            ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        tr(context, controller.homeHeroSubtitle(
+                                          chapterLabel: chapterLabel,
+                                          pageLabel: pageLabel,
+                                          editionLabel: editionLabel,
+                                        )),
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color: theme
+                                                  .colorScheme
+                                                  .onSurfaceVariant,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      const HomeOrnamentDivider(),
+                                      const SizedBox(height: 20),
+                                      if (wide)
+                                        IntrinsicHeight(
+                                          child: Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
+                                            children: [
+                                              Expanded(flex: 7, child: hero),
+                                              const SizedBox(width: 16),
+                                              Expanded(flex: 4, child: rhythm),
+                                            ],
+                                          ),
+                                        )
+                                      else
+                                        hero,
+                                      const SizedBox(height: 20),
+                                      quickActions,
                                       if (!wide) ...[
-                                        const SizedBox(height: 18),
+                                        const SizedBox(height: 16),
                                         rhythm,
                                       ],
-                                      Builder(
-                                        builder: (context) {
-                                          final announcements = controller
-                                              .adminAnnouncements
-                                              .where((item) => item.active)
-                                              .toList(growable: false);
-                                          return announcements.isEmpty
-                                              ? const SizedBox.shrink()
-                                              : Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                        top: 20,
-                                                      ),
-                                                  child: _AnnouncementsCard(
-                                                    announcements:
-                                                        announcements,
-                                                  ),
-                                                );
-                                        },
-                                      ),
-                                      const SizedBox(height: 30),
-                                      _SectionTitle(
+                                      const SizedBox(height: 16),
+                                      editionSelector,
+                                      if (announcements.isNotEmpty) ...[
+                                        const SizedBox(height: 16),
+                                        _AnnouncementsCard(
+                                          announcements: announcements,
+                                        ),
+                                      ],
+                                      const SizedBox(height: 32),
+                                      HomeSectionTitle(
                                         title: tr(context, 'Your reading companions'),
                                         subtitle:
                                             tr(context, 'Save a place. Listen. Study a little deeper.'),
-                                        horizontalInset: 0,
                                       ),
                                       const SizedBox(height: 16),
-                                      Builder(
-                                        builder: (context) {
-                                          final count =
-                                              constraints.maxWidth >= 900
-                                              ? 3
-                                              : constraints.maxWidth >= 320
-                                              ? 2
-                                              : 1;
-                                          final cardWidth =
-                                              (constraints.maxWidth -
-                                                  12 * (count - 1)) /
-                                              count;
-                                          final scale = MediaQuery.textScalerOf(
-                                            context,
-                                          ).scale(1).clamp(1.0, 2.5);
-                                          return GridView.count(
-                                            crossAxisCount: count,
-                                            mainAxisSpacing: 12,
-                                            crossAxisSpacing: 12,
-                                            mainAxisExtent:
-                                                (cardWidth >= 250 ? 104 : 152) *
-                                                scale,
-                                            shrinkWrap: true,
-                                            physics:
-                                                const NeverScrollableScrollPhysics(),
-                                            children: [
-                                              for (final (index, action)
-                                                  in actions.indexed)
-                                                AppStagger(
-                                                  index: 3 + index,
-                                                  child: _HomeMenuTile(
-                                                    icon: action.icon,
-                                                    title: action.title,
-                                                    subtitle: action.subtitle,
-                                                    onTap: action.onTap,
-                                                    accentIndex: index,
-                                                  ),
-                                                ),
-                                            ],
-                                          );
-                                        },
+                                      HomeTileGrid(
+                                        columns: featuredColumns,
+                                        children: [
+                                          for (
+                                            var index = 0;
+                                            index < featuredCount;
+                                            index++
+                                          )
+                                            tile(index, featured: true),
+                                        ],
                                       ),
+                                      if (actions.length > featuredCount) ...[
+                                        const SizedBox(height: 12),
+                                        HomeTileGrid(
+                                          columns: columns,
+                                          children: [
+                                            for (
+                                              var index = featuredCount;
+                                              index < actions.length;
+                                              index++
+                                            )
+                                              tile(index, featured: false),
+                                          ],
+                                        ),
+                                      ],
                                       const SizedBox(height: 24),
                                       _OfflinePacksCard(
                                         bundledEdition: MushafEdition.lines16,
@@ -1031,7 +1087,10 @@ class _HomeNavigation extends StatelessWidget {
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.only(left: 14, bottom: 14),
+                    padding: const EdgeInsetsDirectional.only(
+                      start: 14,
+                      bottom: 14,
+                    ),
                     child: Text(
                       tr(context, 'LIBRARY'),
                       style: theme.textTheme.labelSmall?.copyWith(
@@ -1050,7 +1109,7 @@ class _HomeNavigation extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Material(
                         color: item.$1 == 0
-                            ? Colors.white.withValues(alpha: 0.14)
+                            ? ivory.withValues(alpha: 0.14)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(AppRadii.md),
                         child: ListTile(
@@ -1104,582 +1163,6 @@ class _HomeNavigation extends StatelessWidget {
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HomeTopCard extends StatelessWidget {
-  const _HomeTopCard({
-    required this.title,
-    required this.subtitle,
-    required this.page,
-    required this.compact,
-    required this.onResume,
-    this.progress = 0,
-  });
-  final double progress;
-  final String title;
-  final String subtitle;
-  final QuranPage page;
-  final bool compact;
-  final VoidCallback onResume;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final decor = AppDecor.of(context);
-    final cream = decor.onHero;
-    final gold = decor.gold;
-    final button = FilledButton.icon(
-      onPressed: onResume,
-      icon: const Icon(Icons.arrow_forward_rounded, size: 18),
-      iconAlignment: IconAlignment.end,
-      style: FilledButton.styleFrom(
-        backgroundColor: gold,
-        foregroundColor: decor.onGold,
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-        shape: const StadiumBorder(),
-        textStyle: theme.textTheme.labelLarge?.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      label: Text(tr(context, 'Resume Reading')),
-    );
-    return Container(
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        gradient: decor.heroGradient,
-        borderRadius: BorderRadius.circular(AppRadii.xl),
-        border: Border.all(color: gold.withValues(alpha: 0.22)),
-        boxShadow: decor.floatShadow,
-      ),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(painter: _MushafMotif(color: gold)),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.all(compact ? 20 : 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Flexible(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: gold.withValues(alpha: 0.14),
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(
-                                      color: gold.withValues(alpha: 0.3),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.bookmark_rounded,
-                                        size: 14,
-                                        color: gold,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Flexible(
-                                        child: Text(
-                                          tr(context, 'Continue your reading'),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: theme.textTheme.labelMedium
-                                              ?.copyWith(
-                                                color: gold,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: compact ? 16 : 22),
-                          Text(
-                            tr(context, title),
-                            style: theme.textTheme.headlineLarge?.copyWith(
-                              color: cream,
-                              fontSize:
-                                  (theme.textTheme.headlineLarge?.fontSize ??
-                                      34) *
-                                  (compact ? 0.89 : 1.06),
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            tr(context, subtitle),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: cream.withValues(alpha: 0.78),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(999),
-                                  child: LinearProgressIndicator(
-                                    value: progress,
-                                    minHeight: 6,
-                                    color: gold,
-                                    backgroundColor: Colors.white.withValues(
-                                      alpha: 0.16,
-                                    ),
-                                    semanticsLabel: tr(context, subtitle),
-                                    semanticsValue:
-                                        '${(progress * 100).round()}%',
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Text(
-                                '${(progress * 100).round()}%',
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: gold,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (!compact) ...[const SizedBox(height: 23), button],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Semantics(
-                      label: tr(context, 'Preview of your original Mushaf page'),
-                      image: true,
-                      child: Transform.rotate(
-                        angle: 0.045,
-                        child: Container(
-                        width: compact ? 88 : 132,
-                        height: compact ? 132 : 196,
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: cream,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: gold, width: 1.5),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.3),
-                              blurRadius: 22,
-                              offset: const Offset(0, 12),
-                            ),
-                          ],
-                        ),
-                        child: page.assetPath == null
-                            ? const Icon(
-                                Icons.menu_book_outlined,
-                                color: Color(0xFF163F35),
-                                size: 36,
-                              )
-                            : Image(
-                                image: buildQuranPageImageProvider(
-                                  page,
-                                  cacheWidth: 320,
-                                ),
-                                fit: BoxFit.contain,
-                                excludeFromSemantics: true,
-                                errorBuilder: (_, __, ___) => const Icon(
-                                  Icons.menu_book_outlined,
-                                  color: Color(0xFF163F35),
-                                  size: 36,
-                                ),
-                              ),
-                      ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (compact) ...[
-                  const SizedBox(height: 20),
-                  SizedBox(width: double.infinity, child: button),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MushafMotif extends CustomPainter {
-  const _MushafMotif({required this.color});
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // Soft glow behind the page preview so the card has depth.
-    final glowCenter = Offset(size.width * 0.86, size.height * 0.1);
-    final glowRadius = size.shortestSide * 0.95;
-    canvas.drawCircle(
-      glowCenter,
-      glowRadius,
-      Paint()
-        ..shader = RadialGradient(
-          colors: [color.withValues(alpha: 0.2), color.withValues(alpha: 0)],
-        ).createShader(Rect.fromCircle(center: glowCenter, radius: glowRadius)),
-    );
-
-    // Eight-point star lattice, the classic Islamic geometric tile.
-    final stroke = Paint()
-      ..color = color.withValues(alpha: 0.09)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    const cell = 44.0;
-    const half = cell / 2;
-    const inner = half * 0.42;
-    for (var y = -half; y < size.height + cell; y += cell) {
-      for (var x = -half; x < size.width + cell; x += cell) {
-        final path = Path()
-          ..moveTo(x, y - half)
-          ..lineTo(x + inner, y - inner)
-          ..lineTo(x + half, y)
-          ..lineTo(x + inner, y + inner)
-          ..lineTo(x, y + half)
-          ..lineTo(x - inner, y + inner)
-          ..lineTo(x - half, y)
-          ..lineTo(x - inner, y - inner)
-          ..close();
-        canvas.drawPath(path, stroke);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _MushafMotif oldDelegate) =>
-      oldDelegate.color != color;
-}
-
-class _DailyFocusCard extends StatelessWidget {
-  const _DailyFocusCard({
-    required this.pages,
-    required this.completedPages,
-    required this.streakDays,
-    required this.compact,
-    required this.onTap,
-  });
-  final int pages;
-  final int completedPages;
-  final int streakDays;
-  final bool compact;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final progress = pages <= 0
-        ? 0.0
-        : (completedPages / pages).clamp(0.0, 1.0);
-    return _MenuCard(
-      child: Padding(
-        padding: EdgeInsets.all(compact ? 18 : 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.wb_sunny_rounded,
-                  color: theme.colorScheme.secondary,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    tr(context, "Today's rhythm"),
-                    style: theme.textTheme.titleMedium,
-                  ),
-                ),
-                IconButton(
-                  tooltip: tr(context, 'View reading dashboard'),
-                  onPressed: onTap,
-                  icon: const Icon(Icons.north_east_rounded, size: 17),
-                ),
-              ],
-            ),
-            SizedBox(height: compact ? 8 : 14),
-            Row(
-              children: [
-                SizedBox(
-                  width: 72,
-                  height: 72,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    alignment: Alignment.center,
-                    children: [
-                      CircularProgressIndicator(
-                        value: progress,
-                        strokeWidth: 7,
-                        strokeCap: StrokeCap.round,
-                        color: theme.colorScheme.primary,
-                        backgroundColor: theme.colorScheme.primaryContainer,
-                        semanticsLabel: tr(context, "Today's rhythm"),
-                        semanticsValue: '${(progress * 100).round()}%',
-                      ),
-                      Center(
-                        child: Text(
-                          '${(progress * 100).round()}%',
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text.rich(
-                        TextSpan(
-                          children: [
-                            TextSpan(
-                              text: tr(context, '$completedPages'),
-                              style: theme.textTheme.headlineLarge?.copyWith(
-                                color: theme.colorScheme.onSurface,
-                              ),
-                            ),
-                            TextSpan(
-                              text: tr(context, ' / $pages pages'),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.local_fire_department_rounded,
-                              color: theme.colorScheme.onSecondaryContainer,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 6),
-                            Flexible(
-                              child: Text(
-                                tr(context, '$streakDays ${tr(context, streakDays == 1 ? 'day' : 'days')} of consistency'),
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color:
-                                      theme.colorScheme.onSecondaryContainer,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (!compact) ...[
-              const SizedBox(height: 14),
-              Text(
-                tr(context, 'Small steps make a beautiful habit.'),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  height: 1.5,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle({
-    required this.title,
-    required this.subtitle,
-    this.horizontalInset = 0,
-  });
-
-  final String title;
-  final String subtitle;
-  final double horizontalInset;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: horizontalInset),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            tr(context, title),
-            style: theme.textTheme.titleLarge?.copyWith(
-              color: theme.colorScheme.onSurface,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            tr(context, subtitle),
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EditionSelectorCard extends StatelessWidget {
-  const _EditionSelectorCard({
-    required this.editions,
-    required this.selectedEdition,
-    required this.isEditionReady,
-    required this.isEditionDownloading,
-    required this.downloadProgressForEdition,
-    required this.onSelectEdition,
-    required this.onDownloadEdition,
-    required this.nightMode,
-    required this.onToggleNightMode,
-  });
-  final List<MushafEdition> editions;
-  final MushafEdition selectedEdition;
-  final bool Function(MushafEdition edition) isEditionReady;
-  final bool Function(MushafEdition edition) isEditionDownloading;
-  final double Function(MushafEdition edition) downloadProgressForEdition;
-  final Future<void> Function(MushafEdition edition) onSelectEdition;
-  final Future<void> Function(MushafEdition edition) onDownloadEdition;
-  final bool nightMode;
-  final Future<void> Function(bool enabled) onToggleNightMode;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return _MenuCard(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.auto_stories_outlined,
-                  color: theme.colorScheme.secondary,
-                  size: 20,
-                ),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Text(
-                    tr(context, 'Choose your Mushaf'),
-                    style: theme.textTheme.titleMedium,
-                  ),
-                ),
-                IconButton(
-                  tooltip: tr(context, nightMode
-                      ? 'Use light app theme'
-                      : 'Use dark app theme'),
-                  onPressed: () => onToggleNightMode(!nightMode),
-                  icon: Icon(
-                    nightMode
-                        ? Icons.light_mode_outlined
-                        : Icons.dark_mode_outlined,
-                    size: 18,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 3),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: editions
-                  .map((edition) {
-                    final selected = edition == selectedEdition;
-                    final ready = isEditionReady(edition);
-                    final downloading = isEditionDownloading(edition);
-                    final progress = (downloadProgressForEdition(edition) * 100)
-                        .round();
-                    return ChoiceChip(
-                      showCheckmark: false,
-                      selected: selected,
-                      avatar: Icon(
-                        selected
-                            ? Icons.check_circle_outline_rounded
-                            : ready
-                            ? Icons.menu_book_outlined
-                            : Icons.download_outlined,
-                        size: 16,
-                        color: selected
-                            ? theme.colorScheme.onPrimary
-                            : theme.colorScheme.primary,
-                      ),
-                      label: Text(
-                        tr(context, downloading
-                            ? '${edition.label} $progress%'
-                            : edition.label),
-                      ),
-                      labelStyle: theme.textTheme.labelMedium?.copyWith(
-                        color: selected
-                            ? theme.colorScheme.onPrimary
-                            : theme.colorScheme.onSurface,
-                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      ),
-                      selectedColor: theme.colorScheme.primary,
-                      backgroundColor: theme.colorScheme.surfaceContainerLow,
-                      side: BorderSide(
-                        color: selected
-                            ? theme.colorScheme.primary
-                            : theme.dividerColor,
-                      ),
-                      onSelected: (_) => ready
-                          ? onSelectEdition(edition)
-                          : onDownloadEdition(edition),
-                    );
-                  })
-                  .toList(growable: false),
-            ),
-          ],
         ),
       ),
     );
@@ -1823,142 +1306,6 @@ class _OfflinePacksCard extends StatelessWidget {
   }
 }
 
-class _MenuCard extends StatelessWidget {
-  const _MenuCard({required this.child});
-  final Widget child;
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(AppRadii.lg),
-        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.7)),
-        boxShadow: AppDecor.of(context).cardShadow,
-      ),
-      child: child,
-    );
-  }
-}
-
-class _HomeMenuTile extends StatelessWidget {
-  const _HomeMenuTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.accentIndex = 0,
-  });
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-  final int accentIndex;
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final decor = AppDecor.of(context);
-    final accent = decor.accentAt(accentIndex);
-    return AppPressable(
-      child: DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadii.lg - 2),
-        boxShadow: decor.cardShadow,
-      ),
-      child: Material(
-        color: theme.colorScheme.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.lg - 2),
-          side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.7)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final badge = Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        accent.background,
-                        Color.lerp(
-                              accent.background,
-                              accent.foreground,
-                              0.2,
-                            ) ??
-                            accent.background,
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: accent.foreground, size: 23),
-                );
-                final copy = Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      tr(context, title),
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      tr(context, subtitle),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        height: 1.4,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                );
-                if (constraints.maxWidth >= 218) {
-                  return Row(
-                    children: [
-                      badge,
-                      const SizedBox(width: 14),
-                      Expanded(child: copy),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Directionality.of(context) == TextDirection.rtl
-                            ? Icons.chevron_left_rounded
-                            : Icons.chevron_right_rounded,
-                        size: 20,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ],
-                  );
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    badge,
-                    const SizedBox(height: 14),
-                    Expanded(child: copy),
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
-      ),
-    ),
-    );
-  }
-}
-
 class _AnnouncementsCard extends StatelessWidget {
   const _AnnouncementsCard({
     required this.announcements,
@@ -2049,83 +1396,6 @@ class _AnnouncementsCard extends StatelessWidget {
           }),
         ],
       ),
-    );
-  }
-}
-
-class _QuickAction extends StatelessWidget {
-  const _QuickAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final decor = AppDecor.of(context);
-    final caption = switch (label) {
-      'Surah' => '114 chapters',
-      'Juz' => '30 sections',
-      _ => 'Find an ayah',
-    };
-    return AppPressable(
-      child: DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadii.lg - 2),
-        boxShadow: decor.cardShadow,
-      ),
-      child: Material(
-        color: theme.colorScheme.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.lg - 2),
-          side: BorderSide(color: theme.dividerColor.withValues(alpha: 0.7)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-            child: Column(
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.secondaryContainer,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    icon,
-                    color: theme.colorScheme.onSecondaryContainer,
-                    size: 23,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  tr(context, label),
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.colorScheme.onSurface,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  tr(context, caption),
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
     );
   }
 }

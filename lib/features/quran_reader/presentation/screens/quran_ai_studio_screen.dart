@@ -1978,8 +1978,9 @@ class _Pill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Inverse pills sit on the emerald hero, which stays dark in both themes.
     final foreground = inverse
-        ? theme.colorScheme.onPrimary
+        ? AppDecor.of(context).onHero
         : theme.colorScheme.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),

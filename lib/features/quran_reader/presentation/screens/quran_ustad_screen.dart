@@ -1219,8 +1219,9 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
         true;
     final assigned = assignment['status'] == 'assigned';
     return Card(
+        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
         child: Padding(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
             child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -1238,7 +1239,8 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         child: SelectableText(
                             assignment['instructions'] as String)),
-                  if (active && assigned)
+                  if (active && assigned) ...[
+                    const SizedBox(height: 12),
                     Wrap(spacing: 8, runSpacing: 8, children: [
                       if (student)
                         FilledButton.icon(
@@ -1268,9 +1270,13 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
                                   },
                             child: Text(_t('Cancel assignment'))),
                     ]),
+                  ],
+                  const SizedBox(height: 10),
                   Text(_t('Older clips are in Shared recordings.'),
                       style: Theme.of(context).textTheme.bodySmall),
                   ExpansionTile(
+                      shape: const Border(),
+                      collapsedShape: const Border(),
                       tilePadding: EdgeInsets.zero,
                       title: Text(
                           '${_t('Recent submissions')} (${(assignment['submissions'] as List).length})'),
@@ -1350,6 +1356,15 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
                       ]),
                 ])));
   }
+
+  /// Groups related controls on one card surface, like the other screens.
+  Widget _section(List<Widget> children, {double bottom = 16}) => Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, bottom),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: children)));
 
   Widget _pager(int page, int totalPages, ValueChanged<int> select) => Wrap(
           spacing: 8,
@@ -1463,20 +1478,30 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
                                                     icon: const Icon(
                                                         Icons.refresh))
                                               ])),
-                                  const SizedBox(height: 14),
+                                  const SizedBox(height: 16),
+                                  _section([
                                   SelectableText(_base,
                                       textDirection: TextDirection.ltr,
                                       style: Theme.of(context)
                                           .textTheme
-                                          .bodySmall),
-                                  const SizedBox(height: 12),
+                                          .bodySmall
+                                          ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant)),
+                                  const SizedBox(height: 8),
                                   Text(_t('Clips expire after 30 days. Student storage: 100 MiB.'),
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall),
                                   if (_overview != null)
-                                    Text(
-                                        '${_t('Storage')}: ${(_overview!.usageBytes / 1048576).toStringAsFixed(1)} / 100 MiB'),
+                                    Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: Text(
+                                            '${_t('Storage')}: ${(_overview!.usageBytes / 1048576).toStringAsFixed(1)} / 100 MiB',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleSmall)),
                                   if (_busy) ...[
                                     const SizedBox(height: 12),
                                     LinearProgressIndicator(
@@ -1501,6 +1526,7 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
                                         padding: const EdgeInsets.symmetric(
                                             vertical: 12),
                                         child: Text(_errorText('recording'))),
+                                  const SizedBox(height: 14),
                                   Wrap(spacing: 10, runSpacing: 8, children: [
                                     FilledButton.tonalIcon(
                                         onPressed: _busy || _overview == null
@@ -1523,10 +1549,15 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
                                           icon: const Icon(Icons.stop),
                                           label: Text(_t('Stop audio'))),
                                   ]),
-                                  const SizedBox(height: 16),
+                                  ]),
+                                  const SizedBox(height: 14),
                                   if (links.isEmpty && _overview != null)
-                                    Text(_t('No connections yet.')),
+                                    Padding(
+                                        padding: const EdgeInsetsDirectional
+                                            .fromSTEB(4, 0, 4, 14),
+                                        child: Text(_t('No connections yet.'))),
                                   if (link != null) ...[
+                                    _section([
                                     DropdownButtonFormField<String>(
                                         key: ValueKey(_linkId),
                                         initialValue: _linkId,
@@ -1557,8 +1588,8 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
                                       _assignmentsPage = 1;
                                       unawaited(_run(_reload));
                                     }),
-                                    const SizedBox(height: 10),
-                                    Wrap(spacing: 8, runSpacing: 8, children: [
+                                    const SizedBox(height: 4),
+                                    Wrap(spacing: 8, runSpacing: 4, children: [
                                       if (link['role'] == 'teacher' &&
                                           link['status'] == 'active')
                                         FilledButton.icon(
@@ -1608,13 +1639,19 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
                                             child: Text(_t(
                                                 'Delete lesson recordings and revoke access'))),
                                     ]),
+                                    ], bottom: 8),
+                                    const SizedBox(height: 14),
                                   ],
+                                  _section([
                                   if (_capture.phase ==
                                           ReaderVoiceCapturePhase.recording ||
                                       _capture.phase ==
                                           ReaderVoiceCapturePhase.stopping) ...[
-                                    const SizedBox(height: 12),
-                                    Text('${_capture.elapsed.inSeconds} / 60s'),
+                                    Text('${_capture.elapsed.inSeconds} / 60s',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium),
+                                    const SizedBox(height: 8),
                                     FilledButton.icon(
                                         onPressed: _capture.phase ==
                                                 ReaderVoiceCapturePhase
@@ -1623,16 +1660,18 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
                                             : null,
                                         icon: const Icon(Icons.stop),
                                         label: Text(_t('Stop recording'))),
+                                    const SizedBox(height: 14),
                                   ],
                                   Text(_t('Shared audio is deleted; assignment, feedback and relationship history remain.'),
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall),
-                                  const SizedBox(height: 12),
+                                  const SizedBox(height: 8),
                                   Text(_t('Saved locally before sending. Maximum 60 seconds and 8 MiB.'),
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall),
+                                  const SizedBox(height: 8),
                                   Text(_t('Recorder duration only; no Tajweed or memorization score.'),
                                       style: Theme.of(context)
                                           .textTheme
@@ -1657,6 +1696,8 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
                                     ExpansionTile(
                                         key: const ValueKey(
                                             'ustad-recording-library'),
+                                        shape: const Border(),
+                                        collapsedShape: const Border(),
                                         tilePadding: EdgeInsets.zero,
                                         title: Text(_t('Shared recordings')),
                                         children: [
@@ -1669,10 +1710,15 @@ class _QuranUstadScreenState extends State<QuranUstadScreen>
                                           for (final recording in _recordings)
                                             _libraryRecording(recording),
                                         ]),
-                                  Text(_t('Assignments'),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge),
+                                  ], bottom: _overview != null ? 6 : 16),
+                                  const SizedBox(height: 22),
+                                  Padding(
+                                      padding: const EdgeInsetsDirectional.only(
+                                          start: 4),
+                                      child: Text(_t('Assignments'),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge)),
                                   _pager(_assignmentsPage, _assignmentsPages,
                                       (page) {
                                     _assignmentsPage = page;

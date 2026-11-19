@@ -3,10 +3,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../app/app_theme.dart';
 import '../../../../app/reader_localization.dart';
 import '../../../../core/prayer/prayer_models.dart';
 import '../../../../core/prayer/prayer_reminder_service.dart';
 import '../../../../core/worship/qibla_service.dart';
+import '../widgets/app_page_header.dart';
 
 class QiblaScreen extends StatefulWidget {
   const QiblaScreen({super.key});
@@ -108,27 +110,23 @@ class _QiblaScreenState extends State<QiblaScreen> with WidgetsBindingObserver {
           final heading = _service.heading;
           return SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 600),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        _t('Face the Qibla'),
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _t(
+                      // Same emerald hero as Namaz & Azan and the other
+                      // worship screens.
+                      AppPageHeader(
+                        title: _t('Face the Qibla'),
+                        subtitle: _t(
                           'Use your location to find the direction of the Kaaba.',
                         ),
-                        style: theme.textTheme.bodyLarge,
+                        icon: Icons.explore_outlined,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
                       Card(
                         child: Padding(
                           padding: const EdgeInsets.all(20),
@@ -521,6 +519,8 @@ class _QiblaDial extends CustomPainter {
           text: cardinal.$1,
           style: TextStyle(
             color: cardinal.$2 == 0 ? primary : textColor,
+            // Painted text does not inherit the theme: name the brand face.
+            fontFamily: AppTheme.displayFontFamily,
             fontSize: 17,
             fontWeight: FontWeight.w700,
           ),

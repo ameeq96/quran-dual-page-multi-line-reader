@@ -159,7 +159,13 @@ class ReaderBookmarksContent extends StatelessWidget {
                             runSpacing: 10,
                             children: entry.value.map((bookmark) {
                               return ActionChip(
-                                label: Text(bookmark.label),
+                                // Long labels end in an ellipsis instead of
+                                // being cut at the chip edge.
+                                label: Text(
+                                  bookmark.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 onPressed: () async {
                                   if (onSelectPage != null) {
                                     await onSelectPage!(bookmark.pageNumber);

@@ -677,9 +677,19 @@ class _InterfaceLanguageSetting extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(tr(context, 'Interface language'), style: theme.textTheme.titleMedium),
+            Text(
+              tr(context, 'Interface language'),
+              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 4),
-            Text(tr(context, 'Choose the language for menus and controls.')),
+            // Same title/description pairing as the cards below.
+            Text(
+              tr(context, 'Choose the language for menus and controls.'),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.34,
+              ),
+            ),
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,

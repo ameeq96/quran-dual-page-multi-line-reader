@@ -122,7 +122,9 @@ class AppPageHeader extends StatelessWidget {
       children: [
         if (eyebrow != null && eyebrow!.isNotEmpty) ...[
           Text(
-            eyebrow!,
+            // Eyebrows are set as tracked capitals wherever the script has
+            // case, so every screen's label reads the same.
+            isLtr ? eyebrow!.toUpperCase() : eyebrow!,
             style: theme.textTheme.labelSmall?.copyWith(
               color: gold,
               fontWeight: FontWeight.w700,

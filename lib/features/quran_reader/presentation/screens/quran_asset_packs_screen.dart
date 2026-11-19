@@ -252,7 +252,7 @@ class _AssetPackListState extends State<_AssetPackList> {
     final packs = widget.controller.offlineEditionPacks;
     final showCancelAll = widget.controller.hasActiveOfflinePackDownloads;
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       itemCount: packs.length + 1 + (showCancelAll ? 1 : 0),
       cacheExtent: 360,
       addAutomaticKeepAlives: false,

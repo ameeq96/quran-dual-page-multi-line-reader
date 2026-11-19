@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../../../app/app_theme.dart';
 import '../../../../app/reader_localization.dart';
 import '../../../../app/prayer_translations.dart';
 import '../../../../core/prayer/prayer_calculator.dart';
@@ -540,15 +541,17 @@ class _WorshipHubScreenState extends State<WorshipHubScreen> {
           if (date != null && mounted) setState(() => _diaryDate = date);
         },
       ),
+      const SizedBox(height: 8),
       for (final prayer in _store.trackedPrayers) _diaryPrayerRow(prayer),
     ]),
     _card(_t('Qaza balance', 'قضا کا حساب', 'رصيد القضاء'), [
-      for (final prayer in _store.trackedPrayers)
+      for (final (index, prayer) in _store.trackedPrayers.indexed)
         Padding(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(bottom: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (index > 0) const Divider(height: 20),
               Text(
                 _s(
                   '{prayer} · {count} remaining',
@@ -568,11 +571,17 @@ class _WorshipHubScreenState extends State<WorshipHubScreen> {
                     'completed': _store.completedQaza(prayer),
                   },
                 ),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
+              const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  TextButton(
+                  OutlinedButton(
                     onPressed: _working ? null : () => _editOpening(prayer),
                     child: Text(_s('Starting balance')),
                   ),
@@ -600,9 +609,20 @@ class _WorshipHubScreenState extends State<WorshipHubScreen> {
     padding: const EdgeInsets.symmetric(vertical: 6),
     child: LayoutBuilder(
       builder: (context, constraints) {
-        final choice = DropdownButton<String>(
+        final theme = Theme.of(context);
+        final choice = DecoratedBox(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(AppRadii.sm),
+            border: Border.all(color: theme.dividerColor),
+          ),
+          child: Padding(
+            padding: const EdgeInsetsDirectional.only(start: 14, end: 8),
+            child: DropdownButton<String>(
           value: _store.status(_day(_diaryDate), prayer),
           isExpanded: true,
+          underline: const SizedBox.shrink(),
+          borderRadius: BorderRadius.circular(AppRadii.sm),
           items: [
             for (final status in diaryStatuses)
               DropdownMenuItem(
@@ -619,23 +639,28 @@ class _WorshipHubScreenState extends State<WorshipHubScreen> {
                     );
                   }
                 },
+            ),
+          ),
         );
         final name = Text(
           _prayerName(prayer),
           style: Theme.of(context).textTheme.titleMedium,
         );
-        if (constraints.maxWidth < 480 ||
+        if (constraints.maxWidth < 300 ||
             MediaQuery.textScalerOf(context).scale(14) > 18) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [name, choice],
+            children: [name, const SizedBox(height: 6), choice],
           );
         }
         return Row(
           children: [
             Expanded(child: name),
             const SizedBox(width: 16),
-            SizedBox(width: 220, child: choice),
+            SizedBox(
+              width: constraints.maxWidth < 480 ? 184 : 220,
+              child: choice,
+            ),
           ],
         );
       },

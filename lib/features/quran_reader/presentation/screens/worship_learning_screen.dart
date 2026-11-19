@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../../app/app_theme.dart';
 import '../../../../app/reader_localization.dart';
 import '../../../../core/worship/worship_content.dart';
 import '../../../../core/worship/worship_store.dart';
@@ -291,8 +292,9 @@ class _WorshipLearningScreenState extends State<WorshipLearningScreen>
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(AppRadii.lg),
         border: Border.all(color: theme.dividerColor),
+        boxShadow: AppDecor.of(context).cardShadow,
       ),
       child: child,
     );
@@ -737,7 +739,8 @@ class _WorshipLearningScreenState extends State<WorshipLearningScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 14),
+          // Room for the floating label only; keeps the card padding even.
+          const SizedBox(height: 4),
           DropdownButtonFormField<String>(
             key: ValueKey(widget.store.fiqh),
             initialValue: widget.store.fiqh,

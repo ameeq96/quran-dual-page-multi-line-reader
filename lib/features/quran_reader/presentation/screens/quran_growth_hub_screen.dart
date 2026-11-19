@@ -323,8 +323,18 @@ class QuranGrowthHubScreen extends StatelessWidget {
                           color: themeData.colorScheme.onSurfaceVariant,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
+                      const SizedBox(height: 14),
+                      // On phones the planner actions share one full-width
+                      // column instead of a ragged stack of mixed widths.
+                      LayoutBuilder(builder: (context, hifzBox) {
+                      final stackActions = hifzBox.maxWidth < 480;
+                      Widget action(Widget button) => stackActions
+                          ? SizedBox(width: hifzBox.maxWidth, child: button)
+                          : button;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      action(OutlinedButton.icon(
                         onPressed: () => showModalBottomSheet<void>(
                           context: context,
                           isScrollControlled: true,
@@ -339,47 +349,50 @@ class QuranGrowthHubScreen extends StatelessWidget {
                         ),
                         icon: const Icon(Icons.quiz_outlined),
                         label: Text(_hifzText(context, 'Random Hifz test', 'حفظ کا اتفاقی امتحان', 'اختبار حفظ عشوائي')),
-                      ),
+                      )),
                       const SizedBox(height: 12),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          FilledButton.tonal(
+                          action(FilledButton.tonal(
                             onPressed: () {
                               controller.markCurrentPageForHifz(
                                 HifzPageStrength.weak,
                               );
                             },
                             child: Text(tr(context, 'Mark current as weak')),
-                          ),
-                          FilledButton.tonal(
+                          )),
+                          action(FilledButton.tonal(
                             onPressed: () {
                               controller.markCurrentPageForHifz(
                                 HifzPageStrength.steady,
                               );
                             },
                             child: Text(tr(context, 'Mark current as steady')),
-                          ),
-                          FilledButton.tonal(
+                          )),
+                          action(FilledButton.tonal(
                             onPressed: () {
                               controller.markCurrentPageForHifz(
                                 HifzPageStrength.strong,
                               );
                             },
                             child: Text(tr(context, 'Mark current as strong')),
-                          ),
-                          OutlinedButton(
+                          )),
+                          action(OutlinedButton(
                             onPressed: () {
                               controller.clearHifzReviewEntry(
                                 controller.currentPageNumber,
                               );
                             },
                             child: Text(tr(context, 'Clear current')),
-                          ),
+                          )),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                        ],
+                      );
+                      }),
+                      const SizedBox(height: 18),
                       Text(
                         tr(context, 'Revision reminders'),
                         style: themeData.textTheme.titleMedium,
@@ -988,18 +1001,10 @@ class _MetricGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 640 ? 4 : 2;
-        final width = (constraints.maxWidth - (columns - 1) * 10) / columns;
-        return Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: metrics
+        final tiles = metrics
               .map((metric) {
                 return ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minWidth: width,
-                    maxWidth: width,
-                    minHeight: 108,
-                  ),
+                  constraints: const BoxConstraints(minHeight: 84),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surfaceContainerLow,
@@ -1009,10 +1014,11 @@ class _MetricGrid extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 14,
-                        vertical: 16,
+                        vertical: 14,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             tr(context, metric.label),
@@ -1023,7 +1029,7 @@ class _MetricGrid extends StatelessWidget {
                                   ).colorScheme.onSurfaceVariant,
                                 ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 6),
                           Text(
                             tr(context, metric.value),
                             style: theme.textTheme.titleLarge?.copyWith(
@@ -1037,8 +1043,33 @@ class _MetricGrid extends StatelessWidget {
                   ),
                 );
               })
-              .toList(growable: false),
-        );
+              .toList(growable: false);
+        // Tiles in a row share the tallest height, so a value that wraps
+        // (longer translations) does not leave its neighbour shorter.
+        final rows = <Widget>[];
+        for (var start = 0; start < tiles.length; start += columns) {
+          if (rows.isNotEmpty) {
+            rows.add(const SizedBox(height: 10));
+          }
+          rows.add(
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = start; i < start + columns; i++) ...[
+                    if (i > start) const SizedBox(width: 10),
+                    Expanded(
+                      child: i < tiles.length
+                          ? tiles[i]
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }
+        return Column(mainAxisSize: MainAxisSize.min, children: rows);
       },
     );
   }

@@ -136,34 +136,72 @@ class ReaderAppBar extends StatelessWidget implements PreferredSizeWidget {
                           : controller.spreadProgressLabel;
                       final title = controller.currentChapterSummary?.nameSimple ?? 'Quran Reader';
 
-                      return Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            tr(context, title),
+                      final progressText = tr(context, secondaryLabel);
+                      final editionText = tr(context, controller.settings.preferImageMode ? controller.settings.mushafEdition.label : 'Arabic text');
+                      final detailStyle = theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w500,
+                      );
+                      final textScaler = MediaQuery.textScalerOf(context);
+
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          final detail = '$progressText • $editionText';
+                          final painter = TextPainter(
+                            text: TextSpan(text: detail, style: detailStyle),
+                            textDirection: Directionality.of(context),
+                            textScaler: textScaler,
                             maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: (portraitMode
-                                    ? theme.textTheme.titleMedium
-                                    : theme.textTheme.titleLarge)
-                                ?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: theme.colorScheme.onSurface,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${tr(context, secondaryLabel)} • ${tr(context, controller.settings.preferImageMode ? controller.settings.mushafEdition.label : 'Arabic text')}',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                          )..layout();
+                          // On phones the four actions leave little room: give
+                          // the page and edition a line each instead of cutting
+                          // the edition off, as long as both lines still fit.
+                          final stackDetail = portraitMode &&
+                              painter.width > constraints.maxWidth &&
+                              textScaler.scale(1) <= 1.3;
+                          painter.dispose();
+
+                          return Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                tr(context, title),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: (portraitMode
+                                        ? theme.textTheme.titleMedium
+                                        : theme.textTheme.titleLarge)
+                                    ?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: theme.colorScheme.onSurface,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              SizedBox(height: stackDetail ? 1 : 2),
+                              if (stackDetail) ...[
+                                Text(
+                                  progressText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: detailStyle,
+                                ),
+                                Text(
+                                  editionText,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: detailStyle,
+                                ),
+                              ] else
+                                Text(
+                                  detail,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: detailStyle,
+                                ),
+                            ],
+                          );
+                        },
                       );
                     },
                   ),

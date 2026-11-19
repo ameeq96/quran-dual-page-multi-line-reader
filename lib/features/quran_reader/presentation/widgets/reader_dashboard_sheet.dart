@@ -238,9 +238,8 @@ class ReaderDashboardContent extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
+                      _EvenGrid(
+                        minItemWidth: 136,
                         children: [
                           if (controller.isPlansPacksEnabled)
                             _QuickActionButton(
@@ -313,10 +312,9 @@ class ReaderDashboardContent extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
+                      const SizedBox(height: 12),
+                      _EvenGrid(
+                        minItemWidth: 124,
                         children: [
                           _InfoPill(
                             label: tr(context, 'Streak'),
@@ -340,7 +338,7 @@ class ReaderDashboardContent extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 14),
                       Text(
                         tr(context, controller.dailyProgressStatusLabel),
                         style: theme.textTheme.bodyMedium?.copyWith(
@@ -388,6 +386,11 @@ class ReaderDashboardContent extends StatelessWidget {
                         runSpacing: 8,
                         children: [7, 15, 30, 60].map((days) {
                           return Chip(
+                            // Read-only: the compact size lets two plans
+                            // share a row on a phone.
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
                             label: Text(
                               tr(context, '$days days: ${controller.plannedPagesPerDay(days)} pages/day'),
                             ),
@@ -425,7 +428,11 @@ class ReaderDashboardContent extends StatelessWidget {
                               emptyLabel: 'No pages in this folder yet.',
                               children: entry.value.map((bookmark) {
                                 return ActionChip(
-                                  label: Text(bookmark.label),
+                                  label: Text(
+                                    bookmark.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                   onPressed: () => _handlePageOpen(
                                     context,
                                     bookmark.pageNumber,
@@ -711,8 +718,73 @@ class _QuickActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
       onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        alignment: AlignmentDirectional.centerStart,
+        padding: const EdgeInsetsDirectional.fromSTEB(14, 12, 12, 12),
+      ),
       icon: Icon(icon, size: 18),
-      label: Text(tr(context, label)),
+      label: Text(
+        tr(context, label),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+}
+
+/// Lays its children out in equal-width columns so a group of actions or
+/// stats reads as one tidy grid instead of a ragged wrap. An odd trailing
+/// child takes the full row.
+class _EvenGrid extends StatelessWidget {
+  const _EvenGrid({required this.children, required this.minItemWidth});
+
+  final List<Widget> children;
+  final double minItemWidth;
+
+  static const double _gap = 10;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final scaledMin =
+            minItemWidth * MediaQuery.textScalerOf(context).scale(1);
+        final columns = ((width + _gap) / (scaledMin + _gap))
+            .floor()
+            .clamp(1, children.isEmpty ? 1 : children.length);
+        final rows = <Widget>[];
+        for (var start = 0; start < children.length; start += columns) {
+          final end = (start + columns).clamp(0, children.length);
+          final cells = children.sublist(start, end);
+          if (rows.isNotEmpty) {
+            rows.add(const SizedBox(height: _gap));
+          }
+          rows.add(
+            // Cells in a row share the tallest height, so a label that
+            // needs two lines does not leave its neighbour shorter.
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final (index, cell) in cells.indexed) ...[
+                    if (index > 0) const SizedBox(width: _gap),
+                    Expanded(child: cell),
+                  ],
+                  // Keep a short last row on the column grid, except a
+                  // single leftover cell, which takes the full row.
+                  if (cells.length > 1)
+                    for (var i = cells.length; i < columns; i++) ...[
+                      const SizedBox(width: _gap),
+                      const Expanded(child: SizedBox.shrink()),
+                    ],
+                ],
+              ),
+            ),
+          );
+        }
+        return Column(mainAxisSize: MainAxisSize.min, children: rows);
+      },
     );
   }
 }
@@ -730,8 +802,7 @@ class _InfoPill extends StatelessWidget {
     return ConstrainedBox(
       constraints: const BoxConstraints(
         minWidth: 112,
-        maxWidth: 180,
-        minHeight: 88,
+        minHeight: 84,
       ),
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -751,12 +822,18 @@ class _InfoPill extends StatelessWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                tr(context, value),
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: theme.colorScheme.primary,
+              const SizedBox(height: 6),
+              // Keeps every tile one line tall so rows stay level.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(
+                  tr(context, value),
+                  maxLines: 1,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
               ),
             ],
